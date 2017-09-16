@@ -1,42 +1,19 @@
 #include <Print.h>
 #include <i2c_t3.h>
+//#include <Wire.h>
 #include <LCD.h>
-#include <LiquidCrystal_I2C.h>
-#include "LiquidCrystal_MCP23017.h"
+#include <Adafruit_NeoPixel.h>
+#include <Bounce.h>
+#include <EEPROM.h>
+#include "hardware.h" // Hardware of production model
 
-// Test below here
-#define POWER_PIN 4
-#define POWER_SWITCH_PIN 5
-#define INTA_PIN 2 // Digital Pin 2 of the Teensy is connected to INTA of the MCP23017 on the display boards
-#define NUMBER_OF_DISPLAYS 12
+#include "lcdlib1.h" // i2c expander board with PCF8754
+#include "lcd_lib.h"
 
-#define BACKLIGHT_PIN     3
-#define EN_PIN  2
-#define RW_PIN  1
-#define RS_PIN  0
-#define D4_PIN  4
-#define D5_PIN  5
-#define D6_PIN  6
-#define D7_PIN  7
-
-// Main display:
-LiquidCrystal_I2C	Main_lcd(0x27, EN_PIN, RW_PIN, RS_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN); //First number is the i2c address of the display
-
-// Display boards:
-LiquidCrystal_MCP23017 lcd[NUMBER_OF_DISPLAYS] = {
-  LiquidCrystal_MCP23017 (0x20, DISPLAY1),
-  LiquidCrystal_MCP23017 (0x20, DISPLAY2),
-  LiquidCrystal_MCP23017 (0x20, DISPLAY3),
-  LiquidCrystal_MCP23017 (0x21, DISPLAY1),
-  LiquidCrystal_MCP23017 (0x21, DISPLAY2),
-  LiquidCrystal_MCP23017 (0x21, DISPLAY3),
-  LiquidCrystal_MCP23017 (0x22, DISPLAY1),
-  LiquidCrystal_MCP23017 (0x22, DISPLAY2),
-  LiquidCrystal_MCP23017 (0x22, DISPLAY3),
-  LiquidCrystal_MCP23017 (0x23, DISPLAY1),
-  LiquidCrystal_MCP23017 (0x23, DISPLAY2),
-  LiquidCrystal_MCP23017 (0x23, DISPLAY3)
-};
+#include "LCD.h"
+#include "LEDs.h"
+#include "switches.h"
+#include "eeprom.h"
 
 uint8_t prev_state = 255;
 
@@ -45,52 +22,89 @@ void setup() {
   pinMode(POWER_PIN, OUTPUT);
   digitalWrite(POWER_PIN, HIGH);
 
- // switch LEDs off:
+  // switch LEDs off:
   setup_LED_control();
+  LEDs_turn_all_on_white();
 
-  // Setup interrupt pin for switches:
-  pinMode(INTA_PIN, INPUT_PULLUP);
+  //delay(2000);
+
+  setup_backlight_control();
+  Backlight_turn_all_on_white();
+
+  //delay(2000);
+
+  // Start i2c
+  Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, WIRE_SPEED);
+  Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_29_30, I2C_PULLUP_EXT, WIRE1_SPEED);
+
+  setup_LCD_control();
+  setup_switch_check();
 
   Serial.begin(9600);
 
   // Initialize and test main LCD
-  Main_lcd.begin (16, 2); // Main LCD is 16x2
-  Main_lcd.setBacklightPin(BACKLIGHT_PIN, POSITIVE);
-  Main_lcd.setBacklight(true);
-  Main_lcd.home();
-  Main_lcd.print("Testing Main LCD");
-  Main_lcd.setCursor(0, 1);
-  Main_lcd.print("Succes!!!");
+  Main_lcd1.home();
+  Main_lcd1.print("Main LCD @ 0x27");
+  Main_lcd1.setCursor(0, 1);
+  Main_lcd1.print("Succes!!!");
+
+  Main_lcd2.home();
+  Main_lcd2.print("Main LCD @ 0x3F");
+  Main_lcd2.setCursor(0, 1);
+  Main_lcd2.print("Succes!!!");
+
 
   // Initialize and test seperate displays
   for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS; i++) {
-    lcd[i].begin (16, 2);
     lcd[i].home();
     lcd[i].print("Testing no." + String(i + 1));
-    ///delay(1000);
     lcd[i].setCursor(0, 1);
     lcd[i].print("Succes!!!");
-    ///delay(1000);
   }
-  
+
   // Put LEDs on
-  show_on_all_LEDs(1);
+  LEDs_turn_all_on_white();
+
+  // Test external memory chip
+  write_ext_EEPROM(10, 77); // Write byte 77 to address 10
+  write_ext_EEPROM(67999, 255); // Write byte 255 to address 67999
+  if ((read_ext_EEPROM(10) == 77) && (read_ext_EEPROM(67999) == 255)) {
+    Main_lcd1.setCursor(0, 1);
+    Main_lcd1.print("24LC512 test OK");
+    Main_lcd2.setCursor(0, 1);
+    Main_lcd2.print("24LC512 test OK");
+  }
+  else {
+    Main_lcd1.setCursor(0, 1);
+    Main_lcd1.print("24LC512 ERROR!");
+    Main_lcd2.setCursor(0, 1);
+    Main_lcd2.print("24LC512 ERROR!");
+  }
+
+  // Clear memory
+  write_ext_EEPROM(10, 0);
+  write_ext_EEPROM(67999, 0);
+  EEPROM.write(0, 0); // Will overwrite the internal EEPROM version number, so the VController sketch will rewrite memory
+  EEPROM.write(1, 0); // Will overwrite the external EEPROM version number, so the VController sketch will rewrite memory
 }
 
 void loop() {
   // Check for switch being pressed
-  if (digitalRead(INTA_PIN) == LOW) {
-    Serial.println("Interrupt!");
+  main_switch_check();
+  if (switch_pressed > 0) {
+    if (switch_pressed <= NUMBER_OF_LEDS) LEDs_show_green(switch_pressed - 1);
+    Main_lcd1.setCursor(0, 1);
+    Main_lcd1.print("Pressed  SW #" + String(switch_pressed) + "   ");
+    Main_lcd2.setCursor(0, 1);
+    Main_lcd2.print("Pressed  SW #" + String(switch_pressed) + "   ");
+  }
 
-    for (uint8_t i = 0; i < 4; i++) {
-      bool updated = lcd[i * 3].updateButtonState();
-
-      if (updated) {
-        lcd[i * 3].setCursor(0, 1);
-        lcd[i * 3].print("ButtonState:" + String (lcd[i * 3].readButtonState()));
-        Serial.println("ButtonState: " + String (lcd[i * 3].readButtonState()));
-      }
-    }
+  if (switch_released > 0) {
+    if (switch_released <= NUMBER_OF_LEDS) LEDs_show_blue(switch_released - 1);
+    Main_lcd1.setCursor(0, 1);
+    Main_lcd1.print("Released SW #" + String(switch_released) + "   ");
+    Main_lcd2.setCursor(0, 1);
+    Main_lcd2.print("Released SW #" + String(switch_released) + "   ");
   }
 }
 

@@ -1,7 +1,9 @@
-#ifndef LIQUID_CRYSTAL_MCP23017_H
-#define LIQUID_CRYSTAL_MCP23017_H
+// Please read VController_v2.ino for information about the license and authors
 
-// Start of my MCP23017 library - used LiquidCrystal as a starting point...
+#ifndef LCDLIB_H
+#define LCDLIB_H
+
+// Start of my MCP23017 library - a derived class from FMathilda's LiquidCrystal library.
 
 // Connections to MCP23017
 // GPIO B to 8 data bits of three displays
@@ -13,17 +15,18 @@
 #include <i2c_t3.h>
 #include <LCD.h>
 //#include <I2CIO.h>
+//#include "debug.h"
 
 // Define pins on MCP23017 for the displays
-#define D_RS_PIN B00010000 // Pin 5 of GPIO A is the Rs pin
+#define GPIO_RS_PIN B00010000 // Pin 5 of GPIO A is the Rs pin
 #define DISPLAY1 B10000000 // Pin 8 of GPIO A is the E pin for display 1
 #define DISPLAY2 B01000000 // Pin 7 of GPIO A is the E pin for display 2
 #define DISPLAY3 B00100000 // Pin 6 of GPIO A is the E pin for display 3
 #define DISPLAY_ALL B11100000 // Pin 6-8 for all displays
 #define SWITCH_PINS B00001111 // Pin 1-4 are switch pins
-#define SWITCH_BOUNCE_DELAY 50 // Set bounce delay for switch in ms
+#define NUM_BUTTON_STATES 3 // The number of button states we check for the debouncing
 
-// Port expander registers
+// MCP23017 registers
 #define MCP23017_IODIRA 0x00
 #define MCP23017_IPOLA 0x02
 #define MCP23017_GPINTENA 0x04
@@ -48,44 +51,6 @@
 #define MCP23017_GPIOB 0x13
 #define MCP23017_OLATB 0x15
 
-// commands
-#define LCD_CLEARDISPLAY 0x01
-#define LCD_RETURNHOME 0x02
-#define LCD_ENTRYMODESET 0x04
-#define LCD_DISPLAYCONTROL 0x08
-#define LCD_CURSORSHIFT 0x10
-#define LCD_FUNCTIONSET 0x20
-#define LCD_SETCGRAMADDR 0x40
-#define LCD_SETDDRAMADDR 0x80
-
-// flags for display entry mode
-#define LCD_ENTRYRIGHT 0x00
-#define LCD_ENTRYLEFT 0x02
-#define LCD_ENTRYSHIFTINCREMENT 0x01
-#define LCD_ENTRYSHIFTDECREMENT 0x00
-
-// flags for display on/off control
-#define LCD_DISPLAYON 0x04
-#define LCD_DISPLAYOFF 0x00
-#define LCD_CURSORON 0x02
-#define LCD_CURSOROFF 0x00
-#define LCD_BLINKON 0x01
-#define LCD_BLINKOFF 0x00
-
-// flags for display/cursor shift
-#define LCD_DISPLAYMOVE 0x08
-#define LCD_CURSORMOVE 0x00
-#define LCD_MOVERIGHT 0x04
-#define LCD_MOVELEFT 0x00
-
-// flags for function set
-#define LCD_8BITMODE 0x10
-#define LCD_4BITMODE 0x00
-#define LCD_2LINE 0x08
-#define LCD_1LINE 0x00
-#define LCD_5x10DOTS 0x04
-#define LCD_5x8DOTS 0x00
-
 class LiquidCrystal_MCP23017 : public LCD
 {
   public:
@@ -93,37 +58,42 @@ class LiquidCrystal_MCP23017 : public LCD
     // lcd_Addr is the i2C address of the MCP23017 on the display board
     // lcd_Number is the number of the display (1, 2 or 3)
     LiquidCrystal_MCP23017 (uint8_t lcd_Addr, uint8_t lcd_Number);
-
     virtual void begin(uint8_t cols, uint8_t rows, uint8_t charsize = LCD_5x8DOTS);
     virtual void send(uint8_t value, uint8_t mode);
-    bool updateButtonState (); // Updates state of buttons, returns true when updated
-    uint8_t readButtonState (); // Returns state of buttons
+    void setDisplay(uint8_t lcd_Number);
+    bool buttonProcess(bool useInterruptState);
+    uint8_t buttonPressed();
+    uint8_t buttonReleased();
 
   private:
     void expanderWrite (const byte reg, const byte data );
     void expanderWriteBoth (const byte reg, const byte dataA, uint8_t dataB );
     uint8_t expanderRead (const byte reg);
-
     int  init();             // Initialize the LCD class and the MCP23017
-
+    
     uint8_t _Addr;           // I2C Address of the IO expander
     uint8_t _Number;
     uint8_t _En;             // LCD expander word for enable pin
     uint8_t _Rs;             // LCD expander word for Register Select pin
     uint8_t _Rw;             // LCD expander word for R/W pin (not implemented)
-    uint8_t _ButtonState;    // State of buttons (debounced)
-    uint8_t _NewButtonState; // Current state of buttons (not debounced)
-    uint32_t _BounceDelay;   // Remember delay times
+    uint8_t _ButtonState;    // State of buttons
+    uint8_t _NewButtonState; // Current state of buttons
+    uint8_t _ChangedState;
+    uint8_t _LastButtonState;
+    uint8_t _DeboucedState;
+    uint8_t _State[NUM_BUTTON_STATES] = { 0 };
+    uint8_t _Index = 0;
 };
 
 LiquidCrystal_MCP23017::LiquidCrystal_MCP23017 (uint8_t lcd_Addr, uint8_t lcd_Number) {
   _Addr = lcd_Addr;
   _Number = lcd_Number;     // LCD number is 1, 2 or 3 for display 1,2 or 3
-  _Rs = D_RS_PIN;           // Pin 4 is the default Rs pin
+  _Rs = GPIO_RS_PIN;           // Pin 4 is the default Rs pin
   _En = lcd_Number; // Pin 7 for display 1, pin 6 for display 2 and pin 5 for display 3
   _Rw = 0;                  // RW pin is not implemented
 }
 
+// Initialization of i2c, MCP23017 ports and display
 int LiquidCrystal_MCP23017::init()
 {
   int status = 0;
@@ -131,7 +101,8 @@ int LiquidCrystal_MCP23017::init()
   // initialize the MCP23017 expander
   // and display functions.
   // ------------------------------------------------------------------------
-  Wire.begin();
+
+  //Wire.begin();
 
   if ( Wire.requestFrom ( _Addr, (uint8_t)1 ) == 1 )
   {
@@ -163,17 +134,14 @@ int LiquidCrystal_MCP23017::init()
 
 void LiquidCrystal_MCP23017::begin(uint8_t cols, uint8_t lines, uint8_t dotsize)
 {
-
   init();     // Initialise the I2C expander interface
   LCD::begin ( cols, lines, dotsize );
 }
 
 // Display low-level stuff
+// send is called from the base LCD library
 void LiquidCrystal_MCP23017::send(uint8_t value, uint8_t mode)
 {
-  // First write the value to port Bv and keep port A all 0:
-  expanderWriteBoth(MCP23017_GPIOA, 0, value);
-
   // Is it a command or data
   // -----------------------
   if ( mode == DATA )
@@ -181,38 +149,52 @@ void LiquidCrystal_MCP23017::send(uint8_t value, uint8_t mode)
     mode = _Rs;
   }
 
-  // Now we toggle the enable bit(s) high
-  expanderWrite(MCP23017_GPIOA, (mode | _En)); // Enable bit high
-  expanderWrite(MCP23017_GPIOA, (mode));       // Enable bit low
+  // Now we toggle the enable bit(s) high and vrite the data in the first write cycle
+  expanderWriteBoth(MCP23017_GPIOA, (mode | _En), value); // Enable bit high and value
+  expanderWrite(MCP23017_GPIOA, (mode & ~_En));       // Enable bit low
 }
 
-// update button state
-bool LiquidCrystal_MCP23017::updateButtonState () {
-  bool updated = false;
-  _NewButtonState = expanderRead(MCP23017_INTCAPA) & SWITCH_PINS;
-  if (millis() > _BounceDelay + SWITCH_BOUNCE_DELAY) {
-    _BounceDelay = millis(); // Reset timer
-    if (_NewButtonState != _ButtonState) {
-      if ((_NewButtonState <= 2) || (_NewButtonState == 4) || (_NewButtonState == 8)) { // Only accept 0, 1, 2, 4 or 8 - no double presses allowed
-        _ButtonState = _NewButtonState;
-        updated = true;
-      }
-    }
+void LiquidCrystal_MCP23017::setDisplay(uint8_t lcd_Number) {
+  _En = lcd_Number;
+}
+
+
+// *** Control of connected buttons:
+
+bool LiquidCrystal_MCP23017::buttonProcess(bool useInterruptState) {
+  _LastButtonState = _DeboucedState;
+
+  if (useInterruptState) _ButtonState = expanderRead(MCP23017_INTCAPA) & SWITCH_PINS; // INTCAPA remembers the state at the time of the interrupt
+  else _ButtonState = expanderRead(MCP23017_GPIOA) & SWITCH_PINS; // GPIO gives the current state
+
+  _State[_Index] = _ButtonState;
+  _Index++;
+  if (_Index >= NUM_BUTTON_STATES) _Index = 0; // Check to make sure the index hasn't gone over the limit
+
+  // Debounce the buttons - all the states have to be the same as what we just read to detect a proper state
+  bool debounced = true;
+  for (uint8_t i = 0; i < NUM_BUTTON_STATES; i++)
+  {
+    if (_State[i] != _ButtonState) debounced = false;
   }
-  return updated;
+
+  if (debounced) _DeboucedState = _ButtonState;
+  _ChangedState = _DeboucedState ^ _LastButtonState;
+
+  return (_ChangedState != 0);
 }
 
-// Read button state
-// We check for the highest pressed button, in case we accidently touch the switch below
-uint8_t LiquidCrystal_MCP23017::readButtonState () {
-  uint8_t HighestPressedButton = _ButtonState; // State is correct for 0,1 and 2
-  if (_ButtonState & 4) HighestPressedButton = 3;
-  if (_ButtonState & 8) HighestPressedButton = 4;
-  return HighestPressedButton;
+uint8_t LiquidCrystal_MCP23017::buttonPressed() {
+  return (_ChangedState & _DeboucedState);
 }
 
-// MCP23017 expander writing and reading
-void LiquidCrystal_MCP23017::expanderWrite (uint8_t reg, uint8_t data ) // write data byte to both registers
+uint8_t LiquidCrystal_MCP23017::buttonReleased() {
+  return (_ChangedState & (~_DeboucedState));
+}
+
+// **** MCP23017 expander writing and reading
+// write a byte to a ports of the MCP23017 expander
+void LiquidCrystal_MCP23017::expanderWrite (uint8_t reg, uint8_t data )
 {
   Wire.beginTransmission (_Addr);
   Wire.send (reg);
@@ -220,7 +202,8 @@ void LiquidCrystal_MCP23017::expanderWrite (uint8_t reg, uint8_t data ) // write
   Wire.endTransmission ();
 }
 
-void LiquidCrystal_MCP23017::expanderWriteBoth (uint8_t reg, uint8_t dataA, uint8_t dataB ) // write data byte to both registers
+// write two bytes to both ports of the MCP23017 expander
+void LiquidCrystal_MCP23017::expanderWriteBoth (uint8_t reg, uint8_t dataA, uint8_t dataB )
 {
   Wire.beginTransmission (_Addr);
   Wire.send (reg);
@@ -229,7 +212,7 @@ void LiquidCrystal_MCP23017::expanderWriteBoth (uint8_t reg, uint8_t dataA, uint
   Wire.endTransmission ();
 }
 
-// read a byte from the expander
+// read a byte from the MCP23017 expander
 uint8_t LiquidCrystal_MCP23017::expanderRead (uint8_t reg)
 {
   Wire.beginTransmission (_Addr);
@@ -238,7 +221,5 @@ uint8_t LiquidCrystal_MCP23017::expanderRead (uint8_t reg)
   Wire.requestFrom (_Addr, (uint8_t) 1);
   return Wire.read();
 }
-// End of library
-
 
 #endif
