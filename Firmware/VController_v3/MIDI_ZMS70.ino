@@ -29,7 +29,6 @@
 //    Same message is sent for changing a knob on the MS70-CDR, but byte 7 is not 0x00
 // 8) Tempo. set bpm=40: F0 52 00 61 31 03 08 28 00 F7 => 0x28 = 40, bpm=240: F0 52 00 61 31 03 08 7A 01 F7 => 0x7A = 122, 122+128 = 240, so the last two bytes are the tempo.
 
-
 // Initialize device variables
 // Called at startup of VController
 void ZMS70_class::init() // Default values for variables
@@ -50,6 +49,7 @@ void ZMS70_class::init() // Default values for variables
   my_patch_page = PAGE_ZOOM_PATCH_BANK; // Default value
   my_parameter_page = PAGE_ZOOM_PATCH_BANK; // Default value
   my_assign_page = PAGE_ZOOM_PATCH_BANK; // Default value
+  CP_MEM_current = false;
 }
 
 // ********************************* Section 2: ZOOM MS70-CDR common MIDI in functions ********************************************
@@ -60,59 +60,67 @@ void ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int
   if ((port == MIDI_port) && (sxdata[1] == 0x52) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == ZMS70_MODEL_NUMBER)) {
 
     // Check if it is patch data for a specific patch
-    if ((sxdata[4] == 0x08) && (sxlength == 156)) {
-    //if (sxdata[4] == 0x08) {
+    if (sxdata[4] == 0x08) {
+      if  (sxlength == 156) { // Check if full sysex message is read...
+        // Read the patch name - needs to be read in three parts, to sail around the overflow bytes.
+        // Read the first character of the name
+        SP[Current_switch].Label[0] = static_cast<char>(sxdata[0x89]); //Add first character ascii character to the SP.Label String
+        for (uint8_t count = 1; count < 8; count++) { // Read the next seven characters of the name
+          SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x8A]); //Add byte 2 - 8 to ascii character to the SP.Label String
+        }
+        for (uint8_t count = 8; count < 10; count++) { // Read the last two characters of the name
+          SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x8B]); //Add byte 9 and 10 to ascii character to the SP.Label String
+        }
+        for (uint8_t count = 10; count < 16; count++) { // Fill the rest with spaces
+          SP[Current_switch].Label[count] = ' ';
+        }
+        DEBUGMSG (SP[Current_switch].Label);
 
-      // Read the patch name - needs to be read in three parts, to sail around the overflow bytes.
-      // Read the first character of the name
-      SP[Current_switch].Label[0] = static_cast<char>(sxdata[0x89]); //Add first character ascii character to the SP.Label String
-      for (uint8_t count = 1; count < 8; count++) { // Read the next seven characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x8A]); //Add byte 2 - 8 to ascii character to the SP.Label String
+        if (SP[Current_switch].PP_number == patch_number) {
+          current_patch_name = SP[Current_switch].Label; // Load patchname when it is read
+          update_main_lcd = true; // And show it on the main LCD
+        }
+        PAGE_request_next_switch();
       }
-      for (uint8_t count = 8; count < 10; count++) { // Read the last two characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x8B]); //Add byte 9 and 10 to ascii character to the SP.Label String
+      else { // Data is not complete
+        PAGE_request_current_switch(); // Retry reading data for current switch
       }
-      for (uint8_t count = 10; count < 16; count++) { // Fill the rest with spaces
-        SP[Current_switch].Label[count] = ' ';
-      }
-      DEBUGMSG (SP[Current_switch].Label);
-
-      if (SP[Current_switch].PP_number == patch_number) {
-        current_patch_name = SP[Current_switch].Label; // Load patchname when it is read
-        update_main_lcd = true; // And show it on the main LCD
-      }
-      PAGE_request_next_switch();
     }
 
     // Check if it is the current patch
-    if ((sxdata[4] == 0x28) && (sxlength == ZMS70_CURRENT_PATCH_DATA_SIZE)) {
-      //if (sxdata[4] == 0x28) {
-      //DEBUGMSG("!!!!Length sysex message: " + String(sxlength));
-      // Copy current patch data to current patch memory - we need it later for changing specific parameters
-      for (uint8_t i = 0; i < ZMS70_CURRENT_PATCH_DATA_SIZE; i++) {
-        CP_MEM[i] = sxdata[i];
-      }
-      DEBUGMSG("Copied current patch to CP_MEM");
+    if (sxdata[4] == 0x28) {
+      if (sxlength == ZMS70_CURRENT_PATCH_DATA_SIZE) {
+        //if (sxdata[4] == 0x28) {
+        //DEBUGMSG("!!!!Length sysex message: " + String(sxlength));
+        // Copy current patch data to current patch memory - we need it later for changing specific parameters
+        memcpy( CP_MEM, sxdata, ZMS70_CURRENT_PATCH_DATA_SIZE );
+        CP_MEM_current = true;
+        DEBUGMSG("Copied current patch to CP_MEM");
 
-      // Here we read the FX types and states from the current patch memory (CP_MEM)
-      FX[0] = FXtypeMangler(CP_MEM[6] + ((CP_MEM[5] & B01000000) << 1), CP_MEM[7], CP_MEM[9]);
-      FX[1] = FXtypeMangler(CP_MEM[26] + ((CP_MEM[21] & B00000100) << 5), CP_MEM[27], CP_MEM[30]);
-      FX[2] = FXtypeMangler(CP_MEM[47] + ((CP_MEM[45] & B00100000) << 2), CP_MEM[48], CP_MEM[50]);
-      FX[3] = FXtypeMangler(CP_MEM[67] + ((CP_MEM[61] & B00000010) << 6), CP_MEM[68], CP_MEM[71]);
-      FX[4] = FXtypeMangler(CP_MEM[88] + ((CP_MEM[85] & B00010000) << 3), CP_MEM[89], CP_MEM[91]);
-      FX[5] = FXtypeMangler(CP_MEM[108] + ((CP_MEM[101] & B00000001) << 7), CP_MEM[110], CP_MEM[112]);
+        // Here we read the FX types and states from the current patch memory (CP_MEM)
+        FX[0] = FXtypeMangler(CP_MEM[6] + ((CP_MEM[5] & B01000000) << 1), CP_MEM[7], CP_MEM[9]);
+        FX[1] = FXtypeMangler(CP_MEM[26] + ((CP_MEM[21] & B00000100) << 5), CP_MEM[27], CP_MEM[30]);
+        FX[2] = FXtypeMangler(CP_MEM[47] + ((CP_MEM[45] & B00100000) << 2), CP_MEM[48], CP_MEM[50]);
+        FX[3] = FXtypeMangler(CP_MEM[67] + ((CP_MEM[61] & B00000010) << 6), CP_MEM[68], CP_MEM[71]);
+        FX[4] = FXtypeMangler(CP_MEM[88] + ((CP_MEM[85] & B00010000) << 3), CP_MEM[89], CP_MEM[91]);
+        FX[5] = FXtypeMangler(CP_MEM[108] + ((CP_MEM[101] & B00000001) << 7), CP_MEM[110], CP_MEM[112]);
 
-      // Read the current patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
-      SP[Current_switch].Label[0] = static_cast<char>(CP_MEM[0x7F]); //Add first character ascii character to the SP.Label String
-      for (uint8_t count = 1; count < 8; count++) { // Read the last nine characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(CP_MEM[count + 0x80]); //Add byte 2 - 8 to ascii character to the SP.Label String
-      }
-      for (uint8_t count = 8; count < 10; count++) { // Read the last nine characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(CP_MEM[count + 0x81]); //Add byte 9 and 10 to ascii character to the SP.Label String
-      }
+        // Read the current patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
+        current_patch_name[0] = static_cast<char>(CP_MEM[0x84]); //Add first character ascii character to the SP.Label String
+        for (uint8_t count = 1; count < 8; count++) { // Read the last nine characters of the name
+          current_patch_name[count] = static_cast<char>(CP_MEM[count + 0x85]); //Add byte 2 - 8 to ascii character to the SP.Label String
+        }
+        for (uint8_t count = 8; count < 10; count++) { // Read the last nine characters of the name
+          current_patch_name[count] = static_cast<char>(CP_MEM[count + 0x86]); //Add byte 9 and 10 to ascii character to the SP.Label String
+        }
 
-      no_device_check = false;
-      update_page |= REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the MS70-CDR.
+        no_device_check = false;
+        update_main_lcd = true;
+        update_page |= REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the MS70-CDR.
+      }
+      else { // Data is not complete
+        write_sysex(ZMS70_REQUEST_CURRENT_PATCH); // Request current patch data again
+      }
     }
 
     if ((sxdata[4] == 0x31) && (sxdata[6] == 0x00) && (sxlength == 10)) { // Check for effect switched off on the ZOOM MS70-CDR.
@@ -161,6 +169,7 @@ void ZMS70_class::do_after_connect() {
   is_on = true;
   write_sysex(ZMS70_EDITOR_MODE_ON); // Put the Zoom MS70-CDR in EDITOR mode
   write_sysex(ZMS70_REQUEST_PATCH_NUMBER); // Receiving the current patch number will trigger a request for the current patch as well.
+  CP_MEM_current = false;
   write_sysex(ZMS70_REQUEST_CURRENT_PATCH); //This will update the FX buttons ->
 }
 
@@ -185,7 +194,7 @@ void ZMS70_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an ef
 }
 
 void ZMS70_class::send_current_patch() { //  Send the previously saved data back to the Zoom unit
-  MIDI_send_sysex(CP_MEM, 146, MIDI_port);
+  if (CP_MEM_current) MIDI_send_sysex(CP_MEM, 146, MIDI_port);
 }
 
 void ZMS70_class::set_bpm() { //Will change the bpm to the specified value
@@ -195,7 +204,7 @@ void ZMS70_class::set_bpm() { //Will change the bpm to the specified value
     //check_sysex_delay();
     MIDI_send_sysex(sysexmessage, 10, MIDI_port);
   }*/
-  if (connected) {
+  if ((connected) && (CP_MEM_current)) {
     // We write the tempo in the full patch memory. Here is where it is stored:
     // Tempo bit 4 - 8 is bit 1-5 from second tempo byte (index 131)
     // Tempo bit 3 is bit 3 of the overflow byte! (index 125)
@@ -225,18 +234,21 @@ void ZMS70_class::stop_tuner() {
 void ZMS70_class::do_after_patch_selection() {
   //ZMS70_request_onoff = false;
   is_on = connected;
-  if (Setting.Send_global_tempo_after_patch_change == true) {
-    //delay(5); // ZMS70 misses send bpm command...
-    //set_bpm();
-  }
   Current_patch_number = patch_number; // the patch name
   update_LEDS = true;
   update_main_lcd = true;
+  CP_MEM_current = false;
   write_sysex(ZMS70_REQUEST_CURRENT_PATCH); // Update the FX buttons
   no_device_check = true;
   //update_page |= REFRESH_PAGE;
   //ZMS70_request_guitar_switch_states();
   //EEPROM.write(EEPROM_ZMS70_PATCH_NUMBER, patch_number);
+  /*if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
+    update_page |= REFRESH_PAGE;
+  }
+  else {
+    update_page = REFRESH_FX_ONLY;
+  }*/
 
 }
 
@@ -248,6 +260,7 @@ void ZMS70_class::do_after_patch_selection() {
       current_patch_name = SP[s].Label; // Set patchname correctly
       //ZMS70_Recall_FXs(s); // Copy the FX states
       write_sysex(ZMS70_REQUEST_CURRENT_PATCH); //This will update the FX buttons
+      CP_MEM_current = false;
     }
   }
   if (!onpage) update_page |= REFRESH_PAGE;
@@ -448,7 +461,7 @@ void ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) 
   if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
     set_FX_state(SP[Sw].PP_number, FX_on);
   }
-  else { // Here we change the on/off bit in the patch data memory and write it back to the unit
+  else if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
     if (SP[Sw].PP_number == 3) bitWrite(CP_MEM[67], 0, FX_on);
     if (SP[Sw].PP_number == 4) bitWrite(CP_MEM[88], 0, FX_on);
     if (SP[Sw].PP_number == 5) bitWrite(CP_MEM[108], 0, FX_on);
@@ -461,7 +474,7 @@ void ZMS70_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number
     if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
       set_FX_state(SP[Sw].PP_number, cmd->Value2);
     }
-    else { // Here we change the on/off bit in the patch data memory and write it back to the unit
+    else if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
       if (SP[Sw].PP_number == 3) bitWrite(CP_MEM[67], 0, cmd->Value2);
       if (SP[Sw].PP_number == 4) bitWrite(CP_MEM[88], 0, cmd->Value2);
       if (SP[Sw].PP_number == 5) bitWrite(CP_MEM[108], 0, cmd->Value2);

@@ -229,8 +229,12 @@ void GP10_class::do_after_patch_selection() {
   assign_read = false; // Assigns should be read again
   request_guitar_switch_states();
   //EEPROM.write(EEPROM_GP10_PATCH_NUMBER, patch_number);
-  update_page = REFRESH_FX_ONLY;
-
+  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
+    update_page |= REFRESH_PAGE;
+  }
+  else {
+    update_page = REFRESH_FX_ONLY;
+  }
 }
 
 void GP10_class::request_patch_name(uint16_t number) {

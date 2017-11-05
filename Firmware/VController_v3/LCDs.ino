@@ -195,14 +195,15 @@ void setup_LCD_control()
   Main_lcd.setBacklightPin(BACKLIGHT_PIN, POSITIVE);
   Main_lcd.setBacklight(true); // Backlight state is the same as initial on or off state...
 
+  // Show startup screen
+  LCD_show_startup_message();
+
   // Create the characters for the expression pedal bar
   Main_lcd.createChar(0, block1);
   Main_lcd.createChar(1, block2);
   Main_lcd.createChar(2, block3);
   Main_lcd.createChar(3, block4);
   Main_lcd.createChar(4, block5);
-  // Show startup screen
-  LCD_show_startup_message();
 
   // Initialize individual LCDs - same for both methods
   for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS; i++) {
@@ -222,6 +223,9 @@ void setup_LCD_control()
   Main_menu_line1.reserve(17);
   Main_menu_line2.reserve(17);
   Current_patch_name = "                ";
+
+  // Show startup screen
+  LCD_show_startup_credits();
 }
 
 // ********************************* Section 2: Update of main LCD ********************************************
@@ -271,21 +275,26 @@ void main_LCD_control()
 
 void LCD_update_main_display() {
   Main_lcd.home();
-  /*Current_page_name = ""; //Page[Current_page].Title;
-  //PAGE_lookup_title(Current_page, Current_page_name);
-  EEPROM_read_title(Current_page, 0, Current_page_name); // Page name from EEPROM
+  String topline = Blank_line;
 
-  Current_page_name.trim();
-  Main_lcd.print(Blank_line.substring(0, 16 - Current_page_name.length()) + Current_page_name);*/
+  LCD_set_combined_patch_number_and_name();
+
+  uint8_t ps_length = Current_patch_number_string.length();
+  for (uint8_t i = 0; i < ps_length; i++) {
+    topline[i] = Current_patch_number_string[i];
+  }
 
   if (Current_device < NUMBER_OF_DEVICES) {
     Current_device_name = Device[Current_device]->device_name;
-    Main_lcd.print(Blank_line.substring(0, 16 - Current_device_name.length()) + Current_device_name);
+    uint8_t name_length = Current_device_name.length();
+    if (ps_length < (16 - name_length)) { // Only show current device if it fits
+      for (uint8_t i = 0; i < name_length; i++) {
+        topline[16 - name_length + i] = Current_device_name[i];
+      }
+    }
   }
 
-  LCD_set_combined_patch_number_and_name();
-  Main_lcd.setCursor (0, 0);
-  Main_lcd.print(Current_patch_number_string);
+  Main_lcd.print(topline);
 
   Main_lcd.setCursor (0, 1);       // go to start of 2nd line
 
@@ -322,7 +331,11 @@ void LCD_set_combined_patch_number_and_name() {
   uint8_t l = Current_patch_number_string.length();
   Current_patch_number_string.remove(l - 1);
 
-  if (number_of_active_devices > 2) Current_patch_number_string = Current_patch_number_string + "     "; //Add spaces at the end to clear any remaining leters
+  // Check if device is in bank selection
+  if ((device_in_bank_selection > 0) && (device_in_bank_selection <= NUMBER_OF_DEVICES)) {
+    Current_patch_number_string = "";
+    Device[device_in_bank_selection - 1]->display_patch_number_string();
+  }
 
   // Show patchname
   switch (number_of_active_devices) {
@@ -375,7 +388,12 @@ void LCD_show_are_you_sure(String line1, String line2)
 void LCD_show_startup_message() {
   Main_lcd.home(); // go home
   //Main_lcd.setCursor(0, 0); // Need double command - otherwise I get garbage
-  Main_lcd.print("V-controller " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR));  // Show startup message
+  Main_lcd.print("  V-controller  ");  // Show startup message
+  LCD_show_status_message(" version " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_BUILD) + "  ");  //Please give me the credits :-)
+}
+
+void LCD_show_startup_credits() {
+  delay(800);
   LCD_show_status_message("  by SixEight   ");  //Please give me the credits :-)
 }
 
@@ -721,60 +739,62 @@ void LCD_update(uint8_t sw) {
 }
 
 void LCD_par_state(uint8_t number, uint8_t Dev) { // Will print the right parameter message depending on the TOGGLE state
-  switch (SP[number + 1].Latch) {
-    case TOGGLE:
-      lcd[number].print(" [ ");
-      lcd[number].print(Device[Dev]->device_name);
-      lcd[number].print(" ] ");
-      break;
-    case MOMENTARY:
-      lcd[number].print(" < ");
-      lcd[number].print(Device[Dev]->device_name);
-      lcd[number].print(" > ");
-      break;
-    case TRISTATE:
-      lcd[number].print(Device[Dev]->device_name);
-      lcd[number].print(" (");
-      lcd[number].print(String(SP[number + 1].State));
-      lcd[number].print("/3)");
-      break;
-    case FOURSTATE:
-      lcd[number].print(Device[Dev]->device_name);
-      lcd[number].print(" (");
-      lcd[number].print(String(SP[number + 1].State));
-      lcd[number].print("/4)");
-      break;
-    case TGL_OFF:
-      lcd[number].print("     --     ");
-      break;
-    case UPDOWN:
-      if (SP[number + 1].Direction) {
-        lcd[number].print(' ');
-        lcd[number].print(char(1));
-        lcd[number].print(' ');
+  if (Dev < NUMBER_OF_DEVICES) {
+    switch (SP[number + 1].Latch) {
+      case TOGGLE:
+        lcd[number].print(" [ ");
         lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(' ');
-        lcd[number].print(char(1));
-        lcd[number].print(' ');
-      }
-      else {
-        lcd[number].print(' ');
-        lcd[number].print(char(2));
-        lcd[number].print(' ');
+        lcd[number].print(" ] ");
+        break;
+      case MOMENTARY:
+        lcd[number].print(" < ");
         lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(' ');
-        lcd[number].print(char(2));
-        lcd[number].print(' ');
-      }
-      break;
-    default: // STEP and RANGE
-      lcd[number].print(Device[Dev]->device_name);
-      lcd[number].print(" (");
-      lcd[number].print(String(SP[number + 1].Target_byte1 + 1));
-      lcd[number].print("/");
-      lcd[number].print(String(SP[number + 1].Assign_max));
-      lcd[number].print(")");
-      break;
+        lcd[number].print(" > ");
+        break;
+      case TRISTATE:
+        lcd[number].print(Device[Dev]->device_name);
+        lcd[number].print(" (");
+        lcd[number].print(String(SP[number + 1].State));
+        lcd[number].print("/3)");
+        break;
+      case FOURSTATE:
+        lcd[number].print(Device[Dev]->device_name);
+        lcd[number].print(" (");
+        lcd[number].print(String(SP[number + 1].State));
+        lcd[number].print("/4)");
+        break;
+      case TGL_OFF:
+        lcd[number].print("     --     ");
+        break;
+      case UPDOWN:
+        if (SP[number + 1].Direction) {
+          lcd[number].print(' ');
+          lcd[number].print(char(1));
+          lcd[number].print(' ');
+          lcd[number].print(Device[Dev]->device_name);
+          lcd[number].print(' ');
+          lcd[number].print(char(1));
+          lcd[number].print(' ');
+        }
+        else {
+          lcd[number].print(' ');
+          lcd[number].print(char(2));
+          lcd[number].print(' ');
+          lcd[number].print(Device[Dev]->device_name);
+          lcd[number].print(' ');
+          lcd[number].print(char(2));
+          lcd[number].print(' ');
+        }
+        break;
+      default: // STEP and RANGE
+        lcd[number].print(Device[Dev]->device_name);
+        lcd[number].print(" (");
+        lcd[number].print(String(SP[number + 1].Target_byte1 + 1));
+        lcd[number].print("/");
+        lcd[number].print(String(SP[number + 1].Assign_max));
+        lcd[number].print(")");
+        break;
+    }
   }
 }
 

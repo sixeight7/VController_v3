@@ -61,49 +61,61 @@ void ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int s
   if ((port == MIDI_port) && (sxdata[1] == 0x52) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == ZG3_MODEL_NUMBER)) {
 
     // Check if it is the patch data of a specific patch
-    if ((sxdata[4] == 0x08) && (sxlength == 120)) {
-      //if (sxdata[4] == 0x08) {
-      //DEBUGMSG("!!!!Length sysex message: " + String(sxlength));
-      // Read the patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
-      for (uint8_t count = 0; count < 4; count++) { // Read the first four characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x66]); //Add ascii character to the SP.Label String
-      }
-      for (uint8_t count = 4; count < 10; count++) { // Read the last six characters of the name
-        SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x67]); //Add ascii character to the SP.Label String
-      }
-      for (uint8_t count = 10; count < 17; count++) { // Fill the rest with spaces
-        SP[Current_switch].Label[count] = ' ';
-      }
+    if (sxdata[4] == 0x08) {
+      if (sxlength == 120) {
+        //if (sxdata[4] == 0x08) {
+        //DEBUGMSG("!!!!Length sysex message: " + String(sxlength));
+        // Read the patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
+        for (uint8_t count = 0; count < 4; count++) { // Read the first four characters of the name
+          SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x66]); //Add ascii character to the SP.Label String
+        }
+        for (uint8_t count = 4; count < 10; count++) { // Read the last six characters of the name
+          SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 0x67]); //Add ascii character to the SP.Label String
+        }
+        for (uint8_t count = 10; count < 17; count++) { // Fill the rest with spaces
+          SP[Current_switch].Label[count] = ' ';
+        }
 
-      if (SP[Current_switch].PP_number == patch_number) {
-        current_patch_name = SP[Current_switch].Label; // Load current patchname when it is read
-        update_main_lcd = true; // And show it on the main LCD
+        if (SP[Current_switch].PP_number == patch_number) {
+          current_patch_name = SP[Current_switch].Label; // Load current patchname when it is read
+          update_main_lcd = true; // And show it on the main LCD
+        }
+        DEBUGMSG(SP[Current_switch].Label);
+        PAGE_request_next_switch();
       }
-      DEBUGMSG(SP[Current_switch].Label);
-      PAGE_request_next_switch();
+      else {
+        PAGE_request_current_switch(); // Retry reading
+      }
     }
 
     // Check if it is the current patch data
-    if ((sxdata[4] == 0x28) && (sxlength == ZG3_CURRENT_PATCH_DATA_SIZE)) {
+    if (sxdata[4] == 0x28) {
+      if (sxlength == ZG3_CURRENT_PATCH_DATA_SIZE) {
 
-      // These codes are the same as above. Only the sxdata postitions are all minus 5.
-      FX[0] = ((sxdata[5] & B01000000) << 1) | sxdata[6];
-      FX[1] = ((sxdata[13] & B00000010) << 6) | sxdata[19];
-      FX[2] = ((sxdata[29] & B00001000) << 4) | sxdata[33];
-      FX[3] = ((sxdata[45] & B00100000) << 2) | sxdata[47];
-      FX[4] = ((sxdata[53] & B00000001) << 7) | sxdata[60];
-      FX[5] = ((sxdata[69] & B00000100) << 5) | sxdata[74];
+        // These codes are the same as above. Only the sxdata postitions are all minus 5.
+        FX[0] = ((sxdata[5] & B01000000) << 1) | sxdata[6];
+        FX[1] = ((sxdata[13] & B00000010) << 6) | sxdata[19];
+        FX[2] = ((sxdata[29] & B00001000) << 4) | sxdata[33];
+        FX[3] = ((sxdata[45] & B00100000) << 2) | sxdata[47];
+        FX[4] = ((sxdata[53] & B00000001) << 7) | sxdata[60];
+        FX[5] = ((sxdata[69] & B00000100) << 5) | sxdata[74];
 
-      // Read the patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
-      for (uint8_t count = 0; count < 4; count++) { // Read the first four characters of the name
-        current_patch_name[count] = static_cast<char>(sxdata[count + 0x61]); //Add ascii character to the SP.Label String
+        // Read the patch name - needs to be read in two parts, because the fifth byte in the patchname string is a 0.
+        for (uint8_t count = 0; count < 4; count++) { // Read the first four characters of the name
+          current_patch_name[count] = static_cast<char>(sxdata[count + 0x61]); //Add ascii character to the SP.Label String
+        }
+        for (uint8_t count = 4; count < 10; count++) { // Read the last six characters of the name
+          current_patch_name[count] = static_cast<char>(sxdata[count + 0x62]); //Add ascii character to the SP.Label String
+        }
+
+        update_main_lcd = true;
+        update_page |= REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the G3.
       }
-      for (uint8_t count = 4; count < 10; count++) { // Read the last six characters of the name
-        current_patch_name[count] = static_cast<char>(sxdata[count + 0x62]); //Add ascii character to the SP.Label String
+      else {
+        write_sysex(ZG3_REQUEST_CURRENT_PATCH); //Re-request the patch data
       }
-
-      update_page |= REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the G3.
     }
+
     if ((sxdata[4] == 0x31) && (sxdata[6] == 0x00) && (sxlength == 10)) { // Check for effect switched off on the ZOOM G5.
       uint8_t index = sxdata[5];
       if (index < NUMBER_OF_FX_SLOTS) FX[index] &= B11111110; //Make a zero of bit 1 - this will switch off the effect
@@ -179,6 +191,12 @@ void ZG3_class::do_after_patch_selection() {
   update_main_lcd = true;
   write_sysex(ZG3_REQUEST_CURRENT_PATCH); // Request FX buttons state
   no_device_check = true;
+  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
+    update_page |= REFRESH_PAGE;
+  }
+  else {
+    update_page = REFRESH_FX_ONLY;
+  }
 }
 
 void ZG3_class::page_check() { // Checks if the current patch is on the page

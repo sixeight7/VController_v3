@@ -100,6 +100,7 @@ void Device_class::connect(uint8_t device_id, uint8_t port) {
   DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ":" + String(port & 0x0F));
   //bank_number = (patch_number / bank_size);
   do_after_connect();
+  PAGE_check_first_connect(my_device_number);
   update_page = RELOAD_PAGE;
 }
 
@@ -108,6 +109,7 @@ void Device_class::do_after_connect() {}
 void Device_class::disconnect() {
   connected = false;
   is_on = false;
+  current_patch_name = Blank_line;
   LCD_show_status_message(String(device_name) + " offline   ");
   DEBUGMAIN(String(device_name) + " offline");
   update_page |= RELOAD_PAGE;
@@ -117,7 +119,9 @@ void Device_class::disconnect() {
 // ********************************* Section 3: Device common MIDI out functions ********************************************
 
 void Device_class::check_sysex_delay() { // Will delay if last message was within SYSEX_DELAY_LENGTH (10 ms)
-  while (millis() - sysexDelay <= SYSEX_DELAY_LENGTH) {}
+  while (millis() - sysexDelay <= SYSEX_DELAY_LENGTH) {
+    //main_MIDI_common(); // Keep the MIDI input detection going. Otherwise we get errors on midi input
+  }
   sysexDelay = millis();
 }
 

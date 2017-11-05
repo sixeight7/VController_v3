@@ -286,15 +286,14 @@ void VG99_class::do_after_patch_selection() {
   Current_patch_number = patch_number;
   update_LEDS = true;
   update_main_lcd = true;
-  /*if (!PAGE_check_on_page(my_device_number, patch_number)) {
-    DEBUGMSG("NEED TO REFRESH THE PAGE !!!!!");
-    update_page |= REFRESH_PAGE;
-  }*/
   request_guitar_switch_states();
-  //write_sysex(VG99_EDITOR_MODE_OFF);  // Try to supress messages on the VG-99
-  //EEPROM.write(EEPROM_VG99_PATCH_MSB, (patch_number / 256));
-  //EEPROM.write(EEPROM_VG99_PATCH_LSB, (patch_number % 256));
-  update_page = REFRESH_FX_ONLY;
+
+  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page 
+    update_page |= REFRESH_PAGE;
+  }
+  else {
+    update_page = REFRESH_FX_ONLY;
+  }
 }
 
 /*uint32_t VG99_class::calculate_patch_address(uint16_t number) {

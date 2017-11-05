@@ -35,7 +35,7 @@
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
 #define VCONTROLLER_FIRMWARE_VERSION_MINOR 0
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 2
 
 void setup() {
   // Wire speeds are set in hardware.h
@@ -60,6 +60,7 @@ void loop() {
   main_switch_check(); // Check for switches pressed
   main_switch_control(); //If switch is pressed, take the configured action
   main_LED_control(); //Check update of LEDs
+  //MIDI_check_MIDI3();
   main_LCD_control(); //Check update of displays
   main_MIDI_common(); //Read MIDI ports
   main_page(); // Check update of current page
@@ -157,7 +158,10 @@ Software structure:
 01-09-2017 Re-arranged menu structure
 08-09-2017 Added PC ledger to have LEDs showing the current "patch" for GM PC. As long as channel and port match the selected PC will light up
 25-09-2017 v3.0.1 Fixed PAGE_UP and PAGE_DOWN not working properly
-04-10-2017 v3.0.2 Updown could not be selected when programming menu's, 
+04-10-2017 v3.0.2 Updown could not be selected when programming menus
+29-10-2017 New algorithm for bass mode
+04-11-2017 ZMS70cdr bug not showing patch name fixed. VController now diplaying full version number on powerup. Main display top line behaviour updated.
+05-11-2017 Connect of first new device automatically selects its device page. v3.0.2 published
 */
 
 

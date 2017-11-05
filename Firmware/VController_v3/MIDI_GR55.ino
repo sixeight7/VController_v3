@@ -79,15 +79,20 @@ void GR55_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int 
     if (address == last_requested_sysex_address) {
       switch (last_requested_sysex_type) {
         case PATCH_NAME:
-          for (uint8_t count = 0; count < 16; count++) {
-            SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 11]); //Add ascii character to the SP.Label String
+          if (sxlength == 29) { // Check if we received the full message
+            for (uint8_t count = 0; count < 16; count++) {
+              SP[Current_switch].Label[count] = static_cast<char>(sxdata[count + 11]); //Add ascii character to the SP.Label String
+            }
+            if (SP[Current_switch].PP_number == patch_number) {
+              current_patch_name = SP[Current_switch].Label; // Load patchname when it is read
+              update_main_lcd = true; // And show it on the main LCD
+            }
+            DEBUGMSG(SP[Current_switch].Label);
+            PAGE_request_next_switch();
           }
-          if (SP[Current_switch].PP_number == patch_number) {
-            current_patch_name = SP[Current_switch].Label; // Load patchname when it is read
-            update_main_lcd = true; // And show it on the main LCD
+          else {
+            PAGE_request_current_switch();
           }
-          DEBUGMSG(SP[Current_switch].Label);
-          PAGE_request_next_switch();
           break;
         case PARAMETER_TYPE:
           read_parameter(sxdata[11], sxdata[12]);
@@ -245,9 +250,12 @@ void GR55_class::do_after_patch_selection() {
   update_main_lcd = true;
   //update_page |= REFRESH_PAGE;
   request_guitar_switch_states();
-  //EEPROM.write(EEPROM_GR55_PATCH_MSB, (patch_number / 256));
-  //EEPROM.write(EEPROM_GR55_PATCH_LSB, (patch_number % 256));
-  update_page = REFRESH_FX_ONLY;
+  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
+    update_page |= REFRESH_PAGE;
+  }
+  else {
+    update_page = REFRESH_FX_ONLY;
+  }
 }
 
 /*void GR55_patch_bank_load(uint8_t sw, uint8_t bank_position, uint8_t bank_size) {
@@ -568,7 +576,7 @@ const PROGMEM char GR55_sublists[][9] = {
 
   // Sublist 153 - 159: Part Octave shift - this sublist has to be called from 92 because the minimum value of the data is 61
   "-3", "-2", "-1", "0", "+1", "+2", "+3",
-  
+
   // Sublist 160 - 172: Tunings
   "OPEN-D", "OPEN-E", "OPEN-G", "OPEN-A", "DROP-D", "D-MODAL", "-1 STEP", "-2 STEP", "BARITONE", "NASHVL", "-1 OCT", "+1 OCT", "USER",
 };
@@ -651,11 +659,11 @@ void GR55_class::read_parameter_state(uint16_t number, uint8_t value, String &Ou
 void GR55_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
-  
+
   if (GR55_parameters[number].Sublist == 92) { // Create minimum value for tone octave
     if (value < 61) value = 61;
   }
-  
+
   if (GR55_parameters[number].Reversed) value ^= 1; // Reverse the value
 
   if (SP[Sw].Latch != TGL_OFF) {

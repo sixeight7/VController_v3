@@ -131,10 +131,6 @@ void main_switch_check() {
   switch_extra_long_pressed = 0;
   switch_held = 0;
 
-#ifdef POWER_PIN
-  SC_update_power_switch();
-#endif
-
 #ifdef INTA_PIN
   SC_check_display_board_switch();
 #endif
@@ -150,6 +146,10 @@ void main_switch_check() {
 
 #ifdef JACK1_PINS
   SC_check_external_switches();
+#endif
+
+#ifdef POWER_PIN
+  SC_update_power_switch();
 #endif
 
   SC_update_long_presses_and_hold();

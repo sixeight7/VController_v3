@@ -370,7 +370,6 @@ class ZG3_class : public Device_class
     const uint8_t NUMBER_OF_FX_SLOTS = 6; // The Zoom MS70-CDR has 6 FX slots
     uint16_t FX[6]; //Memory location for the 6 FX
 #define ZG3_CURRENT_PATCH_DATA_SIZE 110
-    uint8_t CP_MEM[ZG3_CURRENT_PATCH_DATA_SIZE]; // Memory to store the current patch data
 };
 
 // ********************************* Section 6: ZMS70_class declaration (derived) ********************************************
@@ -417,5 +416,7 @@ class ZMS70_class : public Device_class
     uint16_t FX[6]; //Memory location for the 6 FX
 #define ZMS70_CURRENT_PATCH_DATA_SIZE 146
     uint8_t CP_MEM[ZMS70_CURRENT_PATCH_DATA_SIZE]; // Memory to store the current patch data
+    bool CP_MEM_current;
 };
+
 

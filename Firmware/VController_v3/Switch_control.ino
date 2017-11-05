@@ -857,13 +857,11 @@ void SCO_reset_tap_tempo_LED() {
 
 // Bass mode: sends a CC message with the number of the lowest string that is being played.
 // By making smart assigns on a device, you can hear just the bass note played
-//#define GUITAR_TO_MIDI_CHANNEL 1 //The MIDI channel of the first string
-//#define BASS_CC_NUMBER 15 //The CC number for the bass control
-//#define BASS_CC_CHANNEL My_GR55.MIDI_channel //The MIDI channel on which this cc must be sent
-//#define BASS_CC_PORT My_GR55.MIDI_port //The MIDI port on which this cc must be sent
-//#define BASS_MIN_VEL 100 // Minimum velocity - messages below it ae ignored
 uint8_t bass_string = 0; //remembers the current midi channel
 
+
+// Method 1:
+/*
 void SCO_bass_mode_note_on(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
   if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
     uint8_t string_played = channel - Setting.Bass_mode_G2M_channel + 1;
@@ -885,6 +883,46 @@ void SCO_bass_mode_note_off(uint8_t note, uint8_t velocity, uint8_t channel, uin
       //if (Setting.Bass_mode_device < NUMBER_OF_DEVICES) 
       //  MIDI_send_CC(Setting.Bass_mode_cc_number , bass_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
     }
+  }
+}
+*/
+// Method 2:
+bool string_on[6] = { false }; // remember the current state of every string
+
+void SCO_bass_mode_note_on(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
+  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
+    uint8_t string_played = channel - Setting.Bass_mode_G2M_channel;
+
+    if (velocity >= Setting.Bass_mode_min_velocity) {
+      string_on[string_played] = true;
+      SCO_bass_mode_check_string();
+    }
+    
+    else { // string level below minimum threshold or string off on VG99
+      string_on[string_played] = false;
+      SCO_bass_mode_check_string();
+    }  
+  }
+}
+
+void SCO_bass_mode_note_off(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
+  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
+    uint8_t string_played = channel - Setting.Bass_mode_G2M_channel;
+    string_on[string_played] = false;
+    SCO_bass_mode_check_string();
+  }
+}
+
+void SCO_bass_mode_check_string() {
+  uint8_t lowest_string_played = 0;
+  for (uint8_t s = 0; s < 6; s++) { // Find the lowest string that is played (has highest string number)
+    if (string_on[s]) lowest_string_played = s + 1;
+  }
+  if (lowest_string_played != bass_string) {
+    bass_string = lowest_string_played;
+    if (Setting.Bass_mode_device < NUMBER_OF_DEVICES)
+      MIDI_send_CC(Setting.Bass_mode_cc_number , bass_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
+    DEBUGMAIN("Set lowest string: " + String(bass_string));
   }
 }
 
@@ -924,9 +962,9 @@ void SCO_switch_power_off() {
 }
 
 bool SCO_are_you_sure() {
-  
+
   switch_pressed = 0;
-  
+
   // Wait for new switch to be pressed
   while (switch_pressed == 0) { // Wait for switch being pressed
     main_switch_check();
@@ -938,7 +976,7 @@ bool SCO_are_you_sure() {
     if (switch_released > 0) {
       SP[switch_released].Pressed = false;
     }
-    
+
     LED_update_pressed_state_only(); // Get the LEDs to respond
   }
 

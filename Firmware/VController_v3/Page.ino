@@ -10,7 +10,7 @@
 // A page contains a set of functions for internal and external switches and expression pedals.
 // Loading of a page from configuration page to active memory (SP array) and reading of the variables
 
-#define SYSEX_WATCHDOG_LENGTH 500 // watchdog length for sysex messages (in msec).
+#define SYSEX_WATCHDOG_LENGTH 100 // watchdog length for sysex messages (in msec).
 unsigned long SysexWatchdog = 0; // This watchdog will check if a device responds. If it expires it will request the same parameter again.
 boolean Sysex_watchdog_running = false;
 #define SYSEX_NUMBER_OF_READ_ATTEMPS 3 // Number of times the watchdog will be restarted before moving to the next parameter
@@ -430,9 +430,28 @@ void PAGE_check_sysex_watchdog() {
   }
 }
 
+void PAGE_check_first_connect(uint8_t dev) { // Will check if last connected device is the first that connects
+  if (Current_device < NUMBER_OF_DEVICES) { // Quit if the current device is already connected
+    if (Device[Current_device]->connected) return;
+  }
+  
+  if (Current_device != dev) {
+    Current_device = dev;
+    SCO_select_page(Device[dev]->my_patch_page); // Select this device
+  }
+}
+
 bool PAGE_check_on_page(uint8_t dev, uint16_t patch) { // Will check if the patch mentioned is currently on the page
+  uint8_t bsize = 0; // We will also read the bank size in the process
   for (uint8_t s = 0; s < NUMBER_OF_SWITCHES; s++) { // Run through the switches on the current page
     if (((SP[s].Type == PATCH_SEL) || (SP[s].Type == PATCH_BANK)) && (SP[s].Device == dev) && (SP[s].PP_number == patch)) return true;
+    if ((SP[s].Type == PATCH_BANK) && (SP[s].Device == dev)) bsize = SP[s].Bank_size;
+  }
+
+  if ((dev < NUMBER_OF_DEVICES) && (bsize > 0)) { // Update the bank number of this device
+    uint16_t bnumber = patch / bsize;
+    Device[dev]->bank_number = bnumber;
+    Device[dev]->bank_select_number = bnumber;
   }
   return false;
 }

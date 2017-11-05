@@ -44,17 +44,17 @@ struct MySettings : public midi::DefaultSettings
   static const unsigned SysExMaxSize = 256; // Change sysex buffersize - Zoom devices send packets up to 146 bytes
 };
 
-/*struct MySettings3 : public midi::DefaultSettings
+struct MySettings3 : public midi::DefaultSettings
 {
   //static const bool UseRunningStatus = false; // Messes with my old equipment!
-  //static const bool Use1ByteParsing = false; // More focus on reading messages - will this help the equipment from stopping with receiving data?
+  static const bool Use1ByteParsing = false; // More focus on reading messages - will this help the equipment from stopping with receiving data?
   static const unsigned SysExMaxSize = 256; // Change sysex buffersize - Zoom G3 sends packets up to 120 bytes
-  static const long BaudRate = MIDI3_BAUD_RATE; // Set in hardware.h
-};*/
+  //static const long BaudRate = MIDI3_BAUD_RATE; // Set in hardware.h
+};
 
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial1, MIDI1, MySettings); // Enables serial1 port for MIDI communication with custom settings
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI2, MySettings); // Enables serial2 port for MIDI communication with custom settings
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial3, MIDI3, MySettings); // Enables serial3 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial3, MIDI3, MySettings3); // Enables serial3 port for MIDI communication with custom settings
 
 void setup_MIDI_common()
 {
@@ -110,6 +110,12 @@ void main_MIDI_common()
 
   MIDI_check_for_devices();  // Check actively if any devices are out there
   PAGE_check_sysex_watchdog(); // check if the watchdog has not expired
+}
+
+void MIDI_check_MIDI3() // Because serial3 is not FIFO, we do an extra check in the loop, so it can keep up.
+{
+  Current_MIDI_port = MIDI3_PORT;
+  MIDI3.read(); 
 }
 
 // ********************************* Section 2: MIDI In Functions ********************************************
