@@ -24,23 +24,24 @@ struct colour {
 
 #define LED_FLASHING 0x80 // Enabling bit 8 in a colour number will make the LEDs flash
 #define LED_DIMMED 0x10 // Enabling bit 5 in a colour number will dim the LED.
-#define LED_MASK 0x7F // The colour stripped of flashingbit
+#define LED_MASK 0x7F // The colour stripped of flashing bit
 
-// Defining FX colours types - the colours are set in the menu:
+// Defining FX colours types - the colours are set in the menu.
+// Colour numbers 241 - 255 are reserved for colour sublists.
 #define FX_TYPE_OFF 0
-#define FX_DEFAULT_TYPE 1 // For parameters that fit no other category
-#define FX_GTR_TYPE 2 // For COSM/guitar settings
-#define FX_PITCH_TYPE 3 // For pitch FX
-#define FX_FILTER_TYPE 4 // For filter FX
-#define FX_DIST_TYPE 5 // For distortion FX
-#define FX_AMP_TYPE 6 // For amp FX and amp solo
-#define FX_MODULATE_TYPE 7 //B For modulation FX
-#define FX_DELAY_TYPE 8 // For delays
-#define FX_REVERB_TYPE 9// For reverb FX
+#define FX_DEFAULT_TYPE 240 // For parameters that fit no other category
+#define FX_GTR_TYPE 239 // For COSM/guitar settings
+#define FX_PITCH_TYPE 238 // For pitch FX
+#define FX_FILTER_TYPE 237 // For filter FX
+#define FX_DIST_TYPE 236 // For distortion FX
+#define FX_AMP_TYPE 235 // For amp FX and amp solo
+#define FX_MODULATE_TYPE 234 //B For modulation FX
+#define FX_DELAY_TYPE 233 // For delays
+#define FX_REVERB_TYPE 232// For reverb FX
+#define FX_LOOPER_TYPE 231 // For looper
 
 //Lets make some colours (R,G,B)
 
-#define CURRENT_DEVICE_COLOUR 255 // Special variable to get the LED to show the colour of the current device
 
 #define NUMBER_OF_COLOURS 32
 #define NUMBER_OF_SELECTABLE_COLOURS 10
@@ -50,7 +51,7 @@ colour colours[NUMBER_OF_COLOURS] = {
   {255, 0, 0} ,  //  Colour 2 is Red
   {0, 0, 255} ,  // Colour 3 is Blue
   {255, 128, 0} ,  // Colour 4 is Orange
-  {0, 204, 128} ,  // Colour 5 is Turquoise
+  {0, 204, 128} ,  // Colour 5 is Cyan
   {204, 255, 204} ,  // Colour 6 is White
   {204, 204, 0} ,   // Colour 7 is Yellow
   {128, 0, 204} ,   // Colour 8 is Purple
@@ -61,22 +62,22 @@ colour colours[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 13 is spare
   {0, 0, 0} ,   // Colour 14 is spare
   {0, 0, 0} ,   // Colour 15 is spare
-  {0, 0, 0} ,   // Colour 0 is LED OFF dimmed
-  {0, 51, 0} ,  // Colour 1 is Green dimmed
-  {51, 0, 0} ,  //  Colour 2 is Red dimmed
-  {0, 0, 51} ,  // Colour 3 is Blue dimmed
-  {51, 51, 0} ,  // Colour 4 is Orange dimmed
-  {0, 41, 25} ,  // Colour 5 is Turquoise dimmed
-  {51, 51, 51} ,  // Colour 6 is White dimmed
-  {51, 51, 0} ,   // Colour 7 is Yellow dimmed
-  {51, 0, 102} ,   // Colour 8 is Purple dimmed
-  {51, 0, 51} ,   // Colour 9 is Pink dimmed
-  {0, 0, 0} ,   // Colour 10 is spare dimmed
-  {0, 0, 0} ,   // Colour 11 is spare dimmed
-  {0, 0, 0} ,   // Colour 12 is spare dimmed
-  {0, 0, 0} ,   // Colour 13 is spare dimmed
-  {0, 0, 0} ,   // Colour 14 is spare dimmed
-  {0, 0, 0} ,   // Colour 15 is spare dimmed
+  {0, 0, 0} ,   // Colour 16 is LED OFF dimmed
+  {0, 51, 0} ,  // Colour 17 is Green dimmed
+  {51, 0, 0} ,  //  Colour 18 is Red dimmed
+  {0, 0, 51} ,  // Colour 19 is Blue dimmed
+  {51, 51, 0} ,  // Colour 20 is Orange dimmed
+  {0, 41, 25} ,  // Colour 21 is Cyan dimmed
+  {51, 51, 51} ,  // Colour 22 is White dimmed
+  {51, 51, 0} ,   // Colour 23 is Yellow dimmed
+  {51, 0, 102} ,   // Colour 24 is Purple dimmed
+  {51, 0, 51} ,   // Colour 25 is Pink dimmed
+  {0, 0, 0} ,   // Colour 26 is spare dimmed
+  {0, 0, 0} ,   // Colour 27 is spare dimmed
+  {0, 0, 0} ,   // Colour 28 is spare dimmed
+  {0, 0, 0} ,   // Colour 29 is spare dimmed
+  {0, 0, 0} ,   // Colour 30 is spare dimmed
+  {0, 0, 0} ,   // Colour 31 is spare dimmed
 };
 
 colour Backlight_colours[NUMBER_OF_COLOURS] = {
@@ -85,7 +86,7 @@ colour Backlight_colours[NUMBER_OF_COLOURS] = {
   {255, 50, 50} ,  //  Colour 2 is Red
   {50, 50, 255} ,  // Colour 3 is Blue
   {255, 178, 50} ,  // Colour 4 is Orange
-  {0, 204, 128} ,  // Colour 5 is Turquoise
+  {0, 204, 128} ,  // Colour 5 is Cyan
   {204, 255, 204} ,  // Colour 6 is White
   {204, 204, 0} ,   // Colour 7 is Yellow
   {128, 50, 204} ,   // Colour 8 is Purple
@@ -119,6 +120,7 @@ uint8_t Backlight_order[NUMBER_OF_BACKLIGHTS] = {BACKLIGHT_ORDER};
 boolean update_LEDS = true;
 uint8_t global_tap_tempo_LED;
 uint8_t prev_page_shown = 255;
+uint8_t MIDI_LEDs[NUMBER_OF_LEDS]; 
 
 void setup_LED_control()
 {
@@ -167,8 +169,8 @@ void LED_update() {
 
     //Copy the LED state from the switch state
     uint8_t sw = s + 1;
-    uint8_t Dev = SP[sw].Device;
     uint8_t colour;
+    uint8_t Dev = SP[sw].Device;
     if (Dev == CURRENT) Dev = Current_device;
 
     if (Dev < NUMBER_OF_DEVICES) {
@@ -182,7 +184,7 @@ void LED_update() {
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case PATCH_BANK:
-          if (Device[Dev]->bank_selection_active()) LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
+          if (Device[Dev]->flash_LEDs_for_patch_bank_switch(sw)) LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
           else {
             if (Device[Dev]->patch_number == SP[sw].PP_number) {
               if (Device[Dev]->is_on) {
@@ -196,6 +198,7 @@ void LED_update() {
           }
           Backlight_show_colour(s, SP[sw].Colour);
           break;
+        case PAR_BANK_CATEGORY:
         case BANK_UP:
         case BANK_DOWN:
         case PAR_BANK_UP:
@@ -204,15 +207,23 @@ void LED_update() {
         //case ASG_BANK_DOWN:
         case PREV_PATCH:
         case NEXT_PATCH:
-          if (SP[sw].Colour == CURRENT_DEVICE_COLOUR) colour = Device[Current_device]->my_LED_colour;
-          else colour = SP[sw].Colour;
+        case TOGGLE_EXP_PEDAL:
+        case SAVE_PATCH:
+          colour = SP[sw].Colour;
+          if (colour >= FX_LOOPER_TYPE) colour = LED_FX_type_colour(SP[sw].Colour); // Check for FX colours
           if (SP[sw].Pressed) LED_show_colour(s, colour);
           else LED_show_colour(s, colour | LED_DIMMED);
           Backlight_show_colour(s, colour);
           break;
         case DIRECT_SELECT:
-          LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
-          Backlight_show_colour(s, SP[sw].Colour);
+          if (Device[Dev]->valid_direct_select_switch(SP[sw].PP_number)) {
+            LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
+            Backlight_show_colour(s, SP[sw].Colour);
+          }
+          else {
+            LED_show_colour(s, 0);
+            Backlight_show_colour(s, 0);
+          }
           break;
         case PARAMETER:
         case PAR_BANK:
@@ -230,9 +241,7 @@ void LED_update() {
           Backlight_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
           break;
         case OPEN_PAGE_DEVICE:
-        case OPEN_PAGE_PATCH:
-        case OPEN_PAGE_PARAMETER:
-        case OPEN_PAGE_ASSIGN:
+        case OPEN_NEXT_PAGE_OF_DEVICE:
           if ((SP[sw].Pressed) || ((SP[sw].PP_number == prev_page_shown) && (SP[sw].Device == Current_device))) LED_show_colour(s, Setting.LED_global_colour);
           else LED_show_colour(s, 0);
           Backlight_show_colour(s, Setting.LED_global_colour);
@@ -242,9 +251,19 @@ void LED_update() {
           else LED_show_colour(s, SP[sw].Colour);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
+        case SNAPSCENE:
+          if (Device[Dev]->current_snapscene == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+          else LED_show_colour(s, 0);
+          Backlight_show_colour(s, SP[sw].Colour);
+          break;
+        case LOOPER:
+          LED_show_colour(s, Device[Dev]->show_looper_LED(sw));
+          Backlight_show_colour(s, Setting.FX_LOOPER_colour);
+          break;
         default:
           LED_show_colour(s, 0); // Show nothing with undefined LED
           Backlight_show_colour(s, 0);
+          break;
       }
     }
     if (Dev == COMMON) {
@@ -303,6 +322,7 @@ void LED_update() {
 #ifdef BACKLIGHTNEOPIXELPIN
   Backlights.show();
 #endif
+  MIDI_update_LEDs(MIDI_LEDs, NUMBER_OF_LEDS);
   //DEBUGMSG("LEDs updated");
 }
 
@@ -311,7 +331,7 @@ void LED_show_dimmed(uint8_t no, uint8_t colour) {
   else LED_show_colour(no, 0);
 }
 
-uint8_t LED_FX_type_colour(uint8_t type) {
+uint8_t LED_FX_type_colour(uint8_t type) { // Read the FX colour from the settings
   switch (type) {
     case FX_DEFAULT_TYPE: return Setting.FX_default_colour;
     case FX_GTR_TYPE: return Setting.FX_GTR_colour;
@@ -322,7 +342,8 @@ uint8_t LED_FX_type_colour(uint8_t type) {
     case FX_MODULATE_TYPE: return Setting.FX_MODULATION_colour;
     case FX_DELAY_TYPE: return Setting.FX_DELAY_colour;
     case FX_REVERB_TYPE: return Setting.FX_REVERB_colour;
-    default: return 0;
+    case FX_LOOPER_TYPE: return Setting.FX_LOOPER_colour;
+    default: return type;
   }
 }
 
@@ -338,23 +359,27 @@ void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the sp
         // Turn the LED on
         if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
         if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
+        MIDI_LEDs[LED_number] = number_fixed;
       }
       else {
         // Turn the LED off
         if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], 0, 0, 0);
         if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, 0); // Update the virtual LEDs on the LCD as well
+        MIDI_LEDs[LED_number] = 0;
       }
     }
     else {
       // Turn the LED on
       if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
       if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
+      MIDI_LEDs[LED_number] = number_fixed;
     }
   }
   else {
     // Invalid colour: show message and give error
     LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[10].red, colours[10].green, colours[10].blue));
     DEBUGMSG("Invalid colour (number " + String(number_fixed) + ") on LED " + String(LED_number));
+    MIDI_LEDs[LED_number] = 0;
   }
 
 }

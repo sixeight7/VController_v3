@@ -38,11 +38,11 @@
 // *** Switches and expression pedals (external)
 #define NUMBER_OF_CTL_JACKS 4 // Number of jacks on the VController for connecting an expression pedal or two switches 
 
-// Pin numbers in the Teensy (digital tip, digital ring, analog tip, analog ring) - make sure you write the analog pin numbers as A0 and not just 0
-#define JACK1_PINS 28, 14, A17, A0
-#define JACK2_PINS 15, 16, A1, A2
-#define JACK3_PINS 20, 21, A6, A7
-#define JACK4_PINS 22, 23, A8, A9
+// Pin numbers in the Teensy (digital tip, digital ring, analog tip, analog ring, max_ring_for_exp_pedal) - make sure you write the analog pin numbers as A0 and not just 0
+#define JACK1_PINS 28, 14, A17, A0, 1000
+#define JACK2_PINS 15, 16, A1, A2, 1000
+#define JACK3_PINS 20, 21, A6, A7, 1000
+#define JACK4_PINS 22, 23, A8, A9, 1000
 
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
 

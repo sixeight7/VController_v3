@@ -32,38 +32,41 @@
 #include "debug.h"
 #include "hardware.h" // Hardware of production model
 //#include "hardware1.h" // Hardware of first model of sixeight
+//#include "hardware_RM.h" // Hardware of first model of Ryan Muar
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 0
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 2
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 1
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
+  SCO_switch_power_on();
+  setup_LED_control(); //Should be first, to reduce startup flash of Neopixel LEDs
+  
   // Wire speeds are set in hardware.h
   Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, WIRE_SPEED);
   #ifdef WIRE1_SPEED
   Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_29_30, I2C_PULLUP_INT, WIRE1_SPEED);
   #endif
   
-  SCO_switch_power_on();
-  setup_LED_control(); //Should be first, to reduce startup flash of Neopixel LEDs
   setup_LCD_control();
+  setup_debug();
   setup_devices();
   setup_eeprom();
-  setup_debug();
   setup_switch_check();
   setup_switch_control();
   setup_page();
   setup_MIDI_common();
+  check_all_devices_for_manual_connection();
 }
 
 void loop() {
   main_switch_check(); // Check for switches pressed
   main_switch_control(); //If switch is pressed, take the configured action
   main_LED_control(); //Check update of LEDs
-  //MIDI_check_MIDI3();
   main_LCD_control(); //Check update of displays
   main_MIDI_common(); //Read MIDI ports
   main_page(); // Check update of current page
+  main_devices();
 }
 
 // ********************************* Section 2: VController documentation overview  ********************************************
@@ -162,6 +165,33 @@ Software structure:
 29-10-2017 New algorithm for bass mode
 04-11-2017 ZMS70cdr bug not showing patch name fixed. VController now diplaying full version number on powerup. Main display top line behaviour updated.
 05-11-2017 Connect of first new device automatically selects its device page. v3.0.2 published
+11-11-2017 v3.0.3 Support Line6 M13 Patch change. Reading the patch names works, but is too slow for practical use. Tap tempo and global tuner work as well
+13-11-2017 Added basic support for effects and looper control
+19-11-2017 Added full support of Line6 M13 - scenes are read after detection and stored in memory.
+22-11-2017 Added support for control of M13 expression pedals. Also disabled expression pedal triggering other functions.
+01-03-2018 Added support for Line6 Helix - basic control of patch/parameters/snapshots and looper. Also changed the connection system to allow the Helix to connect while it is not detectable.
+17-04-2018 Started with adding some support for the AxeFX2 for Ryan Muar.
+23-04-2018 Started with adding support for Boss Katana
+28-04-2018 Changed LCDs.ino, with better centring of titles and labels for the individual displays. Removed all printf statements 
+29-04-2018 Improved direct select - it now shows patchnames and allows bank up/down during selection.
+15-05-2018 Patch selection, IA and XY switches, tap tempo and tuner support for the AxeFX working and tested.
+19-05-2018 Devices can now have up to four pages associated to the device. Selecting the next device will move to the page that was last selected for a specific device.
+20-05-2018 Added master expression pedal. You can edit the menu and command settings with an expression pedal!!!
+23-05-2018 Added calibration menu and implemented the calibration in the code.
+03-06-2018 Added master expression pedal support for GR55 (limited), VG99 and Katana
+04-06-2018 Even faster LCD support. LCD contents are copied in memory and only the changes are written to the displays
+06-06-2018 Added faster LCD support for main display as well.
+13-06-2018 Added looper support with moving ledbar for M13 and Helix
+14-06-2018 Added looper support for the AxeFX
+16-06-2018 AxeFX parameter bank now only shows active effects (bypass and XY states)
+17-06-2018 VG99 parameters are now split in categories
+july 2018  Added editor support for the VController
+29-08-2018 Added port forwarding for Katana editor - works partially - editor gives error on patch sync, but parameters can be edited!
+30-08-2018 Added Katana edit mode, added large part of the parameters, but all the MOD and FX parameters will be too much data. Allowed UPDOWN and RANGE to support large numbers for delay times.
+10-09-2018 Katana can now store 80 extra patches.
+14-09-2018 Made the code for the Katana patch storage more readable. Also the extra parameters of the SDE-3000 are stored on the Katana now.
+15-09-2018 Alpha testing release 3.1. Fixed minor bugs, improved patch reading for G3/MS70-cdr, GR55 direct select improved, M13 properly switched between EXP1 and 2. Updated fixed configuration for GR55, Katana and direct select
+22-09-2018 When switching between pages with different bank sizes, the bank with the current patch is now always shown.
 */
 
 

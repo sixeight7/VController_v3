@@ -1,0 +1,29 @@
+Deploy VC-edit for Mac:
+
+1) Make sure Qt creator is set to Release (and not Debug) and run the app.
+2) Deploy the app by running the following command in Terminal: ~/Qt/5.11.1/clang_64/bin/macdeployqt ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/VC-edit.app ls -dmg -always-overwrite
+3) The VC-edit.dmg file is in folder ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/
+
+
+Deploy VC-edit for Windows:
+1) Make sure Qt creator is set to release (and not Debug) and compile and run the app.
+2) Deploy the app by running the following commands in a command prompt:
+   > D:
+   > cd D:\qt-projects\build-VC-edit-Desktop_Qt_5_10_1_MinGW_32bit-Release\packager
+   > windeployqt VC-edit.exe --compiler-runtime 
+
+
+
+3) You may have to manually copy the following files from D:\Qt\5.10.1\mingw53_32\bin to 
+   D:\qt-projects\build-VC-edit-Desktop_Qt_5_10_1_MinGW_32bit-Release\packager:
+   - libgcc_s_dw2-1.dll
+   - libstdc++-6.dll
+   - libwinpthread-1.dll
+
+Also for windeployqt to run, the D:\Qt\5.10.1\mingw53_32\bin folder must be in the PATH variable and there should be no link to other compilers here!
+
+
+
+
+
+

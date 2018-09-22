@@ -82,7 +82,7 @@ LiquidCrystal_MCP23017 lcd[NUMBER_OF_DISPLAYS] = {
 };
 #endif
 
-// Method 2: devclare displays using regular i2C backpacks if defined in hardware.h
+// Method 2: declare displays using regular i2C backpacks if defined in hardware.h
 #ifdef DISPLAY_01_ADDRESS
 LiquidCrystal_PCF8745 lcd[NUMBER_OF_DISPLAYS] = {
   LiquidCrystal_PCF8745 (DISPLAY_01_ADDRESS, EN_PIN, RW_PIN, RS_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN),
@@ -134,24 +134,33 @@ LiquidCrystal_PCF8745 lcd[NUMBER_OF_DISPLAYS] = {
 #endif
 
 #define MESSAGE_TIMER_LENGTH 1500 // time that status messages are shown (in msec)
+#define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 unsigned long messageTimer = 0;
+unsigned long ledbarTimer = 0;
 bool status_message_showing = false;
+uint8_t ledbar_showing = 0;
 
 String Current_patch_number_string = "";
 String Current_page_name = "";
 String Current_device_name = "";
-String Main_menu_line1 = ""; // Text that is show on the main display from the menu on line 1
-String Main_menu_line2 = ""; // Text that is show on the main display from the menu on line 2
+//String Main_menu_line1 = ""; // Text that is show on the main display from the menu on line 1
+//String Main_menu_line2 = ""; // Text that is show on the main display from the menu on line 2
+//String topline;
+char main_lcd_title[LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 1
+char main_lcd_label[LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 2
 uint8_t Main_menu_cursor = 0; // Position of main menu cursor. Zero = off.
+char lcd_title[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display titles
+char lcd_label[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display labels
+char lcd_mem[NUMBER_OF_DISPLAYS + 1][2][LCD_DISPLAY_SIZE + 1]; // Memory for individual displays
 
 String Current_patch_name; // Patchname displayed in the main display
 uint16_t Current_patch_number = 0;              // Patchnumber displayed in the main display
 
-String Display_number_string[NUMBER_OF_DISPLAYS]; // Placeholder for patchnumbers on display
-String Blank_line = "                ";
+String Display_number_string; // Placeholder for patchnumbers on display
+uint8_t my_looper_lcd = 0; // The LCD that will show the looper progress bar (0 is no display)
 bool backlight_on[NUMBER_OF_DISPLAYS] = {false}; // initialize all backlights off
 
-byte arrow_up[8] = { // The character for LED off
+byte arrow_up[8] = { // The character for the UP arrow
   0b00100,
   0b01110,
   0b11111,
@@ -162,7 +171,7 @@ byte arrow_up[8] = { // The character for LED off
   0b00000
 };
 
-byte arrow_down[8] = { // The character for LED off
+byte arrow_down[8] = { // The character for DOWN arrow
   0b00100,
   0b00100,
   0b00100,
@@ -179,6 +188,16 @@ byte block2[8] = {24, 24, 24, 24, 24, 24, 24, 0};
 byte block3[8] = {28, 28, 28, 28, 28, 28, 28, 0};
 byte block4[8] = {30, 30, 30, 30, 30, 30, 30, 0};
 byte block5[8] = {31, 31, 31, 31, 31, 31, 31, 0};
+
+// Custom character numbers
+#define CHAR_BLOCK1 0
+#define CHAR_BLOCK2 1
+#define CHAR_BLOCK3 2
+#define CHAR_BLOCK4 3
+#define CHAR_BLOCK5 4
+#define CHAR_ARROW_UP 5
+#define CHAR_ARROW_DOWN 6
+#define CHAR_VLED 7
 
 void setup_LCD_control()
 {
@@ -199,20 +218,27 @@ void setup_LCD_control()
   LCD_show_startup_message();
 
   // Create the characters for the expression pedal bar
-  Main_lcd.createChar(0, block1);
-  Main_lcd.createChar(1, block2);
-  Main_lcd.createChar(2, block3);
-  Main_lcd.createChar(3, block4);
-  Main_lcd.createChar(4, block5);
+  Main_lcd.createChar(CHAR_BLOCK1, block1);
+  Main_lcd.createChar(CHAR_BLOCK2, block2);
+  Main_lcd.createChar(CHAR_BLOCK3, block3);
+  Main_lcd.createChar(CHAR_BLOCK4, block4);
+  Main_lcd.createChar(CHAR_BLOCK5, block5);
+
+  memset(main_lcd_title, ' ', sizeof(main_lcd_title)); // Clear topline of main lcd
 
   // Initialize individual LCDs - same for both methods
   for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS; i++) {
     lcd[i].begin (16, 2);
     lcd[i].setBacklightPin(BACKLIGHT_PIN, POSITIVE);
     LCD_switch_on_backlight(i);
+    lcd[i].createChar(CHAR_BLOCK1, block1);
+    lcd[i].createChar(CHAR_BLOCK2, block2);
+    lcd[i].createChar(CHAR_BLOCK3, block3);
+    lcd[i].createChar(CHAR_BLOCK4, block4);
+    lcd[i].createChar(CHAR_BLOCK5, block5);
+    lcd[i].createChar(CHAR_ARROW_UP, arrow_up);
+    lcd[i].createChar(CHAR_ARROW_DOWN, arrow_down);
     LCD_init_virtual_LED(i); // Initialize the virtual LEDs
-    lcd[i].createChar(1, arrow_up);
-    lcd[i].createChar(2, arrow_down);
   }
 
   // Reserve space for Strings - this should avoid memory defragemntation
@@ -220,9 +246,10 @@ void setup_LCD_control()
   Current_page_name.reserve(17);
   Current_device_name.reserve(17);
   Current_patch_name.reserve(17);
-  Main_menu_line1.reserve(17);
-  Main_menu_line2.reserve(17);
-  Current_patch_name = "                ";
+  //Main_menu_line1.reserve(17);
+  //Main_menu_line2.reserve(17);
+  LCD_clear_string(Current_patch_name);
+  LCD_clear_memory();
 
   // Show startup screen
   LCD_show_startup_credits();
@@ -234,35 +261,18 @@ void main_LCD_control()
 {
   if  ((update_main_lcd == true) && (status_message_showing == false)) {
     update_main_lcd = false;
-
-    if (global_tuner_active) {
-      Main_lcd.setCursor (0, 0);
-      Main_lcd.print("  Tuner active  ");
-      Main_lcd.setCursor (0, 1);
-      Main_lcd.print("                ");
-    }
-
-    else if (Current_page == PAGE_MENU) {
-      menu_set_main_title();
-      Main_lcd.setCursor (0, 0);
-      Main_lcd.print(Main_menu_line1);
-      Main_lcd.setCursor (0, 1);
-      Main_lcd.print(Main_menu_line2);
-      // Show cursor
-      if (Main_menu_cursor > 0) {
-        Main_lcd.setCursor (Main_menu_cursor - 1, 1);
-        Main_lcd.cursor();
-      }
-      else Main_lcd.noCursor();
-    }
-
-    else LCD_update_main_display();
-
+    LCD_update_main_display();
   }
 
-  if ((status_message_showing) && (millis() - messageTimer >= MESSAGE_TIMER_LENGTH)) {
+  if ((status_message_showing) && (millis() > messageTimer)) { // Check if message is still showing
     status_message_showing = false;
     update_main_lcd = true; // Now update the main display, so the status message will be overwritten
+  }
+
+  if ((ledbar_showing > 0) && (millis() > ledbarTimer)) {
+    uint8_t ledbar_lcd = ledbar_showing;
+    ledbar_showing = 0;
+    LCD_update(ledbar_lcd); // Now update the ledbar display, so the ledbar will be overwritten
   }
 
   if (update_lcd > 0) {
@@ -274,42 +284,63 @@ void main_LCD_control()
 #define PATCH_NUMBER_SEPERATOR "+"
 
 void LCD_update_main_display() {
-  Main_lcd.home();
-  String topline = Blank_line;
 
+  // Clear main display char arrays
+  LCD_clear_main_lcd_txt();
+
+  // Show tuner message if active
+  if (global_tuner_active) {
+    LCD_main_set_title("  Tuner active  ");
+    LCD_print_main_lcd_txt();
+    return;
+  }
+
+  // Show menu content if active
+  if (Current_page == PAGE_MENU) {
+    menu_set_main_title();
+    LCD_print_main_lcd_txt();
+    // Show cursor
+    if (Main_menu_cursor > 0) {
+      Main_lcd.setCursor (Main_menu_cursor - 1, 1);
+      Main_lcd.cursor();
+    }
+    else Main_lcd.noCursor();
+    return;
+  }
+
+  // Show patchnumers and device name on top line
   LCD_set_combined_patch_number_and_name();
 
   uint8_t ps_length = Current_patch_number_string.length();
+  if (ps_length > LCD_DISPLAY_SIZE) ps_length = LCD_DISPLAY_SIZE;
   for (uint8_t i = 0; i < ps_length; i++) {
-    topline[i] = Current_patch_number_string[i];
+    main_lcd_title[i] = Current_patch_number_string[i];
   }
 
   if (Current_device < NUMBER_OF_DEVICES) {
     Current_device_name = Device[Current_device]->device_name;
     uint8_t name_length = Current_device_name.length();
-    if (ps_length < (16 - name_length)) { // Only show current device if it fits
+    if (ps_length < (LCD_DISPLAY_SIZE - name_length)) { // Only show current device if it fits
       for (uint8_t i = 0; i < name_length; i++) {
-        topline[16 - name_length + i] = Current_device_name[i];
+        main_lcd_title[LCD_DISPLAY_SIZE - name_length + i] = Current_device_name[i];
       }
     }
   }
 
-  Main_lcd.print(topline);
-
-  Main_lcd.setCursor (0, 1);       // go to start of 2nd line
-
+  // Show current page name, current patch or patches combined on second line
   switch (Setting.Main_display_mode) {
     case MD_SHOW_PAGE_NAME:
       EEPROM_read_title(Current_page, 0, Current_page_name); // Page name from EEPROM
-      Main_lcd.print(Current_page_name);
+      LCD_main_set_label(Current_page_name);
       break;
     case MD_SHOW_CURRENT_PATCH:
-      if (Current_device < NUMBER_OF_DEVICES) Main_lcd.print(Device[Current_device]->current_patch_name);
+      if (Current_device < NUMBER_OF_DEVICES) LCD_main_set_label(Device[Current_device]->current_patch_name);
       break;
     case MD_SHOW_PATCHES_COMBINED:
-      Main_lcd.print(Current_patch_name); // Show the combined patchname
+      LCD_main_set_label(Current_patch_name); // Show the combined patchname
       break;
   }
+  LCD_print_main_lcd_txt();
 }
 
 void LCD_set_combined_patch_number_and_name() {
@@ -321,7 +352,7 @@ void LCD_set_combined_patch_number_and_name() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     if (Device[d]->is_on) {
       Device[d]->display_patch_number_string(); // Adds the device name to patch number string
-      Current_patch_number_string = Current_patch_number_string + PATCH_NUMBER_SEPERATOR; //Add a seperation sign in between
+      Current_patch_number_string += PATCH_NUMBER_SEPERATOR; //Add a seperation sign in between
       patch_names[number_of_active_devices] = Device[d]->current_patch_name; //Add patchname to string
       number_of_active_devices++;
     }
@@ -360,54 +391,78 @@ void LCD_set_combined_patch_number_and_name() {
 void LCD_show_status_message(String message)
 // Will display a status message on the main display
 {
-  //Main_lcd.home();
-  Main_lcd.setCursor (0, 1);       // go to start of 2nd line
-  Main_lcd.print(message + Blank_line.substring(0, 16 - message.length())); //Print message plus remaining spaces
-  messageTimer = millis();
+  LCD_main_set_label(message);
+  LCD_print_main_lcd_txt();
+  if (SC_switch_is_expr_pedal()) messageTimer = millis() + LEDBAR_TIMER_LENGTH;
+  else messageTimer = millis() + MESSAGE_TIMER_LENGTH;
   status_message_showing = true;
 }
 
-void LCD_show_are_you_sure(String line1, String line2)
-{
-  //Main_lcd.home();
-  Main_lcd.setCursor (0, 0);       // go to start of 2nd line
-  Main_lcd.print(line1 + Blank_line.substring(0, 16 - line1.length())); //Print message plus remaining spaces
-  Main_lcd.setCursor (0, 1);       // go to start of 2nd line
-  Main_lcd.print(line2 + Blank_line.substring(0, 16 - line2.length())); //Print message plus remaining spaces
-
-  lcd[9].setCursor (0, 0);
-  lcd[9].print(Blank_line);
-  lcd[9].setCursor (0, 1);
-  lcd[9].print("      YES       ");
-  lcd[10].setCursor (0, 0);
-  lcd[10].print(Blank_line);
-  lcd[10].setCursor (0, 1);
-  lcd[10].print("       NO       ");
-}
-
 void LCD_show_startup_message() {
-  Main_lcd.home(); // go home
-  //Main_lcd.setCursor(0, 0); // Need double command - otherwise I get garbage
-  Main_lcd.print("  V-controller  ");  // Show startup message
+  LCD_clear_main_lcd_txt();
+  LCD_main_set_title("  V-controller  ");  // Show startup message
   LCD_show_status_message(" version " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_BUILD) + "  ");  //Please give me the credits :-)
 }
 
 void LCD_show_startup_credits() {
   delay(800);
-  LCD_show_status_message("  by SixEight   ");  //Please give me the credits :-)
+  LCD_show_status_message("   by SixEight  ");  //Please give me the credits :-)
 }
 
-void LCD_show_bar(uint8_t value) { // Will show the bar for the expression pedal on the top line of the main display
-  uint8_t full_blocks = (value >> 3); // Calculate the number of full blocks to display - value is between 0 and 127
-  uint8_t part_block = (value & 7) * 6 / 8; // Calculate which part block to display
-  Main_lcd.setCursor (0, 0);
-  for (uint8_t i = 0; i < full_blocks; i++) Main_lcd.print(char(4)); // Display the full blocks
-  if (part_block > 0) Main_lcd.print(char(part_block - 1)); // Display the correct part block
-  else Main_lcd.print(" ");
-  for (uint8_t i = full_blocks + 1; i < 16; i++) Main_lcd.print(" "); // Fill the rest with spaces
+void LCD_clear_main_lcd_txt() {
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    main_lcd_title[i] = ' ';
+    main_lcd_label[i] = ' ';
+  }
+}
+
+void LCD_main_set_title(const String & msg) { // Will set the Title string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t msg_length = msg.length();
+  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < msg_length; i++) {
+    main_lcd_title[i] = msg[i];
+  }
+  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    main_lcd_title[i] = ' ';
+  }
+}
+
+void LCD_main_set_label(const String & msg) { // Will set the Title string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t msg_length = msg.length();
+  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < msg_length; i++) {
+    main_lcd_label[i] = msg[i];
+  }
+  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    main_lcd_label[i] = ' ';
+  }
+}
+
+void LCD_print_main_lcd_txt() {
+  bool line1_changed = false;
+  bool line2_changed = false;
+  if (!status_message_showing) { // otherwise ledbar will not show
+    line1_changed = LCD_print_delta(0, 0, main_lcd_title);
+  }
+  line2_changed = LCD_print_delta(0, 1, main_lcd_label);
+  if (line1_changed || line2_changed)
+    MIDI_remote_update_display(0, main_lcd_title, main_lcd_label); // Show the data on the remote display
 }
 
 // ********************************* Section 3: Update of individual LCDs ********************************************
+
+// Define my strings
+const char LCD_Bank_Down[] = "BANK DOWN";
+const char LCD_Bank_Up[] = "BANK UP";
+const char LCD_Mute[] = "MUTE";
+const char LCD_Tuner[] = "[GLOBAL TUNER]";
+const char LCD_Tap_Tempo[] = "<TAP TEMPO>";
+const char LCD_Set_Tempo[] = "<SET TEMPO>";
+const char LCD_Page_Down[] = "<PAGE DOWN>";
+const char LCD_Page_Up[] = "<PAGE UP>";
+const char LCD_Looper[] = "<LOOPER>";
 
 void LCD_update(uint8_t sw) {
   // Will update a specific display based on the data in the SP array
@@ -416,12 +471,12 @@ void LCD_update(uint8_t sw) {
     //Determine what to display from the Switch type
     DEBUGMSG("Update display no:" + String(sw));
 
-    uint8_t number = sw - 1; // The displays are numbered from zero upwards
+    LCD_clear_lcd_txt();
 
     if (EEPROM_check4label(Current_page, sw)) {
       String msg;
       EEPROM_read_title(Current_page, sw, msg); // Override the label if a custom label exists
-      LCD_set_label(sw, msg);
+      LCD_set_SP_label(sw, msg);
     }
 
     uint8_t Dev = SP[sw].Device;
@@ -431,436 +486,525 @@ void LCD_update(uint8_t sw) {
       switch (SP[sw].Type) {
         case PATCH_SEL:
         case PATCH_BANK:
-          Display_number_string[number] = ""; //Clear the display_number_string
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string[number]);
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          lcd[number].print("          ");
-          //lcd[number].print("   ");
-          //lcd[number].print(Display_number_string[number]);
-          //lcd[number].print("    ");
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          lcd[number].setCursor(8 - ((Display_number_string[number].length() + 1) / 2), 0);
-          lcd[number].print(Display_number_string[number]);
-          LCD_centre_print_label(sw);
+          Display_number_string = ""; //Clear the display_number_string
+          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case PREV_PATCH:
-          Display_number_string[number] = ""; //Clear the display_number_string
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string[number]);
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print(" PREV (");
-          lcd[number].print(Display_number_string[number]);
-          lcd[number].print(") ");
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          LCD_centre_print_label(sw);
-          break;
         case NEXT_PATCH:
-          Display_number_string[number] = ""; //Clear the display_number_string
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string[number]);
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print(" NEXT (");
-          lcd[number].print(Display_number_string[number]);
-          lcd[number].print(") ");
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          LCD_centre_print_label(sw);
+          if (SP[sw].Type == PREV_PATCH) Display_number_string = "PREV (";
+          else Display_number_string = "NEXT (";
+          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
+          Display_number_string += ')';
+          LCD_add_vled(2);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case BANK_DOWN:
         case PAR_BANK_DOWN:
           //case ASG_BANK_DOWN:
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print(" BANK DOWN ");
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].setCursor (0, 1);
-          lcd[number].print("     ");
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print("      ");
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Down);
+          LCD_add_label(Device[Dev]->device_name);
+          LCD_print_lcd_txt(sw);
           break;
         case BANK_UP:
         case PAR_BANK_UP:
           //case ASG_BANK_UP:
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print("  BANK UP  ");
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].setCursor (0, 1);
-          lcd[number].print("     ");
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print("      ");
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Up);
+          LCD_add_label(Device[Dev]->device_name);
+          LCD_print_lcd_txt(sw);
           break;
         case DIRECT_SELECT:
-          Display_number_string[number] = ""; //Clear the display_number_string
-          Device[Dev]->direct_select_format(SP[sw].PP_number, Display_number_string[number]);
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print("    ");
-          lcd[number].print(Display_number_string[number]);
-          lcd[number].print("    ");
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].setCursor (0, 1);
-          lcd[number].print("                ");
+          if (Device[Dev]->valid_direct_select_switch(SP[sw].PP_number)) {
+            Display_number_string = ""; //Clear the display_number_string
+            Device[Dev]->direct_select_format(SP[sw].PP_number, Display_number_string);
+            DEBUGMSG("HERE! PP_number = " + String(SP[sw].PP_number) + ": " + Display_number_string);
+            LCD_add_vled(3);
+            LCD_add_title(Display_number_string);
+            LCD_add_label(SP[sw].Label);
+          }
+          LCD_print_lcd_txt(sw);
+          break;
+        case PAR_BANK_CATEGORY:
+          Display_number_string = "<";
+          Display_number_string += Device[Dev]->device_name;
+          Display_number_string += " edit>";
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case PARAMETER:
         case PAR_BANK:
-          // What to show on the individual display
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0)); // Virtual LEDs
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          LCD_par_state(number, Dev);
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          lcd[number].print(char(0));
-          //lcd[number].print(SP[sw].Label); // Show the current patchname
-          LCD_centre_print_label(sw);
+          Display_number_string = "";
+          LCD_par_state(sw, Dev, Display_number_string);
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case ASSIGN:
           //case ASG_BANK:
-          // What to show on the individual display
-          if (SP[sw].Assign_number <= 16) { // Normal assign
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].print("[");
-            lcd[number].print(Device[Dev]->device_name);
-            lcd[number].print(" ASGN");
-            lcd[number].print(String(SP[sw].Assign_number));
-            lcd[number].print("]");
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-          }
-          else { // Is only the case for the VG99 as it has 16 common assigns!!!
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            if (SP[sw].Assign_number <= 24) {
-              lcd[number].printf("   [CTL%d]   ", SP[sw].Assign_number - 16);
-            }
-            switch (SP[sw].Assign_number) {
-              case 25: lcd[number].print("   [EXP1]   "); break;
-              case 26: lcd[number].print(" [EXP SW1]  "); break;
-              case 27: lcd[number].print("   [EXP2]   "); break;
-              case 28: lcd[number].print(" [EXP SW2]  "); break;
-              case 29: lcd[number].print(" [GK S1/S2] "); break;
-              case 30: lcd[number].print("  [GK VOL]  "); break;
-              case 31: lcd[number].print("   [EXP]    "); break;
-              case 32: lcd[number].print("   [CTL1]   "); break;
-              case 33: lcd[number].print("   [CTL2]   "); break;
-              case 34: lcd[number].print("   [CTL3]   "); break;
-              case 35: lcd[number].print("   [CTL4]   "); break;
-              case 36: lcd[number].print(" [D-BEAM V] "); break;
-              case 37: lcd[number].print(" [D-BEAM H] "); break;
-              case 38: lcd[number].print("[RIBBON ACT]"); break;
-              case 39: lcd[number].print("[RIBBON POS]"); break;
-            }
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-          }
-          //lcd[number].print(SP[sw].Label); // Show the current patchname
-          LCD_centre_print_label(sw);
+          Display_number_string = "[";
+          Device[Dev]->read_assign_name(SP[sw].Assign_number, Display_number_string);
+          Display_number_string += "]";
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case OPEN_PAGE_DEVICE:
-        case OPEN_PAGE_PATCH:
-        case OPEN_PAGE_PARAMETER:
-        case OPEN_PAGE_ASSIGN:
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0));
-          lcd[number].print("     ");
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print("     ");
-          lcd[number].print(char(0));
-          LCD_centre_print_label(sw);
-          DEBUGMSG("Number: " + String(number) + " Label: " + SP[sw].Label);
+        case OPEN_NEXT_PAGE_OF_DEVICE:
+          LCD_add_vled(3);
+          LCD_add_title(Device[Dev]->device_name);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case MUTE:
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0));
-          lcd[number].print("  MUTE ");
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print("   ");
-          lcd[number].print(char(0));
+          LCD_add_vled(3);
+          LCD_add_title(LCD_Mute);
+          LCD_add_label(Device[Dev]->device_name);
+          LCD_print_lcd_txt(sw);
+          break;
+        case TOGGLE_EXP_PEDAL:
+          LCD_add_vled(3);
+          LCD_add_title(SP[sw].Title);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
+          break;
+        case SNAPSCENE:
+          LCD_add_vled(3);
+          Display_number_string = "<";
+          Display_number_string += Device[Dev]->device_name;
+          Display_number_string += ">";
+          LCD_add_title(Display_number_string);
+          Display_number_string = "[" + String(SP[sw].PP_number) + "] ";
+          Device[Dev]->set_snapscene_name(SP[sw].PP_number, Display_number_string);
+          LCD_set_label(Display_number_string);
+          LCD_print_lcd_txt(sw);
+          break;
+        case LOOPER:
+          LCD_set_looper_title();
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
+          break;
+        case SAVE_PATCH:
+          LCD_add_title("<SAVE PATCH>");
+          LCD_add_label(Device[Dev]->device_name);
+          LCD_print_lcd_txt(sw);
           break;
         default:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print("                ");
-            lcd[number].setCursor (0, 1);
-            lcd[number].print("                ");
-          }
+          LCD_print_lcd_txt(sw);
       }
     }
     if (Dev == COMMON) {
       switch (SP[sw].Type) {
         case MENU:
-          LCD_centre_print_title(sw);
-          LCD_centre_print_label(sw);
+          LCD_add_title(SP[sw].Title);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case OPEN_PAGE:
-          lcd[number].setCursor (0, 0);
-          lcd[number].print(char(0));
-          lcd[number].print("              ");
-          lcd[number].print(char(0));
-          LCD_centre_print_label(sw);
-          DEBUGMSG("Number: " + String(number) + " Label: " + SP[sw].Label);
+          LCD_add_vled(3);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case GLOBAL_TUNER:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print("<GLOBAL TUNER>");
-            lcd[number].print(char(0));
-            lcd[number].setCursor (0, 1);
-            lcd[number].print("                ");
-          }
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Tuner);
+          LCD_print_lcd_txt(sw);
           break;
         case TAP_TEMPO:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(" <TAP TEMPO>  ");
-            lcd[number].print(char(0));
-            lcd[number].setCursor (0, 1);
-            lcd[number].printf("    %3d BPM     ", Setting.Bpm);
-          }
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Tap_Tempo);
+          Display_number_string = String(Setting.Bpm);
+          Display_number_string += " BPM";
+          LCD_add_label(Display_number_string);
+          LCD_print_lcd_txt(sw);
           break;
         case SET_TEMPO:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(" <SET TEMPO>  ");
-            lcd[number].print(char(0));
-            lcd[number].setCursor (0, 1);
-            lcd[number].printf("    %3d BPM     ", SP[sw].PP_number);
-          }
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Set_Tempo);
+          Display_number_string = String(SP[sw].PP_number);
+          Display_number_string += " BPM";
+          LCD_add_label(Display_number_string);
+          LCD_print_lcd_txt(sw);
           break;
         case PAGE_UP:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print("  <PAGE UP>   ");
-            lcd[number].print(char(0));
-            LCD_centre_print_label(sw);
-          }
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Page_Up);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case PAGE_DOWN:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(" <PAGE DOWN>  ");
-            lcd[number].print(char(0));
-            LCD_centre_print_label(sw);
-          }
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Page_Down);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case MIDI_PC:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].printf(" <PC %03d>  ", SP[sw].PP_number);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            LCD_centre_print_label(sw);
-          }
+          Display_number_string = "<PC ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          Display_number_string += '>';
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case MIDI_CC:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            if ((SP[sw].Latch == CC_ONE_SHOT) || (SP[sw].Latch == CC_MOMENTARY)) lcd[number].printf(" <CC #%03d>   ", SP[sw].PP_number);
-            if ((SP[sw].Latch == CC_TOGGLE) || (SP[sw].Latch == CC_TOGGLE_ON)) lcd[number].printf(" [CC #%03d]   ", SP[sw].PP_number);
-            if (SP[sw].Latch == CC_STEP) {
-              lcd[number].setCursor (2, 0);
-              lcd[number].printf("CC #%03d (%d/%d)", SP[sw].PP_number, SP[sw].Target_byte1, SP[sw].Assign_max);
-            }
-            if (SP[sw].Latch == CC_UPDOWN) {
-              if (SP[sw].Direction) {
-                lcd[number].print(char(1));
-                lcd[number].printf(" CC #%03d ", SP[sw].PP_number);
-                lcd[number].print(char(1));
-              }
-              else {
-                lcd[number].print(char(2));
-                lcd[number].printf(" CC #%03d ", SP[sw].PP_number);
-                lcd[number].print(char(2));
-              }
-            }
-
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            if (SP[sw].Latch == CC_UPDOWN) {
-              lcd[number].setCursor (0, 1);
-              lcd[number].printf("      %3d       ", SP[sw].Target_byte1);
-            }
-            else LCD_centre_print_label(sw);
+          Display_number_string = "";
+          LCD_CC_state(sw, Display_number_string);
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          if (SP[sw].Latch == CC_UPDOWN) {
+            Display_number_string = "";
+            LCD_add_3digit_number(SP[sw].Target_byte1, Display_number_string);
+            LCD_add_label(Display_number_string);
           }
+          else LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
           break;
         case MIDI_NOTE:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            lcd[number].printf(" <NOTE %03d> ", SP[sw].PP_number);
-            lcd[number].print(char(0));
-            lcd[number].print(char(0));
-            LCD_centre_print_label(sw);
-          }
+          Display_number_string = "<NOTE ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          Display_number_string += '>';
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+          LCD_print_lcd_txt(sw);
+          break;
           break;
         default:
-          if (number < NUMBER_OF_DISPLAYS) {
-            lcd[number].setCursor (0, 0);
-            lcd[number].print(Blank_line);
-            lcd[number].setCursor (0, 1);
-            lcd[number].print(Blank_line);
-          }
+          LCD_print_lcd_txt(sw);
       }
     }
   }
 }
 
-void LCD_par_state(uint8_t number, uint8_t Dev) { // Will print the right parameter message depending on the TOGGLE state
+void LCD_par_state(uint8_t sw, uint8_t Dev, String &msg) { // Will print the right parameter message depending on the TOGGLE state
   if (Dev < NUMBER_OF_DEVICES) {
-    switch (SP[number + 1].Latch) {
+    switch (SP[sw].Latch) {
       case TOGGLE:
-        lcd[number].print(" [ ");
-        lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(" ] ");
+        msg += "[ ";
+        msg += Device[Dev]->device_name;
+        msg += " ]";
         break;
       case MOMENTARY:
-        lcd[number].print(" < ");
-        lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(" > ");
+        msg += "< ";
+        msg += Device[Dev]->device_name;
+        msg += " >";
         break;
       case TRISTATE:
-        lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(" (");
-        lcd[number].print(String(SP[number + 1].State));
-        lcd[number].print("/3)");
+        msg += Device[Dev]->device_name;
+        msg += " (";
+        msg += String(SP[sw].State);
+        msg += "/3)";
         break;
       case FOURSTATE:
-        lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(" (");
-        lcd[number].print(String(SP[number + 1].State));
-        lcd[number].print("/4)");
+        msg += Device[Dev]->device_name;
+        msg += " (";
+        msg += String(SP[sw].State);
+        msg += "/4)";
         break;
       case TGL_OFF:
-        lcd[number].print("     --     ");
+        msg += "--";
         break;
       case UPDOWN:
-        if (SP[number + 1].Direction) {
-          lcd[number].print(' ');
-          lcd[number].print(char(1));
-          lcd[number].print(' ');
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print(' ');
-          lcd[number].print(char(1));
-          lcd[number].print(' ');
-        }
-        else {
-          lcd[number].print(' ');
-          lcd[number].print(char(2));
-          lcd[number].print(' ');
-          lcd[number].print(Device[Dev]->device_name);
-          lcd[number].print(' ');
-          lcd[number].print(char(2));
-          lcd[number].print(' ');
-        }
+        if (SP[sw].Direction) msg += char(CHAR_ARROW_UP);
+        else msg += char(CHAR_ARROW_DOWN);
+        msg += ' ';
+        msg += Device[Dev]->device_name;
+        msg += ' ';
+        if (SP[sw].Direction) msg += char(CHAR_ARROW_UP);
+        else msg += char(CHAR_ARROW_DOWN);
         break;
       default: // STEP and RANGE
-        lcd[number].print(Device[Dev]->device_name);
-        lcd[number].print(" (");
-        lcd[number].print(String(SP[number + 1].Target_byte1 + 1));
-        lcd[number].print("/");
-        lcd[number].print(String(SP[number + 1].Assign_max));
-        lcd[number].print(")");
+        msg += Device[Dev]->device_name;
+        msg += " (";
+        msg += String(SP[sw].Target_byte1 + 1);
+        msg += '/';
+        msg += String(SP[sw].Assign_max);
+        msg += ')';
         break;
     }
   }
 }
 
+void LCD_CC_state(uint8_t sw, String &msg) { // Will print the right parameter message depending on the TOGGLE state
+  switch (SP[sw].Latch) {
+    case CC_ONE_SHOT:
+    case CC_MOMENTARY:
+      msg += "<CC #";
+      LCD_add_3digit_number(SP[sw].PP_number, msg);
+      msg += '>';
+      break;
+    case CC_TOGGLE:
+    case CC_TOGGLE_ON:
+      msg += "[CC #";
+      LCD_add_3digit_number(SP[sw].PP_number, msg);
+      msg += ']';
+      break;
+    case CC_STEP:
+      msg += "CC #";
+      LCD_add_3digit_number(SP[sw].PP_number, msg);
+      msg += " (";
+      msg += String(SP[sw].Target_byte1);
+      msg += '/';
+      msg += String(SP[sw].Assign_max);
+      msg += ')';
+      break;
+    case CC_UPDOWN:
+      if (SP[sw].Direction) msg += char(CHAR_ARROW_UP);
+      else msg += char(CHAR_ARROW_DOWN);
+      msg += " CC #";
+      LCD_add_3digit_number(SP[sw].PP_number, msg);
+      msg += ' ';
+      if (SP[sw].Direction) msg += char(CHAR_ARROW_UP);
+      else msg += char(CHAR_ARROW_DOWN);
+      //DEBUGMSG("LCD check - direction: " + String(SP[sw].Direction));
+      break;
+  }
+}
+
+void LCD_set_looper_title() {
+  LCD_clear_lcd_title();
+  LCD_add_vled(3);
+  LCD_add_title(LCD_Looper);
+}
+
 // ********************************* Section 4: LCD Functions ********************************************
 
-void LCD_clear_label(uint8_t no) { // Will clear the Label string in the SP array
-  for (uint8_t i = 0; i < 16; i++) {
+void LCD_clear_string(String &msg) {
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    msg[i] = ' ';
+  }
+}
+
+void LCD_clear_SP_title(uint8_t no) { // Will clear the Label string in the SP array
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    SP[no].Title[i] = ' ';
+  }
+}
+
+void LCD_clear_SP_label(uint8_t no) { // Will clear the Label string in the SP array
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
     SP[no].Label[i] = ' ';
   }
 }
 
-void LCD_set_title(uint8_t sw, String & msg) { // Will set the Title string in the SP array
+void LCD_set_SP_title(uint8_t sw, String & msg) { // Will set the Title string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
-  if (msg_length > SP_LABEL_SIZE) msg_length = SP_LABEL_SIZE;
+  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
   for (uint8_t i = 0; i < msg_length; i++) {
     SP[sw].Title[i] = msg[i];
   }
-  for (uint8_t i = msg_length; i < SP_LABEL_SIZE; i++) { // Fill the remaining chars with spaces
+  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    SP[sw].Title[i] = ' ';
+  }
+}
+
+void LCD_set_SP_title(uint8_t sw, const char* label) { // Will set the Label string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t len = strlen(label);
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < len; i++) {
+    SP[sw].Title[i] = label[i];
+  }
+  for (uint8_t i = len; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    SP[sw].Title[i] = ' ';
+  }
+}
+
+void LCD_set_SP_label(uint8_t sw, String & lbl) { // Will set the Label string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t len = lbl.length();
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < len; i++) {
+    SP[sw].Label[i] = lbl[i];
+  }
+  for (uint8_t i = len; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
     SP[sw].Label[i] = ' ';
   }
 }
 
-void LCD_set_label(uint8_t sw, String & msg) { // Will set the Label string in the SP array
+void LCD_set_SP_label(uint8_t sw, const char* label) { // Will set the Label string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t len = strlen(label);
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < len; i++) {
+    SP[sw].Label[i] = label[i];
+  }
+  for (uint8_t i = len; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    SP[sw].Label[i] = ' ';
+  }
+}
+
+void LCD_clear_lcd_txt() {
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    lcd_title[i] = ' ';
+    lcd_label[i] = ' ';
+  }
+}
+
+void LCD_clear_lcd_title() {
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    lcd_title[i] = ' ';
+  }
+}
+
+void LCD_add_vled(uint8_t number) { // Will add the VLEDs to both ends of the top line of the display
+  for (uint8_t i = 0; i < number; i++) {
+    lcd_title[i] = char(CHAR_VLED);
+    lcd_title[(LCD_DISPLAY_SIZE - 1) - i] = char(CHAR_VLED);
+  }
+}
+
+void LCD_set_title(String & msg) { // Will set the Title string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
-  if (msg_length > SP_LABEL_SIZE) msg_length = SP_LABEL_SIZE;
+  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
   for (uint8_t i = 0; i < msg_length; i++) {
-    SP[sw].Label[i] = msg[i];
+    lcd_title[i] = msg[i];
   }
-  for (uint8_t i = msg_length; i < SP_LABEL_SIZE; i++) { // Fill the remaining chars with spaces
-    SP[sw].Label[i] = ' ';
-  }
-}
-
-void LCD_centre_print_title(uint8_t sw) { // Will print the title in the middle of a display
-  // Find out the number of spaces at the end of the label
-  uint8_t endpoint = strlen(SP[sw].Title) - 1; // Go to last character
-  if (endpoint > SP_LABEL_SIZE - 1) endpoint = SP_LABEL_SIZE - 1;
-  while ((endpoint > 0) && (SP[sw].Title[endpoint] == ' ')) endpoint--; //Find last character that is not a space
-
-  // Find the correct position on second line and print label
-  if (sw > 0) {
-    uint8_t s = sw - 1;
-    lcd[s].setCursor (0, 0); // Go to start of 2nd line
-    lcd[s].print(Blank_line); // Clear the title
-    lcd[s].setCursor ((SP_LABEL_SIZE - endpoint - 1) / 2, 0);  // Set the cursor to the start of the label
-    lcd[s].print(SP[sw].Title); // Print it here.
+  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    lcd_title[i] = ' ';
   }
 }
 
-void LCD_centre_print_label(uint8_t sw) { // Will print the label in the middle of a display
-  // Find out the number of spaces at the end of the label
-  uint8_t endpoint = strlen(SP[sw].Label) - 1; // Go to last character
-  if (endpoint > SP_LABEL_SIZE - 1) endpoint = SP_LABEL_SIZE - 1;
-  while ((endpoint > 0) && (SP[sw].Label[endpoint] == ' ')) endpoint--; //Find last character that is not a space
-
-  // Find the correct position on second line and print label
-  if (sw > 0) {
-    uint8_t s = sw - 1;
-    lcd[s].setCursor (0, 1); // Go to start of 2nd line
-    lcd[s].print(Blank_line); // Clear the line
-    lcd[s].setCursor ((SP_LABEL_SIZE - endpoint - 1) / 2, 1);  // Set the cursor to the start of the label
-    lcd[s].print(SP[sw].Label); // Print it here.
+void LCD_add_title(String & title) {
+  uint8_t len = title.length();
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  while ((len > 1) && (title[len - 1] == ' ')) len--; //Find last character that is not a space
+  uint8_t start_point = (LCD_DISPLAY_SIZE - len) >> 1;
+  for (uint8_t i = 0; i < len; i++) { // Copy the title
+    lcd_title[start_point + i] = title[i];
   }
-  //DEBUGMSG(SP[s].Label);
+}
+
+void LCD_add_title(const char* title) {
+  uint8_t len = strlen(title);
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  while ((len > 1) && (title[len - 1] == ' ')) len--; //Find last character that is not a space
+  uint8_t start_point = (LCD_DISPLAY_SIZE - len) >> 1;
+  for (uint8_t i = 0; i < len; i++) { // Copy the title
+    lcd_title[start_point + i] = title[i];
+  }
+}
+
+void LCD_set_label(String & msg) { // Will set the Title string in the SP array
+  // Check length does not exceed LABEL_SIZE
+  uint8_t msg_length = msg.length();
+  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < msg_length; i++) {
+    lcd_label[i] = msg[i];
+  }
+  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    lcd_label[i] = ' ';
+  }
+}
+
+void LCD_add_label(String & lbl) {
+  uint8_t len = lbl.length();
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  while ((len > 1) && (lbl[len - 1] == ' ')) len--; //Find last character that is not a space
+  uint8_t start_point = (LCD_DISPLAY_SIZE - len) >> 1;
+  for (uint8_t i = 0; i < len; i++) { // Copy the lbl
+    lcd_label[start_point + i] = lbl[i];
+  }
+}
+
+void LCD_add_label(const char* lbl) {
+  uint8_t len = strlen(lbl);
+  if (len > LCD_DISPLAY_SIZE) len = LCD_DISPLAY_SIZE;
+  while ((len > 1) && (lbl[len - 1] == ' ')) len--; //Find last character that is not a space
+  uint8_t start_point = (LCD_DISPLAY_SIZE - len) >> 1;
+  for (uint8_t i = 0; i < len; i++) { // Copy the title
+    lcd_label[start_point + i] = lbl[i];
+  }
+}
+
+void LCD_add_3digit_number(uint8_t number, String & msg) {
+  msg += String(number / 100);
+  msg += String((number % 100) / 10);
+  msg += String(number % 10);
+}
+
+void LCD_print_lcd_txt(uint8_t number) {
+  bool line1_changed = false;
+  bool line2_changed = false;
+  if (ledbar_showing != (number)) { // Find first and last character on line 1 that have changed
+    line1_changed = LCD_print_delta(number, 0, lcd_title);
+  }
+  line2_changed = LCD_print_delta(number, 1, lcd_label);
+  if (line1_changed | line2_changed)
+    MIDI_remote_update_display(number, lcd_title, lcd_label); // Show the data on the remote display
+}
+
+bool LCD_print_delta(uint8_t number, uint8_t line, const char * source) {
+  if ((number > NUMBER_OF_DISPLAYS) || (line > 1)) return false;
+  // We will only update the characters on the displays that have changed.
+  uint8_t first_char = 255;
+  uint8_t last_char = 0;
+
+  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) { // Compare each character of source to the lcd_mem. Find first_char and last_char
+    if (source[i] != lcd_mem[number][line][i]) {
+      if (first_char == 255) first_char = i;
+      last_char = i;
+      lcd_mem[number][line][i] = source[i];
+    }
+  }
+
+  if (first_char != 255) {
+    if (number == 0) { // Update main display
+      Main_lcd.setCursor (first_char, line); // Move cursor to first character that has changed on line 1
+      for (uint8_t i = first_char; i <= last_char; i++) {  // Print the characters that have changed (one by one)
+        Main_lcd.print(source[i]);
+      }
+    }
+    else { // Update individual display
+      uint8_t lcd_no = number - 1;
+      lcd[lcd_no].setCursor (first_char, line); // Move cursor to first character that has changed on line 1
+      for (uint8_t i = first_char; i <= last_char; i++) {  // Print the characters that have changed (one by one)
+        lcd[lcd_no].print(source[i]);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+void LCD_clear_memory() {
+  memset(lcd_mem, 0, sizeof(lcd_mem)); // Fill lcd_line arrays with zeros
+}
+
+void LCD_show_bar(uint8_t lcd_no, uint8_t value) { // Will show the bar for the expression pedal on the top line of the main display
+  char ledbar[17];
+  value &= 0x7F; // Keep value below 0x80
+  uint8_t full_blocks = (value >> 3); // Calculate the number of full blocks to display - value is between 0 and 127
+  uint8_t part_block = (value & 7) * 6 >> 3; // Calculate which part block to display
+  if (lcd_no == 0) {
+    for (uint8_t i = 0; i < full_blocks; i++) ledbar[i] = char(4); // Display the full blocks
+    if (part_block > 0) ledbar[full_blocks] = char(part_block - 1); // Display the correct part block
+    else ledbar[full_blocks] = main_lcd_title[full_blocks];
+    for (uint8_t i = full_blocks + 1; i < LCD_DISPLAY_SIZE; i++) ledbar[i] = main_lcd_title[i]; // Fill the rest with remainder of topline
+  }
+  else if (lcd_no <= NUMBER_OF_DISPLAYS) {
+    // Start the timer to make sure nothing gets printe on this display for awhile, but not it is my_looper_lcd
+    if (lcd_no != my_looper_lcd) ledbar_showing = lcd_no;
+    ledbarTimer = millis() + LEDBAR_TIMER_LENGTH;
+    for (uint8_t i = 0; i < full_blocks; i++) ledbar[i] = char(4); // Display the full blocks
+    if (part_block > 0) ledbar[full_blocks] = char(part_block - 1); // Display the correct part block
+    else ledbar[full_blocks] = lcd_title[full_blocks];
+    for (uint8_t i = full_blocks + 1; i < LCD_DISPLAY_SIZE; i++) ledbar[i] = lcd_title[i]; // Fill the rest with remainder of title
+  }
+  LCD_print_delta(lcd_no, 0, ledbar);
 }
 
 void LCD_switch_on_backlight(uint8_t number) {
@@ -897,24 +1041,41 @@ void LCD_backlight_off() { // Will switch all backlights off
 }
 
 void LCD_clear_all_displays() {
-  Main_lcd.clear();
-  for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS; i++) {
-    lcd[i].clear();
+  LCD_clear_main_lcd_txt();
+  LCD_clear_lcd_txt();
+  for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS + 1; i++) {
+    LCD_print_lcd_txt(i);
   }
+}
+
+void LCD_show_are_you_sure(String line1, String line2)
+{
+  const char LBL_YES[] = "YES";
+  const char LBL_NO[] = "NO";
+
+  LCD_main_set_title(line1); //Print message on main display
+  LCD_main_set_label(line2);
+  LCD_print_main_lcd_txt();
+
+  LCD_clear_lcd_txt();
+  LCD_add_label(LBL_YES);
+  LCD_print_lcd_txt(10);
+  LCD_clear_lcd_txt();
+  LCD_add_label(LBL_NO);
+  LCD_print_lcd_txt(11);
 }
 
 void LCD_show_program_mode() {
   LCD_clear_all_displays();
-  Main_lcd.setCursor(0, 0);
-  Main_lcd.print("* PROGRAM MODE *");
-  lcd[9].setCursor(0, 0);
-  lcd[9].print("Upload firmware ");
-  lcd[9].setCursor(0, 1);
-  lcd[9].print("from TeensyDuino");
-  lcd[10].setCursor(0, 0);
-  lcd[10].print(" or power cycle ");
-  lcd[10].setCursor(0, 1);
-  lcd[10].print("the VController ");
+  LCD_main_set_title("* PROGRAM MODE *");
+  LCD_print_main_lcd_txt();
+  LCD_add_title("Upload firmware ");
+  LCD_add_label("from TeensyDuino");
+  LCD_print_lcd_txt(10);
+  LCD_clear_lcd_txt();
+  LCD_add_title(" or power cycle ");
+  LCD_add_label("the VController ");
+  LCD_print_lcd_txt(11);
 }
 
 void LCD_number_to_note(uint8_t number, String & msg) {
@@ -969,7 +1130,7 @@ byte vLED_dimmed[8] = { // The character for LED dimmed
 
 void LCD_init_virtual_LED(uint8_t number) { // Initialize virtual LED
   Display_LED[number] = 0;
-  if (number < NUMBER_OF_DISPLAYS) lcd[number].createChar(0, vLED_off);
+  if (number < NUMBER_OF_DISPLAYS) lcd[number].createChar(CHAR_VLED, vLED_off);
 }
 
 void LCD_set_virtual_LED(uint8_t number, uint8_t state) { // Will set the state of a virtual LED
@@ -977,9 +1138,9 @@ void LCD_set_virtual_LED(uint8_t number, uint8_t state) { // Will set the state 
     Display_LED[number] = state; // Update state
     // Update virtual LED
     if (number < NUMBER_OF_DISPLAYS) {
-      if (state == 0) lcd[number].createChar(0, vLED_off);
-      if (state == 1) lcd[number].createChar(0, vLED_on);
-      if (state == 2) lcd[number].createChar(0, vLED_dimmed);
+      if (state == 0) lcd[number].createChar(CHAR_VLED, vLED_off);
+      if (state == 1) lcd[number].createChar(CHAR_VLED, vLED_on);
+      if (state == 2) lcd[number].createChar(CHAR_VLED, vLED_dimmed);
     }
   }
 }
@@ -987,11 +1148,6 @@ void LCD_set_virtual_LED(uint8_t number, uint8_t state) { // Will set the state 
 void Set_virtual_LED_colour(uint8_t number, uint8_t colour) { // Called from LEDs.ino-show_colour()
   if ((colour == 0) | (colour > 9)) LCD_set_virtual_LED(number, 0); //Virtual LED off
   else LCD_set_virtual_LED(number, 1); //Virtual LED on
-
-  /*if (colour == 0) LCD_set_virtual_LED(number, 0); //Virtual LED off
-  else if (colour < 10) LCD_set_virtual_LED(number, 1); //Virtual LED on
-  else if (colour > 10) LCD_set_virtual_LED(number, 2); //Dimmed
-  else LCD_set_virtual_LED(number, 0); //Virtual LED off for colour 10 as well*/
 }
 
 

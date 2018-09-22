@@ -6,70 +6,82 @@
 // Section 3: External EEPROM (24LC512) Functions
 // Section 4: Command and index functions
 // Section 5: Reading/writing titles to EEPROM
+// Section 6: Reading/writing Katana data to EEPROM
 
 
 // ********************************* Section 1: EEPROM Initialization ********************************************
-// The Teensy 3.2 has 2 kB of EEPROM on board
-// The external 24LC512 chip has 64 kB of EEPOM.
+// The Teensy 3.2 has 2 kB of EEPROM on board - this storage memory is used for VController settings.
+// The external 24LC512 chip has 64 kB of EEPROM - this storage memory is used for VController commands
 
 #include <EEPROM.h>
 //#include <Wire.h>
 #include <i2c_t3.h>
 
-#define CURRENT_EEPROM_VERSION 1 // Update this value whenever there is an update of the internal EEPROM structure 
-#define CURRENT_EXT_EEPROM_VERSION 1 // Update this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!! 
+#define CURRENT_EEPROM_VERSION 3 // Update this value whenever there is an update of the internal EEPROM structure 
+#define CURRENT_EXT_EEPROM_VERSION 2 // Update this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
+#define CURRENT_KATANA_MEMORY_VERSION 1 // Update this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
 
 
 // ************************ Internal EEPROM data addresses ***********************
 // Common data (10 bytes)
-#define EEPROM_VERSION 0x00 // Address!!! Version update must be done above!!!
-#define EEPROM_EXT_VERSION 0x01
-#define EEPROM_CURRENT_PAGE 0x02
-#define EEPROM_CURRENT_DEVICE 0x03
+#define EEPROM_VERSION_ADDR 0x00 // Address!!! Version update must be done above!!!
+#define EEPROM_EXT_VERSION_ADDR 0x01
+#define EEPROM_CURRENT_PAGE_ADDR 0x02
+#define EEPROM_CURRENT_DEVICE_ADDR 0x03
 #define EEPROM_GENERAL_SETTINGS_BASE_ADDRESS 0x10
 
 // For each device we store the following data
 #define EEPROM_DEVICES_BASE_ADDRESS 0x80
-#define EEPROM_DEVICE_DATA_SIZE 0x20 // Enough for 16 variables - every variable takes up two bytes!!!
+#define EEPROM_DEVICE_DATA_SIZE 0x20 // Enough for 32 variables
 
 #define EEPROM_DEVICE_PATCH_MSB 0
 #define EEPROM_DEVICE_PATCH_LSB 1
-//#define EEPROM_DEVICE_ALWAYS_ON 2
-//#define EEPROM_DEVICE_BANK_NUMBER 3
+#define EEPROM_DEVICE_SETLIST 2
+#define EEPROM_DEVICE_SETTINGS 3 // The rest of the device settings - currently 10 - total of 13 bytes. There is space for 32.
 
 // ************************ External EEPROM data addresses ***********************
+
+// 24LC512 has 64 kByte of memory
+// These are writable in pages of 128 bytes = 500 pages
+// The commands are stored in bytes 3
+
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
 #define EEPROM_DELAY_LENGTH 5  // time between EEPROM writes (usually 5 ms is OK)
 unsigned long WriteDelay = 0;
 
 // Addressing of programmed commands for switches
-#define EXT_EEP_CMD_BASE_ADDRESS 32    // Commands are stored from byte 32 upwards
-#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 2999
-#define EXT_EEP_NUMBER_OF_COMMANDS_MSB 0
-#define EXT_EEP_NUMBER_OF_COMMANDS_LSB 1
+#define EXT_EEP_CMD_BASE_ADDRESS 32    // Commands are stored from address 32 - 31999
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 2997
+#define EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR 0
+#define EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR 1
+#define EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR 2
 #define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
+
+#define EXT_EEP_KATANA_PRESETS_BASE_ADDRESS 32000 // Katana presets are stored from address 320000 - 47359 (80 presets of 192 bytes)
+#define EXT_MAX_NUMBER_OF_KATANA_PRESETS 80
 
 // RAM indexes
 #define MAX_NUMBER_OF_PAGES 256
 
 // We will create a number of indexes to quickly find the commands that are assigned to a switch of the VController
-uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1] = {0}; // Gives the index number of every first command for every dwitch on every page
-uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS] = {0}; // Gives the number of the next command that needs to be read from EEPROM
-uint16_t Next_internal_cmd_index[NUMBER_OF_INTERNAL_COMMANDS] = {0}; // Gives the index of the next command that needs to be read from Fixed_commands[]
-uint16_t Title_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1] = {0}; // gives the index number of the title command for page 0 (page title) and every switch with a display
+uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1]; // Gives the index number of every first command for every dwitch on every page
+uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS]; // Gives the number of the next command that needs to be read from EEPROM
+uint16_t Next_internal_cmd_index[NUMBER_OF_INTERNAL_COMMANDS]; // Gives the index of the next command that needs to be read from Fixed_commands[]
+uint16_t Title_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1]; // gives the index number of the title command for page 0 (page title) and every switch with a display
 uint16_t number_of_cmds; // Contains the total number of commands stored in EEPROM.
 
 #define INTERNAL_CMD 0x8000 // MSB of an index set indicates the command is an internal command
 
 void setup_eeprom()
 {
-  if (EEPROM.read(EEPROM_VERSION) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
-  if (EEPROM.read(EEPROM_EXT_VERSION) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
+  if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
+  if (EEPROM.read(EEPROM_EXT_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
+  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_initialize_katana_preset_memory();
 
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
-  Current_page = EEPROM.read(EEPROM_CURRENT_PAGE);
-  Current_device = EEPROM.read(EEPROM_CURRENT_DEVICE);
+  Current_page = EEPROM.read(EEPROM_CURRENT_PAGE_ADDR);
+  Current_device = EEPROM.read(EEPROM_CURRENT_DEVICE_ADDR);
 
   EEPROM_create_indexes();
 }
@@ -88,17 +100,18 @@ void EEP_read_eeprom_common_data() {
   for (uint8_t s = 0; s < sizeof(Setting); s++) {
     *settingbytes++ = EEPROM.read(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + s);
   }
-
+  DEBUGMSG("Reading settings (" + String(sizeof(Setting)) + " settings)");
+  SC_set_expression_pedals();
 
   // Read device data
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
-    Device[d]->patch_number = (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) * 256) + EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB);
-    /*Device[d]->is_always_on = EEPROM.read(address + EEPROM_DEVICE_ALWAYS_ON);
-    Device[d]->bank_number = EEPROM.read(address + EEPROM_DEVICE_BANK_NUMBER);
-    Device[d]->bank_select_number = Device[d]->bank_number; // bank select number should have the same initial value*/
+    Device[d]->patch_number = (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) << 8) + EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB);
+    Device[d]->current_setlist = EEPROM.read(address + EEPROM_DEVICE_SETLIST);
+    //Device[d]->bank_number = EEPROM.read(address + EEPROM_DEVICE_BANK_NUMBER);
+    //Device[d]->bank_select_number = Device[d]->bank_number; // bank select number should have the same initial value
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
-      Device[d]->set_setting(var, EEPROM.read(address + var + 2));
+      Device[d]->set_setting(var, EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var));
     }
   }
 }
@@ -110,12 +123,12 @@ void EEP_write_eeprom_common_data() {
   }
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
-    EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, (Device[d]->patch_number / 256));
-    EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, (Device[d]->patch_number % 256));
-    /*EEPROM_write(address + EEPROM_DEVICE_ALWAYS_ON, Device[d]->is_always_on);
-    EEPROM_write(address + EEPROM_DEVICE_BANK_NUMBER, Device[d]->bank_number);*/
+    EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, (Device[d]->patch_number >> 8));
+    EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, (Device[d]->patch_number & 0xFF));
+    EEPROM_write(address + EEPROM_DEVICE_SETLIST, Device[d]->current_setlist);
+    //EEPROM_write(address + EEPROM_DEVICE_BANK_NUMBER, Device[d]->bank_number);
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
-      EEPROM_write(address + var + 2, Device[d]->get_setting(var));
+      EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
     }
   }
 }
@@ -124,9 +137,9 @@ void EEP_initialize_internal_eeprom_data() {
   // Initialize settings for VController and devices from Teensy EEPROM and write default configuration to external EEPROM
   LED_show_middle_four();
   LCD_show_status_message("Initializing...");
-  EEPROM_write(EEPROM_VERSION, CURRENT_EEPROM_VERSION); // Save the current eeprom version
-  EEPROM_write(EEPROM_CURRENT_PAGE, DEFAULT_PAGE);
-  EEPROM_write(EEPROM_CURRENT_DEVICE, 0); // Select first device
+  EEPROM_write(EEPROM_VERSION_ADDR, CURRENT_EEPROM_VERSION); // Save the current eeprom version
+  EEPROM_write(EEPROM_CURRENT_PAGE_ADDR, DEFAULT_PAGE);
+  EEPROM_write(EEPROM_CURRENT_DEVICE_ADDR, 0); // Select first device
 
   byte* settingbytes = (byte*)&Default_settings;
   for (uint8_t s = 0; s < sizeof(Setting); s++) {
@@ -137,9 +150,10 @@ void EEP_initialize_internal_eeprom_data() {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
     EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, 0);
     EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, 0);
+    EEPROM_write(address + EEPROM_DEVICE_SETLIST, 0);
     Device[d]->init(); // So default values will be restored
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) { // Just write the settings from EEPROM
-      EEPROM_write(address + var + 2, Device[d]->get_setting(var));
+      EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
       DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
     }
   }
@@ -150,12 +164,20 @@ void EEPROM_write(uint16_t address, uint8_t value) { // Only write data if it ha
   if (value != EEPROM.read(address)) EEPROM.write(address, value);
 }
 
+void EEPROM_write_patch_number(uint8_t dev, uint16_t number) {
+  if (dev < NUMBER_OF_DEVICES) {
+    uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * dev);
+    EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, number >> 8);
+    EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, number & 0xFF);
+  }
+}
+
 
 // ********************************* Section 3: External EEPROM (24LC512) Functions ********************************************
 
 // We store the commands in the external EEPROM.
 // The page size of the 24LC512 is 32 bytes. We can only read/write multiple bytes from within that page.
-// Two commands of 11 bytes are stored on every page.
+// Two commands of 10 bytes are stored on every page.
 // An index is created to quickly access the correct commands from EEPROM
 // There are also commands fixed in the ROM of the TEENSY
 // To access these commands, the index is larger (CMD_IS_FIXED = 0x8000)
@@ -279,7 +301,7 @@ void copy_cmd(const Cmd_struct* source, Cmd_struct* dest) {
 // ********************************* Section 4: Command and index functions ********************************************
 
 void EEP_initialize_external_eeprom_data() {
-  EEPROM_write(EEPROM_EXT_VERSION, CURRENT_EXT_EEPROM_VERSION); // Save the current eeprom version
+  EEPROM_write(EEPROM_EXT_VERSION_ADDR, CURRENT_EXT_EEPROM_VERSION); // Save the current eeprom version
   LED_show_middle_four();
   LCD_show_status_message("Initializing...");
 
@@ -288,31 +310,31 @@ void EEP_initialize_external_eeprom_data() {
     write_cmd_EEPROM(c, &Default_commands[c]);
   }
   EEP_write_number_of_commands(NUMBER_OF_INIT_COMMANDS);
+  EEPROM_create_indexes();
+
   delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
   LED_turn_all_off();
 }
 
 void EEP_write_number_of_commands(uint16_t number) {
-  write_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_MSB, number / 256);
-  write_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB, number % 256);
+  write_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR, number >> 8);
+  write_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR, number & 0xFF);
 }
 
-void EEPROM_clear_indexes() { // Will initialize the indexes with zeros
+void EEPROM_create_indexes() {
   memset(First_cmd_index, 0, sizeof(First_cmd_index));
   memset(Next_cmd_index, 0, sizeof(Next_cmd_index));
   memset(Next_internal_cmd_index, 0, sizeof(Next_internal_cmd_index));
   memset(Title_index, 0, sizeof(Title_index));
-}
 
-void EEPROM_create_indexes() {
   Cmd_struct cmd;
 
   // Fill the indexes with external commands
   //DEBUGMSG("Creating index internal commands");
   //LCD_show_status_message("Index internal");
-  number_of_cmds = (read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_MSB) * 256) + read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB);
+  number_of_cmds = (read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR) << 8) + read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR);
   Number_of_pages = 0;
-  for (uint16_t c = number_of_cmds + 1; c-- > 0; ) { //Run backwards through the EEPROM command array
+  for (uint16_t c = number_of_cmds; c-- > 0; ) { //Run backwards through the EEPROM command array
     read_cmd_EEPROM(c, &cmd); // read the command from EEPROM
     if (cmd.Page >= Number_of_pages) Number_of_pages = cmd.Page + 1; //update the number of pages
     if (cmd.Switch & LABEL) { // Check if it is a name label
@@ -378,9 +400,30 @@ void EEPROM_purge_cmds() { // Will delete any empty commands
     number_of_cmds -= number_of_deleted_cmds;
     EEP_write_number_of_commands(number_of_cmds);
     DEBUGMSG("New number of commands is " + String(number_of_cmds));
-    EEPROM_clear_indexes();
     EEPROM_create_indexes();
   }
+}
+
+void EEPROM_clear_all_commands() {
+  number_of_cmds = 0;
+}
+
+void EEPROM_write_command_from_editor(Cmd_struct *cmd) {
+  write_cmd_EEPROM(number_of_cmds, cmd); // Write this command
+  number_of_cmds++;
+}
+
+void EEPROM_check_data_received(uint8_t check_number_of_pages, uint16_t check_number_of_cmds) {
+  if (check_number_of_cmds != number_of_cmds) {
+    DEBUGMAIN("MIDI read error: number of commands (" + String(number_of_cmds) + ") is different from the number of received commands (" + String(check_number_of_cmds) + ")");
+    LCD_show_status_message("Receive failed!");
+  }
+  else {
+    LCD_show_status_message("Data received OK");
+  }
+  EEP_write_number_of_commands(number_of_cmds);
+
+  EEPROM_create_indexes();
 }
 
 uint8_t EEPROM_count_cmds(uint8_t pg, uint8_t sw) { // Counts the number of commands for this switch. Excludes the commands from the defaut bank, unless specifically selected
@@ -472,10 +515,8 @@ void EEPROM_write_cmd(uint8_t pg, uint8_t sw, uint8_t number, Cmd_struct *cmd) {
 
   write_cmd_EEPROM(cmd_index, cmd); // Write this command
 
-  if (new_command) {
-    EEPROM_clear_indexes(); // First clear the indexes
-    EEPROM_create_indexes(); // Then recreate them
-  }
+  if (new_command) EEPROM_create_indexes();
+
 
   //return (Next_cmd_index[i] != 0); // Return true if next command exists
 }
@@ -593,3 +634,112 @@ void EEPROM_delete_title(uint8_t pg, uint8_t sw) {
   if (cmd_index == 0) return;
   write_cmd_EEPROM(cmd_index, &empty_cmd);
 }
+
+// ********************************* Section 6: Reading/writing Katana data to EEPROM ********************************************
+
+void EEP_initialize_katana_preset_memory() {
+  write_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR, CURRENT_KATANA_MEMORY_VERSION);
+  LED_show_middle_four();
+  LCD_show_status_message("Initializing...");
+  
+  My_KTN.load_patch_buffer_with_default_patch();
+
+  for(uint8_t i = 0; i < EXT_MAX_NUMBER_OF_KATANA_PRESETS; i++) {
+    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  }
+  
+  delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
+  LED_turn_all_off();
+}
+
+void EEPROM_read_KTN_title(uint8_t number, String &title) {
+  // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
+  // Page 1 contains the first 128 bytes of patch 1
+  // Page 2 contains the first 128 bytes of patch 2
+  // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
+  // The patch name is stored in the first 16 bytes of a patch.
+  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
+
+  DEBUGMSG("Reading patch name for number " + String(number) + " at Addr1:" + String(part1_address));
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(part1_address >> 8));   // MSB
+  Wire.send((int)(part1_address & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) 16);
+  for (uint8_t c = 0; c < 16; c++) {
+    uint8_t newbyte = Wire.receive();
+    if ((newbyte > 31) && (newbyte < 128)) title += static_cast<char>(newbyte);
+    else title += ' ';
+  }
+  DEBUGMSG("Read title from memory: " + String(title));
+}
+
+void EEPROM_load_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_length) {
+  // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
+  // Page 1 contains the first 128 bytes of patch 1
+  // Page 2 contains the first 128 bytes of patch 2
+  // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
+  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
+  uint16_t part2_address = base_address + 256 + ((number % 2) * 64); // Point to the first or second half of the third page
+
+  DEBUGMSG("Loading patch number " + String(number) + " from Addr1:" + String(part1_address) + "Addr2:" + String(part2_address));
+  
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(part1_address >> 8));   // MSB
+  Wire.send((int)(part1_address & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) 128);
+  for (uint8_t i = 0; i < 128; i++) {
+    patch_data[i] = Wire.receive();
+  }
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(part2_address >> 8));   // MSB
+  Wire.send((int)(part2_address & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) (data_length - 128));
+  for (uint8_t i = 128; i < data_length; i++) {
+    patch_data[i] = Wire.receive();
+  }
+}
+
+void EEPROM_save_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_length) {
+  // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
+  // Page 1 contains the first 128 bytes of patch 1
+  // Page 2 contains the first 128 bytes of patch 2
+  // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
+  
+  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
+  uint16_t part2_address = base_address + 256 + ((number % 2) * 64); // Point to the first or second half of the third page
+
+  DEBUGMSG("Storing patch number " + String(number) + " at Addr1:" + String(part1_address) + "Addr2:" + String(part2_address));
+  
+  EEPROM_delay();
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(part1_address >> 8));   // MSB
+  Wire.send((int)(part1_address & 0xFF)); // LSB
+  for (uint8_t i = 0; i < 128; i++) {
+    Wire.send(patch_data[i]);
+  }
+  Wire.endTransmission();
+
+  EEPROM_delay();
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(part2_address >> 8));   // MSB
+  Wire.send((int)(part2_address & 0xFF)); // LSB
+  for (uint8_t i = 128; i < data_length; i++) {
+    Wire.send(patch_data[i]);
+  }
+  Wire.endTransmission();
+
+  EEPROM_delay();
+}
+
+

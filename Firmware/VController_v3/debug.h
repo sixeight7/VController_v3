@@ -3,16 +3,21 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+void StartFreeTimer();
+
 // Enable normal debugging (put // in front of #define to disable it
 //#define DEBUG_NORMAL
 
 // Enable debugging of main events (put // in front of the next line to disable it
-#define DEBUG_MAIN
+//#define DEBUG_MAIN
 
 // Midi debugging
-#define DEBUG_MIDI
-#define DEBUG_SYSEX
+//#define DEBUG_MIDI
+//#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
+
+// Check for free memory - to detect memory leaks
+//#define DEBUG_FREE
 
 // Setup debug procedures.
 #define SERIAL_STARTUP_TIME 3000 // Will wait max three seconds max before serial starts
@@ -24,6 +29,8 @@ void setup_debug() {
   serial_timer = millis();
   while ((!Serial) && (serial_timer - millis() < SERIAL_STARTUP_TIME)) {}; // Wait while the serial communication is not ready or while the SERIAL_START_UP time has not elapsed.
   Serial.println("VController v2 debugging started...");
+  Serial.println("Arduino version: " + String(ARDUINO));
+  StartFreeTimer();
 #endif
 }
 
@@ -59,8 +66,9 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
 #endif
 
 #ifndef DEBUG_SYSEX_UNIVERSAL
-  if (sxdata[1] == 0x7E) return; // Quit if debugconnect is off and we have a universal midi message
-    if (sxdata[2] == 0x7F) return; // Quit if debugconnect is off and we have an FC300 bloat message
+  if (sxdata[1] == 0x7E) return; // Quit if we have a universal midi message
+  if (sxdata[2] == 0x7F) return; // Quit if we have an FC300 bloat message
+  if ((sxdata[3] == 0x74) && (sxdata[4] == 0x7F)) return; // Quit if we have a Fractal connect message
 #endif
 
 #ifdef DEBUG_SYSEX
@@ -92,6 +100,9 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
 #endif
 }
 
+#ifdef DEBUG_FREE
+IntervalTimer FreeTimer;
+
 //Check free RAM
 uint32_t FreeRam() { // for Teensy 3.0
   uint32_t stackTop;
@@ -107,6 +118,17 @@ uint32_t FreeRam() { // for Teensy 3.0
 
   // The difference is the free, available ram.
   return stackTop - heapTop;
+}
+
+void FreeTimerInterrupt() {
+  Serial.println("Free RAM: " + String(FreeRam()));
+}
+#endif
+
+void StartFreeTimer() {
+#ifdef DEBUG_FREE
+   FreeTimer.begin(FreeTimerInterrupt, 5000000); // Run every five seconds
+#endif
 }
 
 #endif

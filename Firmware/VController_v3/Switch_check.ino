@@ -125,11 +125,6 @@ void setup_switch_check() {
 
 void main_switch_check() {
   // Reset switch variables
-  switch_pressed = 0;
-  switch_released = 0;
-  switch_long_pressed = 0;
-  switch_extra_long_pressed = 0;
-  switch_held = 0;
 
 #ifdef INTA_PIN
   SC_check_display_board_switch();
@@ -196,13 +191,7 @@ void check_switches_on_current_board(bool check_interrupt_state) {
 
   // Read the buttons on this board
   updated = lcd[Current_board].buttonProcess(check_interrupt_state);
-  /*if (check_interrupt_state) {
-    DEBUGMAIN("  Checking INTCAPA board " + String(Current_board) + " at " + String(micros() - time_switch_pressed));
-  }
-  else {
-    DEBUGMAIN("  Checking GPIOA board " + String(Current_board) + " at " + String(micros() - time_switch_pressed));
-  }*/
-
+  
   if (updated) {
     uint8_t button_state = lcd[Current_board].buttonPressed();
     //DEBUGMAIN("  Button_state pressed board" + String(Current_board) + ": " + String(button_state) + " at " + String(micros() - time_switch_pressed));
@@ -254,6 +243,74 @@ void SC_check_external_switches() {
   }
 }
 #endif
+
+void SC_display_raw_value() {
+  if (calibrate_exp_pedal < NUMBER_OF_CTL_JACKS) {
+    LCD_show_status_message("EXP" + String(calibrate_exp_pedal + 1) + ": " + String(ctl_jack[calibrate_exp_pedal].get_raw_value()));
+  }
+}
+
+void SC_set_expr_min() { // Set minimum value for selected expression pedal in the menu
+#ifdef JACK1_PINS
+  if (calibrate_exp_pedal < NUMBER_OF_CTL_JACKS) {
+    ctl_jack[calibrate_exp_pedal].calibrate_min();
+    Setting.exp_min[calibrate_exp_pedal] = ctl_jack[calibrate_exp_pedal].get_min();
+    LCD_show_status_message("Min set for EXP" + String(calibrate_exp_pedal + 1));
+  }
+#endif
+}
+
+void SC_set_expr_max() { // Set maximum value for selected expression pedal in the menu
+#ifdef JACK1_PINS
+  if (calibrate_exp_pedal < NUMBER_OF_CTL_JACKS) {
+    ctl_jack[calibrate_exp_pedal].calibrate_max();
+    Setting.exp_max[calibrate_exp_pedal] = ctl_jack[calibrate_exp_pedal].get_max();
+    LCD_show_status_message("Max set for EXP" + String(calibrate_exp_pedal + 1));
+  }
+#endif
+}
+
+void SC_set_auto_calibrate() { // Set expression pedal to auto calibrate in meu
+#ifdef JACK1_PINS
+  if (calibrate_exp_pedal < NUMBER_OF_CTL_JACKS) {
+    ctl_jack[calibrate_exp_pedal].set_max(0);
+    Setting.exp_max[calibrate_exp_pedal] = 0;
+    LCD_show_status_message("AutoCalibr. EXP" + String(calibrate_exp_pedal + 1));
+  }
+#endif
+}
+
+void SC_check_calibration() {
+#ifdef JACK1_PINS
+  DEBUGMSG("Checking calibration...");
+  for (uint8_t j = 0; j < NUMBER_OF_CTL_JACKS; j++) {
+    DEBUGMSG("EXP PEDAL " + String(j + 1) + "! Max value: " + String(Setting.exp_max[j]) + ", Min value: " + String(Setting.exp_min[j]));
+    if (ctl_jack[j].check_calibration() == false) {
+      LCD_show_status_message("Recalibrate EXP" + String(j + 1));
+      DEBUGMAIN("Please re-calibrate EXP PEDAL " + String(j + 1) + "! Max value: " + String(Setting.exp_max[j]) + ", Min value: " + String(Setting.exp_min[j]));
+    }
+  }
+#endif
+}
+
+uint8_t SC_current_exp_pedal() {
+  DEBUGMSG("Current switch: " + String(switch_pressed));
+  return (last_switch_pressed - NUMBER_OF_SWITCHES) / 2;
+}
+
+void SC_set_expression_pedals() { // Called from EEP_read_eeprom_common_data()
+#ifdef JACK1_PINS
+  for (uint8_t j = 0; j < NUMBER_OF_CTL_JACKS; j++) { // Set max and min values in ctl_jack objects
+    DEBUGMSG("Expression pedal " + String(j) + "...");
+    ctl_jack[j].set_max(Setting.exp_max[j]);
+    if (Setting.exp_max[j] > 0) ctl_jack[j].set_min(Setting.exp_min[j]);
+  }
+#endif
+}
+
+bool SC_switch_is_expr_pedal() {
+  return switch_is_expression_pedal;
+}
 
 // ********************************* Section 4: Switch Long Press / Extra Long Press and Hold Detection ********************************************
 void SC_update_long_presses_and_hold() {
@@ -309,4 +366,15 @@ void SC_update_long_presses_and_hold() {
     DEBUGMAIN("Switch held: " + String(switch_held));
     //}
   }
+}
+
+void SC_remote_switch_pressed(uint8_t sw) {
+  if (sw < NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1) {
+    time_switch_pressed = micros();
+    switch_pressed = sw;
+  }
+}
+
+void SC_remote_switch_released(uint8_t sw) {
+  if (sw < NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1) switch_released = sw;
 }

@@ -12,10 +12,10 @@ struct Setting_struct { // All the global settings in one place.
   bool Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
   uint8_t LED_brightness; // The neopixels are very bright. I find setting them to 10 is just fine for an indicator light.
   uint8_t Backlight_brightness; //In case of RGB displays, here the backlight brightness is set
-  uint8_t Bpm;
+  uint8_t Bpm; // The current tempo
   bool LED_FX_off_is_dimmed; // When an effect is off, the LED will be dimmed
   uint8_t LED_global_colour; // Colour of Global functions
-  uint8_t LED_bpm_colour;
+  uint8_t LED_bpm_colour; // Colour of the tempo LED
   uint8_t FX_default_colour; // Default colour
   uint8_t FX_GTR_colour; // Colour for guitar settings
   uint8_t FX_PITCH_colour; // Colour for pitch FX
@@ -33,11 +33,15 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Bass_mode_cc_number;
   uint8_t Bass_mode_min_velocity; // The minimum velocity
   uint8_t Main_display_mode; // The mode of the main display
+  uint8_t exp_max[4]; // the maximum values of the expression pedals
+  uint8_t exp_min[4]; // the minimum values of the expression pedals
+  uint8_t FX_LOOPER_colour; // Colour for the looper
+  uint8_t MEP_control; // Control options for Master Expression Pedal
 };
 
 Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
-  true,  // US20_emulation_active
+  false,  // US20_emulation_active
   true,  // Physical_LEDs
   false, // Virtual_LEDs
   10,    // LED_brightness
@@ -48,7 +52,7 @@ Setting_struct Default_settings = {  // Default values for global settings
   2,     // LED_bpm_colour (red)
   6,     // FX_default_colour (white)
   6,     // FX_GTR_colour (White) for guitar settings
-  5,     // FX_PITCH_colour (Turquoise) for pitch FX
+  5,     // FX_PITCH_colour (Cyan) for pitch FX
   8,     // FX_FILTER_colour (Purple) for filter FX
   9,     // FX_DIST_colour (Pink) for distortion FX
   2,     // FX_AMP_colour (Red) for amp FX and amp solo
@@ -62,7 +66,11 @@ Setting_struct Default_settings = {  // Default values for global settings
   0,     // Bass_mode_device
   15,    // Bass_mode_cc_number
   100,   // Bass_mode_min_verlocity
-  0,     // Main display mode
+  1,     // Main display mode
+  {0, 0, 0, 0}, // The maximum values of the expression pedals (0 = auto calibrate)
+  {0, 0, 0, 0}, // The minumum values of the expression pedals (0 = auto calibrate)
+  6,     // FX_LOOPER_colour (white)
+  0,     // MEP_control - basic control
 };
 
 Setting_struct Setting;
@@ -80,30 +88,22 @@ struct Cmd_struct { // The structure of a command as it is stored in EEPROM
   uint8_t Value4;
 };
 
-/*struct Cmd_struct_index {
-  uint8_t Page;
-  uint8_t Switch;
-  uint8_t Type;
-  uint8_t Device;
-};*/
-
-#define SP_LABEL_SIZE 16
+#define LCD_DISPLAY_SIZE 16
 // Switch parameter memory
 struct SP_struct {
   uint8_t Device;       // The device the switch is assigned to
   uint8_t Type;         // The type of this switch
   uint16_t Cmd;         // The command number that will set the display and LED state
-  bool Cmd_from_default_bank;          // Switch has commands from the default bank
-  bool Always_read;     // Switches do not always need reading - after load this variable will indicate if it is neccesary or not.
+  bool Refresh_with_FX_only; // If true this effect will be refreshed on an update_page = REFRESH_FX_ONLY command.
   uint8_t State;        // State of the switch: on (1) or off(0) or three extra states for TRI/FOURSTATE/RANGE/UPDOWN (2-4)
-  uint8_t LED_state;    // State of the LED: on (1), off (0), dimmed (2) or blink (3)
   bool Pressed;         // True when switch is pressed, false when released.
   uint8_t Latch;        // MOMENTARY (0), LATCH (1) TRI/FOURSTATE/RANGE/UPDOWN (2-4)
   uint8_t Step;         // Step value
   bool Direction;       // For UPDOWN type. Up = true
-  char Title[SP_LABEL_SIZE + 1];        //Title shows on LCD line 1
-  char Label[SP_LABEL_SIZE + 1];        //Label shows on LCD line 2
-  uint8_t Colour;        //LED settings
+  char Title[LCD_DISPLAY_SIZE + 1];        //Title shows on LCD line 1
+  char Label[LCD_DISPLAY_SIZE + 1];        //Label shows on LCD line 2
+  uint8_t Colour;        // LED settings
+  uint8_t Exp_pedal;     // Which expression pedal we are controlling - used for MASTER_EXPRESSION_PEDAL
   uint8_t Trigger;       // The trigger of the pedal
   uint16_t PP_number;    //When it is a patch, here we store the patch number, for an parameter/assign it is the pointer to the Parameter table
   uint8_t Bank_position; // Used for PATCH_BANK and PAR_BANK. The relative position in this bank
@@ -115,15 +115,12 @@ struct SP_struct {
   uint16_t Assign_max;   // Assign: max_value (switch is on) - also used for parameter STEP/UPDOWN type
   uint8_t Target_byte1;  // Once the assign target is known, the state of the target is read into two bytes
   uint8_t Target_byte2;  // This byte often contains the type of the assign - which we exploit in the part of parameter feedback
-  //uint8_t Target_byte3;  // For the Zoom G5, i needed some extra locations for target data (1 for each FX slot)
-  //uint8_t Target_byte4;
-  //uint8_t Target_byte5;
-  //uint8_t Target_byte6;
   uint8_t Value1;
   uint8_t Value2;
   uint8_t Value3;
   uint8_t Value4;
   uint8_t Value5;
+  uint8_t Offline_value;
 };
 
 // Reserve the memory for the switches on the page and the external switches and the default page switch

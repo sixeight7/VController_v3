@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/fonts">
+        <file>LCD_Solid.ttf</file>
+    </qresource>
+    <qresource prefix="/images">
+        <file>VController_RGB.JPG</file>
+    </qresource>
+</RCC>
