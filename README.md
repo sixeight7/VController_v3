@@ -11,6 +11,7 @@ It support a number of guitar modelers and symths, where it actively read patch 
 * Roland GR-55
 * Roland VG-99
 * Boss Katana (50/100/Artist)
+* Kemper Profiling Amp
 * Line 6 Helix (limited)
 * Line 6 M13
 * Zoom G3
