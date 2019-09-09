@@ -37,9 +37,17 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t exp_min[4]; // the minimum values of the expression pedals
   uint8_t FX_LOOPER_colour; // Colour for the looper
   uint8_t MEP_control; // Control options for Master Expression Pedal
+  uint8_t FX_WAH_colour; // Colour for wahs
+  uint8_t FX_DYNAMICS_colour; // Colour for dynamics
 };
 
-Setting_struct Default_settings = {  // Default values for global settings
+#ifdef IS_VCMINI
+#define DEFAULT_MAIN_DISPLAY_MODE 3
+#else
+#define DEFAULT_MAIN_DISPLAY_MODE 1
+#endif
+
+const Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
   false,  // US20_emulation_active
   true,  // Physical_LEDs
@@ -58,7 +66,7 @@ Setting_struct Default_settings = {  // Default values for global settings
   2,     // FX_AMP_colour (Red) for amp FX and amp solo
   3,     // FX_MODULATE_colour (Blue) for modulation FX
   1,     // FX_DELAY_colour (Green) for delays
-  7,     // FX_REVERB_colour (Yellow) for reverb FX
+  4,     // FX_REVERB_colour (Orange) for reverb FX
   2,     // MIDI_PC_colour (Red)
   1,     // MIDI_CC_colour (Green)
   3,     // MIDI_note_colour (Blue)
@@ -66,11 +74,13 @@ Setting_struct Default_settings = {  // Default values for global settings
   0,     // Bass_mode_device
   15,    // Bass_mode_cc_number
   100,   // Bass_mode_min_verlocity
-  1,     // Main display mode
+  DEFAULT_MAIN_DISPLAY_MODE,     // Main display mode - 1 for VController, 3 for VC-mini
   {0, 0, 0, 0}, // The maximum values of the expression pedals (0 = auto calibrate)
   {0, 0, 0, 0}, // The minumum values of the expression pedals (0 = auto calibrate)
   6,     // FX_LOOPER_colour (white)
   0,     // MEP_control - basic control
+  5,     // FX_WAH_colour (Purple)
+  7,     // FX_DYNAMICS_colour (Yellow)
 };
 
 Setting_struct Setting;
@@ -88,11 +98,64 @@ struct Cmd_struct { // The structure of a command as it is stored in EEPROM
   uint8_t Value4;
 };
 
+struct MIDI_switch_settings_struct {
+  uint8_t type;
+  uint8_t port;
+  uint8_t channel;
+  uint8_t cc;
+};
+
+#define MIDI_SWITCH_OFF 0
+#define MIDI_SWITCH_CC_MOMENTARY 1 // CC controlled by momentary switch
+#define MIDI_SWITCH_CC_TOGGLE 2 // CC controlled by toggle switch
+#define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
+#define MIDI_SWITCH_PC 4
+
+#define TOTAL_NUMBER_OF_SWITCHES NUMBER_OF_SWITCHES + (NUMBER_OF_ENCODERS * 2) + NUMBER_OF_EXTERNAL_SWITCHES + NUMBER_OF_MIDI_SWITCHES
+#define NUMBER_OF_DEFAULT_MIDI_SWITCHES 32
+MIDI_switch_settings_struct MIDI_switch[TOTAL_NUMBER_OF_SWITCHES];
+
+const MIDI_switch_settings_struct MIDI_switch_default_settings[NUMBER_OF_DEFAULT_MIDI_SWITCHES] = {
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 0
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 1
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 2
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 3
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 4
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 5
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 6
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 7
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 8
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 9
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 10
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 11
+  { MIDI_SWITCH_CC_MOMENTARY, 1, 9, 26 }, // switch 12
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 13
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 14
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 15
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 16
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 17
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 18
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 19
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 20
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 21
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 22
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 23
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 24
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 25
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 26
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 27
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 28
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 29
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 30
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 31
+};
+
 #define LCD_DISPLAY_SIZE 16
 // Switch parameter memory
 struct SP_struct {
   uint8_t Device;       // The device the switch is assigned to
-  uint8_t Type;         // The type of this switch
+  uint8_t Type;         // The cmdtype of this switch
+  uint8_t Sel_type;     // The selection type: SELECT/NEXT/PREV/BANKSELECT/BANKUP/BANKDOWN
   uint16_t Cmd;         // The command number that will set the display and LED state
   bool Refresh_with_FX_only; // If true this effect will be refreshed on an update_page = REFRESH_FX_ONLY command.
   uint8_t State;        // State of the switch: on (1) or off(0) or three extra states for TRI/FOURSTATE/RANGE/UPDOWN (2-4)
@@ -124,6 +187,6 @@ struct SP_struct {
 };
 
 // Reserve the memory for the switches on the page and the external switches and the default page switch
-SP_struct SP[NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1];  // SP = Switch Parameters
+SP_struct SP[TOTAL_NUMBER_OF_SWITCHES + 1];  // SP = Switch Parameters
 
 #endif

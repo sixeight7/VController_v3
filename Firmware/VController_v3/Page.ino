@@ -14,10 +14,13 @@
 // The page data van be updated in three levels:
 // update_page = RELOAD_PAGE will reload and reread all the data from the devices
 // update_page = REFRESH_PAGE will reread all the data from the devices, but not reload
-// update_page - REFRESH_FX_ONLY will only reread the effects (where SP[].Refresh_with_FX_only is set to true)
+// update_page = REFRESH_FX_ONLY will only reread the effects (where SP[].Refresh_with_FX_only is set to true)
 
 // Reading data from the devices takes time. Therefore it can happen that a REFRESH_FX_ONLY is given while RELOAD_PAGE is still in progress. In that cas a RELOAD_PAGE will be
 // executed for the entire page. That way all the displays will be updated with the correct data.
+
+#define MINIMAL_PAGE_UPDATE_INTERVAL 200 // Minimal time between page updates
+unsigned long PageUpdateTimer = 0;
 
 #define SYSEX_WATCHDOG_LENGTH 300 // watchdog length for sysex messages (in msec).
 unsigned long SysexWatchdog = 0; // This watchdog will check if a device responds. If it expires it will request the same parameter again.
@@ -43,7 +46,8 @@ void setup_page()
 
 void main_page() {
   //if (global_tuner_active) DEBUGMSG("Tuner active");
-  if (update_page != OFF) {
+  if ((update_page != OFF) && (millis() > PageUpdateTimer)) {
+    PageUpdateTimer = millis() + MINIMAL_PAGE_UPDATE_INTERVAL;
     if (active_update_type < update_page) active_update_type = update_page;
     switch (active_update_type) {
       case RELOAD_PAGE:
@@ -77,7 +81,8 @@ void main_page() {
 // Load a page from memory into the SP array
 void PAGE_load_current() {
   //update_page = OFF; //Switch LCDs are updated here as well
-  for (uint8_t s = 0; s < (NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1); s++) { // Load regular switches
+  on_looper_page = false;
+  for (uint8_t s = 0; s < (TOTAL_NUMBER_OF_SWITCHES + 1); s++) { // Load regular switches
     PAGE_load_switch(s);
   }
   PAGE_request_first_switch(); //Now start reading in the parameters from the devices
@@ -103,35 +108,27 @@ void PAGE_load_switch(uint8_t sw) {
   DEBUGMSG("Loading switch " + String(sw) + " for device " + String(Dev));
   if (Dev < NUMBER_OF_DEVICES) {
     switch (SP[sw].Type) {
-      case PATCH_SEL:
+      case PATCH:
         {
+          SP[sw].Sel_type = Data1;
           SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
-          uint16_t this_patch = (Data2 * 100) + Data1;
-          //if ((prev_device != Dev) || (prev_type != Type) || (prev_number != this_patch)) {
-          SP[sw].PP_number = this_patch;
+          if (Data1 == SELECT) {
+            SP[sw].PP_number = (cmd.Value1 * 100) + Data2;
+          }
+          if (Data1 == BANKSELECT) {
+            SP[sw].Bank_position = Data2;
+            SP[sw].Bank_size = cmd.Value1;
+            Device[Dev]->update_bank_size(cmd.Value1);
+          }
+          if ((Data1 == PREV) || (Data1 == NEXT)) {
+            SP[sw].Refresh_with_FX_only = true;
+          }
         }
         break;
-      case PATCH_BANK:
-        {
-          SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
-          SP[sw].Bank_position = Data1;
-          SP[sw].Bank_size = Data2;
-          Device[Dev]->update_bank_size(Data2);
-        }
-        break;
-      case BANK_UP:
-      case BANK_DOWN:
       case PAR_BANK_UP:
       case PAR_BANK_DOWN:
       case SAVE_PATCH:
-        //case ASG_BANK_UP:
-        //case ASG_BANK_DOWN:
         SP[sw].Colour = Device[Dev]->my_LED_colour;
-        break;
-      case PREV_PATCH:
-      case NEXT_PATCH:
-        SP[sw].Refresh_with_FX_only = true; // Always needs re-reading after update
-        SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
         break;
       case DIRECT_SELECT:
         SP[sw].Refresh_with_FX_only = true;
@@ -155,12 +152,22 @@ void PAGE_load_switch(uint8_t sw) {
         SP[sw].Bank_size = Data2;
         break;
       case PAR_BANK_CATEGORY:
-        SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
+        SP[sw].Colour = Device[Dev]->my_LED_colour;
         SP[sw].PP_number = Data1;
         break;
       case ASSIGN:
         SP[sw].Refresh_with_FX_only = true; // Parameters always need re-reading
-        Device[Dev]->assign_load(sw, Data1, Data2);
+        SP[sw].Sel_type = Data1;
+        if (Data1 == SELECT) {
+          Device[Dev]->assign_load(sw, Data2, cmd.Value1);
+        }
+        else if (Data1 == BANKSELECT) {
+          SP[sw].Bank_position = Data2;
+          SP[sw].Bank_size = cmd.Value1;
+        }
+        else {
+          SP[sw].Colour = Device[Dev]->my_LED_colour;
+        }
         break;
       case OPEN_PAGE_DEVICE:
         SP[sw].PP_number = Data1; //Store page number
@@ -180,6 +187,9 @@ void PAGE_load_switch(uint8_t sw) {
         SP[sw].Exp_pedal = Data1;
         break;
       case SNAPSCENE:
+        SP[sw].Value1 = Data1;
+        SP[sw].Value2 = Data2;
+        SP[sw].Value3 = cmd.Value1;
         SP[sw].PP_number = Data1;
         SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
         break;
@@ -187,16 +197,28 @@ void PAGE_load_switch(uint8_t sw) {
         SP[sw].PP_number = Data1;
         SP[sw].Colour = FX_LOOPER_TYPE; // Set the colour
         SP[sw].Refresh_with_FX_only = true;
+        on_looper_page = true;
         break;
     }
   }
   else if (Dev == COMMON) {
     switch (SP[sw].Type) {
-      case OPEN_PAGE:
       case MENU:
       case SET_TEMPO:
         SP[sw].Colour = Setting.LED_global_colour;
         SP[sw].PP_number = Data1; //Store page number
+        SP[sw].Refresh_with_FX_only = true;
+        break;
+      case PAGE:
+        SP[sw].Sel_type = Data1;
+        if (Data1 == SELECT) {
+          SP[sw].PP_number = Data2; //Store page number
+        }
+        if (Data1 == BANKSELECT) {
+          SP[sw].Bank_position = Data2;
+          SP[sw].Bank_size = cmd.Value1;
+        }
+        SP[sw].Colour = Setting.LED_global_colour;
         SP[sw].Refresh_with_FX_only = true;
         break;
       case MIDI_NOTE:
@@ -246,7 +268,7 @@ void PAGE_request_first_switch() {
 }
 
 void PAGE_request_next_switch() {
-  if ((active_update_type != REFRESH_FX_ONLY) || (SP[Current_switch].Refresh_with_FX_only)) LCD_update(Current_switch);
+  if ((active_update_type != REFRESH_FX_ONLY) || (SP[Current_switch].Refresh_with_FX_only)) LCD_update(Current_switch, true);
   PAGE_stop_sysex_watchdog();
   Current_switch++;
   read_attempt = 1;
@@ -254,7 +276,7 @@ void PAGE_request_next_switch() {
 }
 
 void PAGE_request_current_switch() { //Will request the data for the next switch
-  if (Current_switch < NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1) {
+  if (Current_switch < TOTAL_NUMBER_OF_SWITCHES + 1) {
     request_next_switch = true; // By default we move on to the next page.
     //DEBUGMSG("Switch " + String(Current_switch) + ": active_update_type: " + String(active_update_type) + ", Always read: " + String(SP[Current_switch].Refresh_with_FX_only));
     if ((active_update_type != REFRESH_FX_ONLY) || (SP[Current_switch].Refresh_with_FX_only)) {
@@ -263,43 +285,32 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
       uint8_t Type = SP[Current_switch].Type;
       uint16_t my_patch_number;
       uint8_t page;
+      uint8_t asgn_num;
+      String msg;
       DEBUGMAIN("Request data for switch " + String(Current_switch) + ", device " + String(Dev) + ", type: " + String(Type));
       //update_lcd = Current_switch; //update LCD before moving on...
       MIDI_disable_device_check(); // Do not check for devices now
 
       if (Dev < NUMBER_OF_DEVICES) {
         switch (Type) {
-          case PATCH_SEL:
-            if (Device[Dev]->can_request_sysex_data()) {
+          case PATCH:
+            if ((SP[Current_switch].Sel_type == BANKUP) || (SP[Current_switch].Sel_type == BANKDOWN)) break;
+            if (SP[Current_switch].Sel_type == BANKSELECT) {
+              my_patch_number = Device[Dev]->calculate_patch_number(SP[Current_switch].Bank_position - 1, SP[Current_switch].Bank_size);
+              SP[Current_switch].PP_number = my_patch_number;
+            }
+            if (SP[Current_switch].Sel_type == NEXT) {
+              my_patch_number = Device[Dev]->next_patch_number();
+              SP[Current_switch].PP_number = my_patch_number;
+            }
+            if (SP[Current_switch].Sel_type == PREV) {
+              my_patch_number = Device[Dev]->prev_patch_number();
+              SP[Current_switch].PP_number = my_patch_number;
+            }
+            if ((Device[Dev]->can_request_sysex_data()) || (Dev == KPA)) {
               request_next_switch = Device[Dev]->request_patch_name(Current_switch, SP[Current_switch].PP_number);  //Request the patch name
-              if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
-            }
-            else LCD_clear_SP_label(Current_switch);
-            break;
-          case PATCH_BANK:
-            my_patch_number = Device[Dev]->calculate_patch_number(SP[Current_switch].Bank_position - 1, SP[Current_switch].Bank_size);
-            SP[Current_switch].PP_number = my_patch_number;
-            if (Device[Dev]->can_request_sysex_data()) {
-              request_next_switch = Device[Dev]->request_patch_name(Current_switch, my_patch_number);  //Request the patch name
-              if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
-            }
-            else LCD_clear_SP_label(Current_switch);
-            break;
-          case PREV_PATCH:
-            my_patch_number = Device[Dev]->prev_patch_number();
-            SP[Current_switch].PP_number = my_patch_number;
-            if (Device[Dev]->can_request_sysex_data()) {
-              request_next_switch = Device[Dev]->request_patch_name(Current_switch, my_patch_number);  //Request the patch name
-              if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
-            }
-            else LCD_clear_SP_label(Current_switch);
-            break;
-          case NEXT_PATCH:
-            my_patch_number = Device[Dev]->next_patch_number();
-            SP[Current_switch].PP_number = my_patch_number;
-            if (Device[Dev]->can_request_sysex_data()) {
-              request_next_switch = Device[Dev]->request_patch_name(Current_switch, my_patch_number);  //Request the patch name
-              if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
+              if (!request_next_switch) PAGE_start_sysex_watchdog();
+              DEBUGMSG("Requesting patch name #" + String(SP[Current_switch].PP_number));
             }
             else LCD_clear_SP_label(Current_switch);
             break;
@@ -320,8 +331,8 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
           case PAR_BANK:
             {
               uint16_t par_num = (Device[Dev]->parameter_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position - 1;
-              uint16_t par_id = Device[Dev]->get_parbank_parameter_id(par_num);
-              DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
+              uint16_t par_id = Device[Dev]->get_parbank_parameter_id(par_num); // If the device supports parameter categories, this will point to the parameter within the selected category
+              //DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
               if (par_num < Device[Dev]->number_of_parbank_parameters()) {
 
                 // Determine if the pedal type: TOGGLE, STEP or UPDOWN
@@ -362,13 +373,33 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             Device[Dev]->request_par_bank_category_name(Current_switch);
             break;
           case ASSIGN:
-            //case ASG_BANK:
-            if (Device[Dev]->can_request_sysex_data()) {
-              Device[Dev]->request_current_assign(Current_switch);
-              PAGE_start_sysex_watchdog(); // Start the watchdog
-              request_next_switch = false; // Do not read the next switch yet
+            if (SP[Current_switch].Sel_type == SELECT) {
+              if (Device[Dev]->can_request_sysex_data()) {
+                Device[Dev]->request_current_assign(Current_switch);
+                PAGE_start_sysex_watchdog(); // Start the watchdog
+                request_next_switch = false; // Do not read the next switch yet
+              }
+              else LCD_clear_SP_label(Current_switch);
             }
-            else LCD_clear_SP_label(Current_switch);
+            if (SP[Current_switch].Sel_type == BANKSELECT) {
+              asgn_num = (Device[Dev]->assign_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position - 1;
+              if (asgn_num < Device[Dev]->get_number_of_assigns()) {
+                SP[Current_switch].PP_number = asgn_num;
+                Device[Dev]->assign_load(Current_switch, asgn_num, Device[Dev]->trigger_follow_assign(asgn_num));
+                if (Device[Dev]->can_request_sysex_data()) {
+                  Device[Dev]->request_current_assign(Current_switch);
+                  PAGE_start_sysex_watchdog(); // Start the watchdog
+                  request_next_switch = false; // Do not read the next switch yet
+                }
+                else LCD_clear_SP_label(Current_switch);
+              }
+              else { // Assign number out of range
+                SP[Current_switch].PP_number = 0;
+                SP[Current_switch].Latch = TGL_OFF;
+                SP[Current_switch].Colour = 0;
+                LCD_clear_SP_label(Current_switch);
+              }
+            }
             break;
           case OPEN_PAGE_DEVICE:
           case OPEN_NEXT_PAGE_OF_DEVICE:
@@ -380,7 +411,11 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
           case TOGGLE_EXP_PEDAL:
             if (switch_controlled_by_master_exp_pedal > 0) { // If we are controlling an UPDOWN or STEP switch.
               LCD_set_SP_title(Current_switch, "[SWITCH " + String(switch_controlled_by_master_exp_pedal) + "]");
-              LCD_set_SP_label(Current_switch, SP[switch_controlled_by_master_exp_pedal].Label); // Copy the label from that switch
+              msg = "";
+              Device[Dev]->read_parameter_title(SP[switch_controlled_by_master_exp_pedal].PP_number, msg);
+              msg += ":";
+              msg += SP[switch_controlled_by_master_exp_pedal].Label;
+              LCD_set_SP_label(Current_switch, msg); // Copy the title and label from that switch
               break;
             }
             Device[Dev]->set_expr_title(Current_switch);
@@ -391,7 +426,18 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             else LCD_clear_SP_label(Current_switch);
             break;
           case SNAPSCENE:
-            LCD_clear_SP_label(Current_switch);
+            if ((Device[Dev]->current_snapscene == SP[Current_switch].Value2) && (SP[Current_switch].Value3 > 0)) {
+              SP[Current_switch].PP_number = SP[Current_switch].Value3;
+            }
+            else if ((Device[Dev]->current_snapscene == SP[Current_switch].Value1) && (SP[Current_switch].Value2 > 0)) {
+              SP[Current_switch].PP_number = SP[Current_switch].Value2;
+            }
+            else {
+              SP[Current_switch].PP_number = SP[Current_switch].Value1;
+            }
+            request_next_switch = Device[Dev]->request_snapscene_name(Current_switch, SP[Current_switch].PP_number);  //Request the parameter for this device
+            if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
+            //LCD_clear_SP_label(Current_switch);
             break;
           case LOOPER:
             Device[Dev]->request_looper_label(Current_switch);
@@ -404,20 +450,45 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             else LCD_clear_SP_label(Current_switch);
             break;
         }
+        // Set main backlight colour
+        if (Current_switch == 1) {
+          if (on_looper_page) {
+            uint8_t c = Device[Dev]->request_looper_backlight_colour();
+            if (c > 0) Main_backlight_show_colour(c);
+            else Main_backlight_show_colour(6); // show white
+          }
+          else Main_backlight_show_colour(Device[Current_device]->my_LED_colour);
+        }
       }
       else if (Dev == COMMON) {
         switch (SP[Current_switch].Type) {
-          case OPEN_PAGE:
-            page = SP[Current_switch].PP_number;
-            EEPROM_read_title(page, 0, page_label);
-            page_label.trim();
-            LCD_set_SP_label(Current_switch, page_label);
-            if (!SCO_valid_page(page) ) SP[Current_switch].Colour = 0; // Switch colour off if this page does not exist.
-            break;
           case MENU:
             menu_load(Current_switch);
             break;
+          case PAGE:
+            if ((SP[Current_switch].Sel_type == BANKUP) || (SP[Current_switch].Sel_type == BANKDOWN)) break;
+            if (SP[Current_switch].Sel_type == BANKSELECT) {
+              page = (page_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              if (page >= Number_of_pages) page += FIRST_SELECTABLE_FIXED_CMD_PAGE - Number_of_pages; // Jump over the gap in the pages to reach the fixed ones
+              SP[Current_switch].PP_number = page;
+              SP[Current_switch].Colour = Setting.LED_global_colour;
+            }
+            else {
+              page = SP[Current_switch].PP_number;
+            }
+            if (SCO_valid_page(page)) {
+              EEPROM_read_title(page, 0, page_label);
+              page_label.trim();
+              LCD_set_SP_label(Current_switch, page_label);
+            }
+            else {
+              SP[Current_switch].Colour = 0; // Switch colour off if this page does not exist.
+              LCD_clear_SP_label(Current_switch);
+            }
+            break;
         }
+        // Set main backlight colour
+        if (Current_switch == 1) Main_backlight_show_colour(6); // Main display colour white
       }
     }
   }
@@ -456,7 +527,7 @@ void PAGE_check_sysex_watchdog() {
 void PAGE_check_first_connect(uint8_t dev) { // Will check if last connected device is the first that connects
   number_of_connected_devices++;
   if (number_of_connected_devices == 1) {
-    Current_device = dev;
+    set_current_device(dev);
     if ((Current_device < NUMBER_OF_DEVICES) && (Current_page != PAGE_MENU)) SCO_select_page(Device[dev]->read_current_device_page()); // Load the patch page associated to this device
   }
 }
@@ -469,7 +540,7 @@ void PAGE_check_disconnect(uint8_t dev) {
 bool PAGE_check_on_page(uint8_t dev, uint16_t patch) { // Will check if the patch mentioned is currently on the page
   bool dev_on_page = false;
   for (uint8_t s = 1; s < NUMBER_OF_SWITCHES + 1; s++) { // Run through the switches on the current page
-    if (((SP[s].Type == PATCH_SEL) || (SP[s].Type == PATCH_BANK)) && (SP[s].Device == dev)) {
+    if ((SP[s].Type == PATCH) && (SP[s].Device == dev)) {
       dev_on_page = true;
       if (SP[s].PP_number == patch) return true;
     }

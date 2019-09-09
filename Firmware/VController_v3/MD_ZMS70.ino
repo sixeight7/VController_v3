@@ -13,6 +13,7 @@
 #define ZMS70_MIDI_CHANNEL 1
 #define ZMS70_PATCH_MIN 0
 #define ZMS70_PATCH_MAX 49
+#define ZMS70_MIDI_TIME 100 // Minimal time inbetween requests for patch data from MS70
 
 // Documentation of Zoom sysex has been moved to http://www.vguitarforums.com/smf/index.php?topic=4329.msg131444#msg131444 (The ZOOM MS70-CDR v2 MIDI specification)
 // The relevant messages are repeated here
@@ -36,11 +37,11 @@
 
 // Initialize device variables
 // Called at startup of VController
-void ZMS70_class::init() // Default values for variables
+void MD_ZMS70_class::init() // Default values for variables
 {
   // Variables
   enabled = DEVICE_DETECT; // Default value
-  strcpy(device_name, "MS70");
+  strcpy(device_name, "MS70"); // This line crashes the VController Production Model for no apparent reason - memory leak somewhere? Fixed by changing "Optimize" to fast
   strcpy(full_device_name, "Zoom MS70-cdr");
   current_patch_name.reserve(17);
   current_patch_name = "                ";
@@ -48,21 +49,32 @@ void ZMS70_class::init() // Default values for variables
   patch_max = ZMS70_PATCH_MAX;
   sysex_delay_length = 5; // time between sysex messages (in msec).
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the Zoom G3 does not have to respond before disconnection
-  bank_size = 10;
+  //bank_size = 10;
   my_LED_colour = 5; // Default value
   MIDI_channel = ZMS70_MIDI_CHANNEL; // Default value
-  bank_number = 0; // Default value
+  //bank_number = 0; // Default value
   is_always_on = true; // Default value
-  my_device_page1 = PAGE_ZOOM_PATCH_BANK; // Default value
-  my_device_page2 = 0; // Default value
-  my_device_page3 = 0; // Default value
-  my_device_page4 = 0; // Default value
+  my_device_page1 = ZMS70_DEFAULT_PAGE1; // Default value
+  my_device_page2 = ZMS70_DEFAULT_PAGE2; // Default value
+  my_device_page3 = ZMS70_DEFAULT_PAGE3; // Default value
+  my_device_page4 = ZMS70_DEFAULT_PAGE4; // Default value
   CP_MEM_current = false;
+  midi_timer = 0;
+}
+
+void MD_ZMS70_class::update() {
+  if ((send_patch_change) && (millis() > midi_timer)) { // We delay the sending of a PC message if these come to close together.
+    MIDI_send_PC(patch_number, MIDI_channel, MIDI_port);
+    DEBUGMSG("out(" + String(device_name) + ") PC" + String(patch_number)); //Debug
+    do_after_patch_selection();
+    midi_timer = millis() + ZMS70_MIDI_TIME;
+    send_patch_change = false;
+  }
 }
 
 // ********************************* Section 2: ZOOM MS70-CDR common MIDI in functions ********************************************
 
-void ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+void MD_ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a ZOOM MS70-CDR
   if ((port == MIDI_port) && (sxdata[1] == 0x52) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == ZMS70_MODEL_NUMBER)) {
@@ -139,7 +151,7 @@ void ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int
   }
 }
 
-uint16_t ZMS70_class::FXtypeMangler(uint8_t byte1, uint8_t byte2, uint8_t byte4) {
+uint16_t MD_ZMS70_class::FXtypeMangler(uint8_t byte1, uint8_t byte2, uint8_t byte4) {
   // We will read three bytes from the sysex stream. All of them contain some bits that together make the FX type
   // Byte1 is the first byte of every fx slot
   // Bit one of Byte1 signals whether the effect is on or off
@@ -165,7 +177,7 @@ uint16_t ZMS70_class::FXtypeMangler(uint8_t byte1, uint8_t byte2, uint8_t byte4)
 
 // Detection of Zoom MS70-CDR
 
-void ZMS70_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_ZMS70_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Zoom MS70-CDR
   if ((sxdata[5] == 0x52) && (sxdata[6] == ZMS70_MODEL_NUMBER) && (sxdata[7] == 0x00)) {
     no_response_counter = 0;
@@ -173,7 +185,7 @@ void ZMS70_class::identity_check(const unsigned char* sxdata, short unsigned int
   }
 }
 
-void ZMS70_class::do_after_connect() {
+void MD_ZMS70_class::do_after_connect() {
   is_on = true;
   write_sysex(ZMS70_EDITOR_MODE_ON); // Put the Zoom MS70-CDR in EDITOR mode
   write_sysex(ZMS70_REQUEST_CURRENT_PATCH_NUMBER); // Receiving the current patch number will trigger a request for the current patch as well.
@@ -183,29 +195,29 @@ void ZMS70_class::do_after_connect() {
 
 // ********************************* Section 3: ZOOM MS70-CDR common MIDI out functions ********************************************
 
-void ZMS70_class::write_sysex(uint8_t message) {
+void MD_ZMS70_class::write_sysex(uint8_t message) {
   uint8_t sysexmessage[6] = {0xF0, 0x52, MIDI_device_id, ZMS70_MODEL_NUMBER, message, 0xF7};
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 6, MIDI_port);
 }
 
-void ZMS70_class::request_patch(uint8_t number) { //Will request the complete patch information from the Zoom MS70-CDR (will receive 120 bytes as an answer)
+void MD_ZMS70_class::request_patch(uint8_t number) { //Will request the complete patch information from the Zoom MS70-CDR (will receive 120 bytes as an answer)
   uint8_t sysexmessage[9] = {0xF0, 0x52, MIDI_device_id, ZMS70_MODEL_NUMBER, 0x09, 0x00, 0x00, number, 0xF7};
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 9, MIDI_port);
 }
 
-void ZMS70_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an effect on or off
+void MD_ZMS70_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an effect on or off
   uint8_t sysexmessage[10] = {0xF0, 0x52, MIDI_device_id, ZMS70_MODEL_NUMBER, 0x31, number, 0x00, state, 0x00, 0xF7}; // F0 52 00 5A 31 00 (FX) 00 01 (on) 00 F7
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 10, MIDI_port);
 }
 
-void ZMS70_class::send_current_patch() { //  Send the previously saved data back to the Zoom unit
+void MD_ZMS70_class::send_current_patch() { //  Send the previously saved data back to the Zoom unit
   if (CP_MEM_current) MIDI_send_sysex(CP_MEM, 146, MIDI_port);
 }
 
-void ZMS70_class::set_bpm() { //Will change the bpm to the specified value
+void MD_ZMS70_class::set_bpm() { //Will change the bpm to the specified value
 
   if ((connected) && (CP_MEM_current)) {
     // We write the tempo in the full patch memory. Here is where it is stored:
@@ -220,13 +232,13 @@ void ZMS70_class::set_bpm() { //Will change the bpm to the specified value
   }
 }
 
-void ZMS70_class::start_tuner() {
+void MD_ZMS70_class::start_tuner() {
   if (connected) {
     MIDI_send_CC(0x4A, 0x40, MIDI_channel, MIDI_port);
   }
 }
 
-void ZMS70_class::stop_tuner() {
+void MD_ZMS70_class::stop_tuner() {
   if (connected) {
     MIDI_send_CC(0x4A, 0x00, MIDI_channel, MIDI_port);
   }
@@ -234,7 +246,16 @@ void ZMS70_class::stop_tuner() {
 
 // ********************************* Section 4: MS70-CDR program change ********************************************
 
-void ZMS70_class::do_after_patch_selection() {
+void MD_ZMS70_class::select_patch(uint16_t new_patch) {
+
+  if (new_patch == patch_number) unmute();
+  patch_number = new_patch;
+  send_patch_change = true;
+  update_LEDS = true;
+  update_main_lcd = true;
+}
+
+void MD_ZMS70_class::do_after_patch_selection() {
   is_on = connected;
   Current_patch_number = patch_number;
   update_LEDS = true;
@@ -244,7 +265,7 @@ void ZMS70_class::do_after_patch_selection() {
   MIDI_disable_device_check();
 }
 
-bool ZMS70_class::request_patch_name(uint8_t sw, uint16_t number) {
+bool MD_ZMS70_class::request_patch_name(uint8_t sw, uint16_t number) {
   DEBUGMSG("Requesting patch " + String(number));
   if (number > patch_max) return true;
   last_requested_sysex_switch = sw;
@@ -253,7 +274,7 @@ bool ZMS70_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void ZMS70_class::number_format(uint16_t number, String &Output) {
+void MD_ZMS70_class::number_format(uint16_t number, String &Output) {
   Output += String((number + 1) / 10) + String((number + 1) % 10);
 }
 
@@ -351,7 +372,7 @@ const PROGMEM ZMS70_FX_type_struct ZMS70_FX_types[] = { // Table with the name a
   {18, 67,  "Space Hole", FX_REVERB_TYPE}, // 81
   {18, 99,  "Mangled Space", FX_REVERB_TYPE}, // 82
   {18, 131, "Dual Reverb", FX_REVERB_TYPE}, // 83
-  {2, 160,  "ZNR", FX_FILTER_TYPE}, // 84
+  {2, 160,  "ZNR", FX_DYNAMICS_TYPE}, // 84
   {4, 193,  "Stereo Gtr GEQ", FX_FILTER_TYPE}, // 85
   {4, 2,    "Stereo Bass GEQ", FX_FILTER_TYPE}, // 86
   {4, 16,   "LineSel", FX_GTR_TYPE}, // 87
@@ -373,18 +394,18 @@ const PROGMEM ZMS70_FX_type_struct ZMS70_FX_types[] = { // Table with the name a
   {14, 64,  "Bomber", FX_MODULATE_TYPE},
   {14, 96,  "Mono Synth", FX_MODULATE_TYPE},
   {14, 128, "Z-Organ", FX_MODULATE_TYPE},
-  {2, 16,   "COMP", FX_FILTER_TYPE},
-  {2, 32,   "Rock Comp", FX_FILTER_TYPE},
-  {2, 64,   "M Comp", FX_FILTER_TYPE},
-  {2, 96,   "Opto Comp", FX_FILTER_TYPE},
-  {2, 104,  "160 COMP", FX_FILTER_TYPE},
-  {2, 112,  "Limiter", FX_FILTER_TYPE},
+  {2, 16,   "COMP", FX_DYNAMICS_TYPE},
+  {2, 32,   "Rock Comp", FX_DYNAMICS_TYPE},
+  {2, 64,   "M Comp", FX_DYNAMICS_TYPE},
+  {2, 96,   "Opto Comp", FX_DYNAMICS_TYPE},
+  {2, 104,  "160 COMP", FX_DYNAMICS_TYPE},
+  {2, 112,  "Limiter", FX_DYNAMICS_TYPE},
   {2, 128,  "Slow Attack", FX_FILTER_TYPE},
-  {2, 192,  "Noise Gate", FX_FILTER_TYPE},
-  {2, 224,  "Dirty Gate", FX_FILTER_TYPE},
-  {2, 1,    "Orange Lim", FX_FILTER_TYPE},
-  {2, 33,   "Gray Comp", FX_FILTER_TYPE},
-  {2, 65,   "Dual Comp", FX_FILTER_TYPE},
+  {2, 192,  "Noise Gate", FX_DYNAMICS_TYPE},
+  {2, 224,  "Dirty Gate", FX_DYNAMICS_TYPE},
+  {2, 1,    "Orange Lim", FX_DYNAMICS_TYPE},
+  {2, 33,   "Gray Comp", FX_DYNAMICS_TYPE},
+  {2, 65,   "Dual Comp", FX_DYNAMICS_TYPE},
   {4, 32,   "Graphic EQ", FX_FILTER_TYPE},
   {4, 48,   "Bass Graphic EQ", FX_FILTER_TYPE},
   {4, 64,   "Para EQ", FX_FILTER_TYPE},
@@ -393,16 +414,16 @@ const PROGMEM ZMS70_FX_type_struct ZMS70_FX_types[] = { // Table with the name a
   {4, 88,   "Bottom B", FX_FILTER_TYPE},
   {4, 96,   "Exciter", FX_FILTER_TYPE},
   {4, 128,  "Comb FLTR", FX_FILTER_TYPE},
-  {4, 160,  "Auto Wah", FX_FILTER_TYPE},
-  {4, 176,  "Bass Auto Wah", FX_FILTER_TYPE},
-  {4, 192,  "Resonance", FX_FILTER_TYPE},
-  {4, 224,  "Cry", FX_FILTER_TYPE},
+  {4, 160,  "Auto Wah", FX_WAH_TYPE},
+  {4, 176,  "Bass Auto Wah", FX_WAH_TYPE},
+  {4, 192,  "Resonance", FX_WAH_TYPE},
+  {4, 224,  "Cry", FX_WAH_TYPE},
   {4, 1,    "Slow Filter", FX_FILTER_TYPE},
   {4, 17,   "Z Tron", FX_FILTER_TYPE},
   {4, 33,   "M-Filter", FX_FILTER_TYPE},
   {4, 41,   "A-Filter", FX_FILTER_TYPE},
-  {4, 49,   "Bass Cry", FX_FILTER_TYPE},
-  {4, 65,   "STEP", FX_FILTER_TYPE},
+  {4, 49,   "Bass Cry", FX_WAH_TYPE},
+  {4, 65,   "STEP", FX_WAH_TYPE},
   {4, 97,   "SEQ Filter", FX_FILTER_TYPE},
   {4, 129,  "Random Filter", FX_FILTER_TYPE},
   {4, 161,  "FCycle", FX_FILTER_TYPE},
@@ -410,7 +431,7 @@ const PROGMEM ZMS70_FX_type_struct ZMS70_FX_types[] = { // Table with the name a
 
 const uint8_t ZMS70_NUMBER_OF_FX = sizeof(ZMS70_FX_types) / sizeof(ZMS70_FX_types[0]);
 
-uint8_t ZMS70_class::FXsearch(uint8_t type, uint8_t number) {
+uint8_t MD_ZMS70_class::FXsearch(uint8_t type, uint8_t number) {
   uint8_t my_type = 0;
   for (uint8_t i = 0; i < ZMS70_NUMBER_OF_FX; i++) {
     if ((ZMS70_FX_types[i].Type == type) && (ZMS70_FX_types[i].Number == number)) {
@@ -421,7 +442,7 @@ uint8_t ZMS70_class::FXsearch(uint8_t type, uint8_t number) {
   return my_type; // Return index to the effect type
 }
 
-void ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   // Send sysex MIDI command to Zoom G3
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   bool FX_on = (value & 1);
@@ -434,9 +455,11 @@ void ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) 
     if (SP[Sw].PP_number == 5) bitWrite(CP_MEM[108], 0, FX_on);
     send_current_patch(); // Write the updated patch memory to the MS70-CDR
   }
+
+  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 }
 
-void ZMS70_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_ZMS70_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   if (SP[Sw].Latch == MOMENTARY) {
     if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
       set_FX_state(SP[Sw].PP_number, cmd->Value2);
@@ -451,7 +474,16 @@ void ZMS70_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number
 }
 
 // Parameters are the 6 FX buttons
-bool ZMS70_class::request_parameter(uint8_t sw, uint16_t number) {
+void MD_ZMS70_class::read_parameter_title(uint16_t number, String &Output) {
+  Output += "FX " + String(number + 1);
+}
+
+void MD_ZMS70_class::read_parameter_title_short(uint16_t number, String &Output) {
+  uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
+  Output += String(number + 1) + ":" + ZMS70_FX_types[FX_type].Name;
+}
+
+bool MD_ZMS70_class::request_parameter(uint8_t sw, uint16_t number) {
   //Effect type and state are stored in the ZMS70_FX array
   //Effect can have three states: 0 = no effect, 1 = on, 2 = off
   if (number < NUMBER_OF_FX_SLOTS) {
@@ -460,33 +492,30 @@ bool ZMS70_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 
   uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
-  String msg = "FX" + String(number + 1) + ":" + ZMS70_FX_types[FX_type].Name;  //Find the patch name in the ZMS70_FX_types array
-  LCD_set_SP_label(sw, msg);
+  LCD_set_SP_label(sw, ZMS70_FX_types[FX_type].Name); //Find the patch name in the ZMS70_FX_types array
   SP[sw].Colour = ZMS70_FX_types[FX_type].Colour; //Find the LED colour in the ZMS70_FX_types array
   return true; // Move to next switch is true
 }
 
 // Menu options for FX states
-void ZMS70_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+void MD_ZMS70_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = "FX" + String(number + 1) + " SW";
   else Output = "?";
 }
 
-uint16_t ZMS70_class::number_of_parameters() {
+uint16_t MD_ZMS70_class::number_of_parameters() {
   return 6;
 }
 
-uint8_t ZMS70_class::number_of_values(uint16_t parameter) {
+uint8_t MD_ZMS70_class::number_of_values(uint16_t parameter) {
   if (parameter < number_of_parameters()) return 2; // So far all parameters have two states: on and off
   else return 0;
 }
 
-void ZMS70_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+void MD_ZMS70_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters())  {
     if (value == 1) Output += "ON";
     else Output += "OFF";
   }
   else Output += "?";
 }
-
-

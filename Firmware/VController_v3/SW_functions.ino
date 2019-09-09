@@ -23,15 +23,20 @@ Cmd_struct cmd_buf[CMD_BUFFER_SIZE]; // We store fifty commands to allow for fas
 uint8_t current_cmdbuf_index = 0; // Index to the cmd_buf array
 
 uint8_t prev_switch_pressed = 0; // To allow detection of re-pressing a switch and reading the commands from the buffer instead of external EEPROM
+uint8_t prev_switch_page = 0; // The page the previous command was on.
 uint16_t current_cmd = 0; // The current command that is being executed
 uint8_t current_cmd_switch = 0; // Placeholder for the current_switch where the action is taken on
 
 uint8_t current_cmd_switch_action = 0; // Placeholder for the switch action of the current command. Types are below:
 #define SWITCH_PRESSED 1
-#define SWITCH_PRESSED_REPEAT 2
-#define SWITCH_RELEASED 3
-#define SWITCH_LONG_PRESSED 4
+#define SWITCH_RELEASED 2
+#define SWITCH_LONG_PRESSED 3
+#define SWITCH_LONG_RELEASED 4
 #define SWITCH_HELD 5
+#define SWITCH_DUAL_PRESSED 6
+#define SWITCH_DUAL_RELEASED 7
+#define SWITCH_DUAL_LONG_PRESSED 8
+#define SWITCH_DUAL_HELD 9
 
 uint8_t arm_page_cmd_exec = 0; // Set to the number of the selected page to execute the commands for this page
 
@@ -49,33 +54,28 @@ void setup_switch_control()
 void main_switch_control()  // Checks if a button has been pressed and check out which functions have to be executed
 {
   if (switch_released > 0) { // When switch is released, set current_cmd_switch_action to SWITCH_RELEASED and let current_cmd point to the first command for this switch
-    SP[switch_released].Pressed = false;
-    update_LEDS = true;
-    current_cmd_switch_action = SWITCH_RELEASED;
-    current_cmd = EEPROM_first_cmd(Current_page, switch_released);
-    current_cmd_switch = switch_released;
+    if (switch_released & ON_LONG_PRESS) current_cmd_switch_action = SWITCH_LONG_RELEASED;
+    else if (switch_released & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_RELEASED;
+    else current_cmd_switch_action = SWITCH_RELEASED;
+    current_cmd = EEPROM_first_cmd(Current_page, switch_released & SWITCH_MASK);
+    current_cmd_switch = switch_released & SWITCH_MASK;
     current_cmdbuf_index = 0;
     switch_released = 0;
   }
 
   if (switch_pressed > 0) {
-    SP[switch_pressed].Pressed = true;
-    update_LEDS = true;
     // Check if we are in tuner mode - pressing any key will stop tuner mode
     if (global_tuner_active) {
       SCO_global_tuner_stop();
+      SC_skip_release_and_hold_until_next_press();
     }
     else { // When switch is pressed, set current_cmd_switch_action to SWITCH_PRESSED or SWITCH_PRESSED_REPEAT and let current_cmd point to the first command for this switch
-      if ((switch_pressed == prev_switch_pressed) && (switch_is_expression_pedal)) {
-        current_cmd_switch_action = SWITCH_PRESSED_REPEAT;
-      }
-      else {
-        current_cmd_switch_action = SWITCH_PRESSED;
-        prev_switch_pressed = switch_pressed;
-      }
-      current_cmd = EEPROM_first_cmd(Current_page, switch_pressed); // Is always fast, because first_cmd is read from the index which is in RAM
+      if (switch_pressed & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_PRESSED;
+      else current_cmd_switch_action = SWITCH_PRESSED;
+      current_cmd = EEPROM_first_cmd(Current_page, switch_pressed & SWITCH_MASK); // Is always fast, because first_cmd is read from the index which is in RAM
       DEBUGMSG("Current cmd:" + String(current_cmd) + " on page:" + String(Current_page));
       current_cmd_switch = switch_pressed;
+      DEBUGMSG("Current_cmd_switch: " + String(current_cmd_switch));
       current_cmdbuf_index = 0;
     }
     switch_pressed = 0;
@@ -83,8 +83,9 @@ void main_switch_control()  // Checks if a button has been pressed and check out
 
   if (switch_long_pressed > 0) { // When switch is long pressed, set current_cmd_switch_action to SWITCH_LONG_PRESSED and let current_cmd point to the first command for this switch
     //SCO_switch_long_pressed_commands(Current_page, switch_long_pressed);
-    current_cmd_switch_action = SWITCH_LONG_PRESSED;
-    current_cmd = EEPROM_first_cmd(Current_page, switch_long_pressed);
+    if (switch_pressed & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_LONG_PRESSED;
+    else current_cmd_switch_action = SWITCH_LONG_PRESSED;
+    current_cmd = EEPROM_first_cmd(Current_page, switch_long_pressed & SWITCH_MASK);
     current_cmd_switch = switch_long_pressed;
     current_cmdbuf_index = 0;
     switch_long_pressed = 0;
@@ -92,8 +93,9 @@ void main_switch_control()  // Checks if a button has been pressed and check out
 
   if (switch_held > 0) { // When switch is held, set current_cmd_switch_action to SWITCH_HELD and let current_cmd point to the first command for this switch
     //SCO_switch_held_commands(Current_page, switch_held);
-    current_cmd_switch_action = SWITCH_HELD;
-    current_cmd = EEPROM_first_cmd(Current_page, switch_held);
+    if (switch_pressed & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_HELD;
+    else current_cmd_switch_action = SWITCH_HELD;
+    current_cmd = EEPROM_first_cmd(Current_page, switch_held & SWITCH_MASK);
     current_cmd_switch = switch_held;
     current_cmdbuf_index = 0;
     switch_held = 0;
@@ -113,6 +115,9 @@ void main_switch_control()  // Checks if a button has been pressed and check out
     current_cmdbuf_index++; // Point to the next command in the command buffer
     if (current_cmdbuf_index >= CMD_BUFFER_SIZE) current_cmd = 0; // Stop executing commands when the end of the buffer is reached.
   }
+  else {
+    prev_switch_pressed = current_cmd_switch & SWITCH_MASK; // Will stop the reading of switch commands from EEPROM
+  }
 
   if ((current_cmd == 0) && (arm_page_cmd_exec > 0)) { // Execute any commands on page selection
     // We do this when current_cmd is 0, because the arm_page_exec variable is set from another command that is running.
@@ -131,23 +136,77 @@ void main_switch_control()  // Checks if a button has been pressed and check out
 // ********************************* Section 2: Command Execution ********************************************
 
 void SCO_execute_cmd(uint8_t sw, uint8_t action, uint8_t index) {
+  if ((prev_switch_pressed != (sw & SWITCH_MASK)) || (prev_switch_page != Current_page)) {
+    // Here we read the switch and store the value in the command buffer. This is only done on first press. After that the commands are executed from the buffer.
+    // This allows for smoother expression pedal operation, where we trigger the same commands in quick succesion
+    prev_switch_page = Current_page; // Remember the page the switch was on, so repressing it after changing page will cause a re-read from EEPROM.
+    read_cmd_EEPROM(current_cmd, &cmd_buf[index]);
+    DEBUGMSG("Cmd buffer read from EEPROM. Switch number is " + String(cmd_buf[index].Switch));
+  }
+
+  uint8_t switch_type = cmd_buf[index].Switch & SWITCH_TYPE_MASK;
+  DEBUGMSG("Checking Cmd index: " +  String(index) + ", switch type: " + String(switch_type) + ", switch: " + String(sw) + ", action: " + String(action));
+
   switch (action) {
     case SWITCH_PRESSED:
-      // Here we read the switch and store the value in the command buffer. This is only done on first press. After that the commands are executed from the buffer.
-      // This allows for smoother expression pedal operation, where we trigger the same commands in quick succesion
-      read_cmd_EEPROM(current_cmd, &cmd_buf[index]);
-    // No break!
-    case SWITCH_PRESSED_REPEAT:
-      SCO_execute_command_press(sw, &cmd_buf[index], (index == 0));
+      if ((switch_type & ON_DUAL_PRESS) == 0) SCO_execute_command_press(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      if (switch_type == 0) {
+        DEBUGMSG("Pressed");
+        SCO_execute_command(sw, &cmd_buf[index], (index == 0));
+      }
       break;
     case SWITCH_RELEASED:
-      SCO_execute_command_release(sw, &cmd_buf[index], (index == 0));
+      if (switch_type == ON_RELEASE) {
+        DEBUGMSG("Released");
+        SCO_execute_command(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      if ((switch_type & ON_DUAL_PRESS) == 0) SCO_execute_command_release(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
       break;
     case SWITCH_LONG_PRESSED:
-      SCO_execute_command_long_pressed(sw, &cmd_buf[index], (index == 0));
+      //SCO_execute_command_long_pressed(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      if (switch_type == ON_LONG_PRESS) {
+        DEBUGMSG("Long Pressed");
+        SCO_execute_command(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      break;
+    case SWITCH_LONG_RELEASED:
+      if ((switch_type & ON_DUAL_PRESS) == 0) {
+        DEBUGMSG("Long Released");
+        SCO_execute_command_release(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
       break;
     case SWITCH_HELD:
-      SCO_execute_command_held(sw, &cmd_buf[index], (index == 0));
+      if (switch_type == 0) {
+        DEBUGMSG("Switch Held");
+        SCO_execute_command_held(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      break;
+    case SWITCH_DUAL_PRESSED:
+      if (switch_type == ON_DUAL_PRESS) {
+        DEBUGMSG("Dual pressed");
+        SCO_execute_command_press(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+        SCO_execute_command(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      break;
+    case SWITCH_DUAL_RELEASED:
+      if (switch_type == (ON_DUAL_PRESS | ON_RELEASE)) {
+        DEBUGMSG("Dual released");
+        SCO_execute_command_release(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+        SCO_execute_command(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      break;
+    case SWITCH_DUAL_LONG_PRESSED:
+      if (switch_type == (ON_DUAL_PRESS | ON_LONG_PRESS)) {
+        DEBUGMSG("Dual long pressed");
+        //SCO_execute_command_long_pressed(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+        SCO_execute_command(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
+      break;
+    case SWITCH_DUAL_HELD:
+      if (switch_type == ON_DUAL_PRESS) {
+        DEBUGMSG("Dual held");
+        SCO_execute_command_held(sw & SWITCH_MASK, &cmd_buf[index], (index == 0));
+      }
       break;
   }
 }
@@ -156,225 +215,277 @@ void SCO_trigger_default_page_cmds(uint8_t Pg) {
   arm_page_cmd_exec = Pg;
 }
 
-void SCO_execute_command_press(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
+void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
 
   uint8_t Dev = cmd->Device;
   if (Dev == CURRENT) Dev = Current_device;
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
-  uint16_t new_patch;
-  uint8_t New_page;
 
-  DEBUGMAIN("Press -> execute command " + String(Type) + " for device " + String(Dev));
+  DEBUGMAIN("Execute command " + String(Type) + " for device " + String(Dev));
 
   if (Dev == COMMON) { // Check for common parameters
     switch (Type) {
       case TAP_TEMPO:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         SCO_global_tap_tempo_press(Sw);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case SET_TEMPO:
-        if (switch_is_expression_pedal) break;
-        SCO_set_global_tempo_press(Data1);
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_is_encoder()) SCO_set_global_tempo_with_encoder(Enc_value);
+        else SCO_set_global_tempo_press(Data1);
         switch_controlled_by_master_exp_pedal = 0;
         break;
-      case OPEN_PAGE:
-        if (switch_is_expression_pedal) break;
-        SCO_trigger_default_page_cmds(Data1);
-        SCO_select_page(Data1);
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case PAGE_UP:
-        if (switch_is_expression_pedal) break;
-        if (Current_page < (Number_of_pages - 1)) New_page = Current_page + 1;
-        else New_page = LOWEST_USER_PAGE;
-        SCO_trigger_default_page_cmds(New_page);
-        SCO_select_page(New_page);
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case PAGE_DOWN:
-        if (switch_is_expression_pedal) break;
-        if (Current_page > LOWEST_USER_PAGE) New_page = Current_page - 1;
-        else New_page = Number_of_pages - 1;
-        SCO_trigger_default_page_cmds(New_page);
-        SCO_select_page(New_page);
+      case PAGE:
+        if (SC_switch_is_expr_pedal()) break;
+        if (Data1 == SELECT) {
+          SCO_trigger_default_page_cmds(Data2);
+          SCO_select_page(Data2);
+        }
+        if (Data1 == NEXT) {
+          if (SC_switch_is_encoder()) SCO_page_up_down(Enc_value);
+          else SCO_page_up_down(1);
+        }
+        if (Data1 == PREV) {
+          if (SC_switch_is_encoder()) SCO_page_up_down(Enc_value);
+          else SCO_page_up_down(-1);
+        }
+        if (Data1 == BANKSELECT) {
+          SCO_trigger_default_page_cmds(SP[Sw].PP_number);
+          SCO_select_page(SP[Sw].PP_number);
+          page_last_selected = SP[Sw].PP_number;
+        }
+        if (Data1 == BANKUP) {
+          if (SC_switch_is_encoder()) SC_page_bank_updown(Enc_value, Data2);
+          else SC_page_bank_updown(1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == BANKDOWN) {
+          if (SC_switch_is_encoder()) SC_page_bank_updown(Enc_value, Data2);
+          else SC_page_bank_updown(-1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case MENU:
-        if (switch_is_expression_pedal) break;
-        menu_press(Sw);
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_is_encoder()) menu_encoder_turn(Sw, Enc_value);
+        else menu_press(Sw, true);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case SELECT_NEXT_DEVICE:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         SCO_select_next_device();
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case GLOBAL_TUNER:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         SCO_global_tuner_toggle();
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case MIDI_CC:
         SCO_CC_press(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd);
-        if (!switch_is_expression_pedal) {
+        if (!SC_switch_is_expr_pedal()) {
           update_page = REFRESH_PAGE;
         }
         break;
       case MIDI_PC:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         MIDI_send_PC(Data1, Data2, SCO_MIDI_port(cmd->Value1));
         MIDI_remember_PC(Data1, Data2, SCO_MIDI_port(cmd->Value1));
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case MIDI_NOTE:
-        if (switch_is_expression_pedal) break;
-        MIDI_send_note_on(Data1, Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
         switch_controlled_by_master_exp_pedal = 0;
         break;
     }
   }
   if (Dev < NUMBER_OF_DEVICES) { // Check for device specific parameters
     bool updated = false;
+    uint16_t pnumber = 0;
     switch (Type) {
-      case PATCH_SEL:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->patch_select_pressed(Data1 + (Data2 * 100));
+      case PATCH:
+        if (SC_switch_is_expr_pedal()) break;
+        switch_controlled_by_master_exp_pedal = 0;
+        if (Data1 == BANKUP) {
+          if (SC_switch_is_encoder()) Device[Dev]->bank_updown(Enc_value, Data2);
+          else Device[Dev]->bank_updown(1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+          break;
+        }
+        if (Data1 == BANKDOWN) {
+          if (SC_switch_is_encoder()) Device[Dev]->bank_updown(Enc_value, Data2);
+          else Device[Dev]->bank_updown(-1, Data2);
+          DEBUGMSG("***********HERE!!!!!!");
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+          break;
+        }
+        if (SC_switch_is_encoder()) {
+          if (Enc_value == 0) break;
+          if (Enc_value > 0) pnumber = Device[Dev]->next_patch_number();
+          if (Enc_value < 0) pnumber = Device[Dev]->prev_patch_number();
+        }
+        else {
+          if (Data1 == SELECT) pnumber = Data1 + (Data2 * 100);
+          else if (Data1 == PREV) pnumber = Device[Dev]->prev_patch_number();
+          else if (Data1 == NEXT) pnumber = Device[Dev]->next_patch_number();
+          else pnumber = SP[Sw].PP_number;
+        }
+        Device[Dev]->patch_select_pressed(pnumber);
         Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
         mute_all_but_me(Dev); // mute all the other devices
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case PATCH_BANK:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->patch_select_pressed(SP[Sw].PP_number);
-        Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
-        mute_all_but_me(Dev); // mute all the other devices
-        DEBUGMSG("Selecting patch: " + String(SP[Sw].PP_number));
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case PREV_PATCH:
-        if (switch_is_expression_pedal) break;
-        new_patch = Device[Dev]->prev_patch_number();
-        Device[Dev]->patch_select_pressed(new_patch);
-        Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
-        Device[Dev]->request_current_patch_name(); // Request the correct patch name
-        mute_all_but_me(Dev); // mute all the other devices
-        DEBUGMSG("Selecting patch: " + String(SP[Sw].PP_number));
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case NEXT_PATCH:
-        if (switch_is_expression_pedal) break;
-        new_patch = Device[Dev]->next_patch_number();
-        Device[Dev]->patch_select_pressed(new_patch);
-        Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
-        Device[Dev]->request_current_patch_name(); // Request the correct patch name
-        mute_all_but_me(Dev); // mute all the other devices
-        DEBUGMSG("Selecting patch: " + String(SP[Sw].PP_number));
-        switch_controlled_by_master_exp_pedal = 0;
+        if (SP[Sw].Label[0] != ' ') LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
         break;
       case DIRECT_SELECT:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         Device[Dev]->direct_select_press(Data1);
         update_page = RELOAD_PAGE;
         switch_controlled_by_master_exp_pedal = 0;
         break;
-      case BANK_UP:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->bank_updown(UP, Data1);
-        update_main_lcd = true;
-        update_page = REFRESH_PAGE;
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case BANK_DOWN:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->bank_updown(DOWN, Data1);
-        update_main_lcd = true;
-        update_page = REFRESH_PAGE;
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
       case PARAMETER:
+        if (Data2 == UPDOWN) break; // updown parameters are executed in SCO_command_press()
         if (first_cmd) updated = SCO_update_parameter_state(Sw, cmd->Value1, cmd->Value2, cmd->Value3); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         if (updated) Device[Dev]->parameter_press(Sw, cmd, Data1);
         break;
       case PAR_BANK:
+        if (Data2 == UPDOWN) break; // updown parameters are executed in SCO_command_press()
         if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         if (updated) Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
         break;
       case PAR_BANK_CATEGORY:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         Device[Dev]->select_parameter_bank_category(SP[Sw].PP_number);
         SCO_select_page(PAGE_CURRENT_PARAMETER, Dev);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case PAR_BANK_UP:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->par_bank_updown(UP, Data1);
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_is_encoder()) Device[Dev]->par_bank_updown(Enc_value, Data1);
+        else Device[Dev]->par_bank_updown(1, Data1);
         update_main_lcd = true;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case PAR_BANK_DOWN:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->par_bank_updown(DOWN, Data1);
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_is_encoder()) Device[Dev]->par_bank_updown(Enc_value, Data1);
+        else Device[Dev]->par_bank_updown(-1, Data1);
         update_main_lcd = true;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case ASSIGN:
-        if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, 1, 1);
-        if (updated) {
-          if (switch_is_expression_pedal) Device[Dev]->assign_press(Sw, Expr_ped_value);
-          else Device[Dev]->assign_press(Sw, 127);
+        if ((Data1 == SELECT) || (Data1 == BANKSELECT)) {
+          if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, 1, 1);
+          if (updated) {
+            if (SC_switch_is_expr_pedal()) Device[Dev]->assign_press(Sw, Expr_ped_value);
+            else Device[Dev]->assign_press(Sw, 127);
+          }
+        }
+        if (Data1 == BANKUP) {
+          if (SC_switch_is_expr_pedal()) break;
+          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data1);
+          else Device[Dev]->asgn_bank_updown(1, Data1);
+          update_main_lcd = true;
+          switch_controlled_by_master_exp_pedal = 0;
+        }
+        if (Data1 == BANKDOWN) {
+          if (SC_switch_is_expr_pedal()) break;
+          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data1);
+          else Device[Dev]->asgn_bank_updown(-1, Data1);
+          update_main_lcd = true;
+          switch_controlled_by_master_exp_pedal = 0;
         }
         break;
       case MUTE:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         Device[Dev]->mute();
         update_LEDS = true;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case OPEN_PAGE_DEVICE:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         SCO_trigger_default_page_cmds(Data1);
         SCO_select_page(Data1, Dev);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case OPEN_NEXT_PAGE_OF_DEVICE:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         SCO_select_next_page_of_device(Dev);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case TOGGLE_EXP_PEDAL:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         if (switch_controlled_by_master_exp_pedal > 0) { // If MEP is currently set to control some other parameter, undo that.
-          switch_controlled_by_master_exp_pedal = 0;
           update_page = REFRESH_FX_ONLY;
-          break;
         }
-        Device[Dev]->toggle_expression_pedal(Sw);
+        else {
+          Device[Dev]->toggle_expression_pedal(Sw);
+        }
         switch_controlled_by_master_exp_pedal = 0;
+#ifdef IS_VCMINI
+        LCD_show_popup_label(SP[Sw].Title, ACTION_TIMER_LENGTH);
+#endif
         break;
       case MASTER_EXP_PEDAL:
-        if (switch_is_expression_pedal) SCO_move_master_exp_pedal(Sw, Dev);
+        if (SC_switch_is_expr_pedal()) SCO_move_master_exp_pedal(Sw, Dev);
         break;
       case SNAPSCENE:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->set_snapscene(Data1);
+        if (SC_switch_is_expr_pedal()) break;
+        if (first_cmd) Device[Dev]->set_snapscene(SP[Sw].PP_number);
+        else Device[Dev]->set_snapscene(Data1);  // When not the first command, the first snapshot value set in the command is sent.
         update_page = REFRESH_PAGE;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case LOOPER:
-        if (switch_is_expression_pedal) break;
-        Device[Dev]->looper_press(Data1);
+        if (SC_switch_is_expr_pedal()) break;
+        Device[Dev]->looper_press(Data1, true);
         update_page = REFRESH_PAGE;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case SAVE_PATCH:
-        if (switch_is_expression_pedal) break;
+        if (SC_switch_is_expr_pedal()) break;
         if (Dev == KTN) {
           My_KTN.save_patch();
         }
         switch_controlled_by_master_exp_pedal = 0;
+        break;
+    }
+  }
+}
+
+void SCO_execute_command_press(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
+  uint8_t Dev = cmd->Device;
+  if (Dev == CURRENT) Dev = Current_device;
+  uint8_t Type = cmd->Type;
+  uint8_t Data1 = cmd->Data1;
+  uint8_t Data2 = cmd->Data2;
+  bool updated = false;
+
+  DEBUGMSG("Press -> execute command " + String(Type) + " for device " + String(Dev));
+
+  if (Dev == COMMON) { // Check for common parameters
+    switch (Type) {
+      case MIDI_NOTE:
+        MIDI_send_note_on(Data1, cmd->Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
+        break;
+      case MIDI_CC:
+        if (first_cmd) SCO_CC_press(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        break;
+    }
+  }
+  if (Dev < NUMBER_OF_DEVICES) {
+    switch (Type) {
+      case PARAMETER:
+        if (Data2 != UPDOWN) break; // Only update updown parameters here
+        if (first_cmd) updated = SCO_update_parameter_state(Sw, cmd->Value1, cmd->Value2, cmd->Value3); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (updated) Device[Dev]->parameter_press(Sw, cmd, Data1);
+        break;
+      case PAR_BANK:
+        if (SP[Sw].Latch != UPDOWN) break; // Only update updown parameters here
+        if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (updated) Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
         break;
     }
   }
@@ -410,10 +521,15 @@ void SCO_execute_command_release(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         Device[Dev]->parameter_release(Sw, cmd, SP[Sw].PP_number);
         break;
       case ASSIGN:
-        //case ASG_BANK:
-        if (first_cmd) SCO_update_released_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
-        Device[Dev]->assign_release(Sw);
+        if ((Data1 == SELECT) || (Data1 == BANKSELECT)) {
+          if (first_cmd) SCO_update_released_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+          Device[Dev]->assign_release(Sw);
+        }
         break;
+      case LOOPER:
+        Device[Dev]->looper_release();
+        break;
+
     }
   }
 }
@@ -427,21 +543,17 @@ void SCO_execute_command_long_pressed(uint8_t Sw, Cmd_struct *cmd, bool first_cm
   DEBUGMSG("Long press -> execute command " + String(Type) + " for device " + String(Dev));
 
   switch (Type) {
-    case OPEN_PAGE: // Go to user select page on long press of any page command
+    case PAGE: // Go to user select page on long press of any page command
     case OPEN_PAGE_DEVICE:
     case SELECT_NEXT_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
-    case PAGE_UP:
-    case PAGE_DOWN:
-      Current_page = Previous_page; // "Undo" for pressing OPEN_PAGE or SELECT_NEXT_DEVICE
-      Current_device = Previous_device;
-      SCO_select_page(PAGE_USER_SELECT);
+      Current_page = Previous_page; // "Undo" for pressing PAGE or SELECT_NEXT_DEVICE
+      set_current_device(Previous_device);
+      SCO_select_page(PAGE_SELECT);
       prev_page_shown = Previous_page; // Page to be displayed on PAGE_SELECT LEDS
       break;
-    case BANK_DOWN: // Go to direct select on long press of bank up/down or patch up/down
-    case BANK_UP:
-    case PREV_PATCH:
-    case NEXT_PATCH:
+    case PATCH: // Go to direct select on long press of bank up/down or patch up/down
+      if ((cmd->Data1 == SELECT) || (cmd->Data1 == BANKSELECT)) break;
       if (Dev < NUMBER_OF_DEVICES) Device[Dev]->direct_select_start();
       SCO_select_page(PAGE_CURRENT_DIRECT_SELECT); // Jump to the direct select page
       break;
@@ -449,7 +561,10 @@ void SCO_execute_command_long_pressed(uint8_t Sw, Cmd_struct *cmd, bool first_cm
       SCO_global_tuner_toggle(); //Start global tuner
       break;
     case LOOPER: // Holding a looper button will open the full looper page
-      SCO_select_page(PAGE_FULL_LOOPER);
+#ifndef IS_VCMINI
+      if (Current_device == KPA) SCO_select_page(PAGE_KPA_LOOPER);
+      else SCO_select_page(PAGE_FULL_LOOPER);
+#endif
       break;
   }
 }
@@ -476,7 +591,7 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if ((SP[Sw].Latch == STEP) || (SP[Sw].Latch == UPDOWN)) {
           if (first_cmd) SCO_update_held_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
           Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
-          if (Data2 == UPDOWN) updown_direction_can_change = false;
+          if (SP[Sw].Latch == UPDOWN) updown_direction_can_change = false;
         }
         break;
     }
@@ -504,24 +619,29 @@ void mute_all_but_me(uint8_t my_device) {
 bool SCO_update_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t Step) {
   // Update the current paramater state. Return true if value was updated.
   uint8_t val;
-  if (switch_is_expression_pedal) {
+  if (SC_switch_is_expr_pedal()) {
     bool isnew = false;
     SP[Sw].State = 1;
     if (SP[Sw].Latch == RANGE) {
-      if (Max >= 128) {
+      if (Max >= 128) { // Checking for dual byte parameters
         uint16_t _max = Max;
+        uint16_t _min = Min;
         if (Max + 1 == TIME_2000) _max = 2000;
         if (Max + 1 == TIME_1000) _max = 1000;
         if (Max + 1 == TIME_500) _max = 500;
         if (Max + 1 == TIME_300) _max = 300;
-        uint16_t new_value = map(Expr_ped_value, 0, 127, Min, _max);
+        if (Max + 1 == RPT_600) {
+          _min = 40;
+          _max = 600;
+        }
+        uint16_t new_value = map(Expr_ped_value, 0, 127, _min, _max);
         if (new_value != (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2) {
           SP[Sw].Target_byte1 = new_value / 128;
           SP[Sw].Target_byte2 = new_value % 128;
           isnew = true;
         }
       }
-      else {
+      else { // Single byte parameter
         uint8_t new_value = map(Expr_ped_value, 0, 127, Min, Max);
         if (new_value != SP[Sw].Target_byte1) {
           SP[Sw].Target_byte1 = new_value;
@@ -529,37 +649,51 @@ bool SCO_update_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t St
         }
       }
       LCD_show_bar(0, Expr_ped_value); // Show it on the main display
-      if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show it on the individual display
+      if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show the bar on the individual display when using the MEP
       return isnew;
     }
   }
-  else {
+  else { // Not an expresssion pedal
     master_expr_from_cc = false;
+    signed int delta;
+    if (SC_switch_is_encoder()) delta = Enc_value;
+    else delta = 1;
+
     switch (SP[Sw].Latch) {
       case MOMENTARY:
         SP[Sw].State = 1; // Switch state on
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case TOGGLE:  // Toggle state
-        SP[Sw].State++;
+        SP[Sw].State += delta;;
         if (SP[Sw].State > 2) SP[Sw].State = 1;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case TRISTATE:  // Select next state
-        SP[Sw].State++;
+        SP[Sw].State += delta;
         if (SP[Sw].State > 3) SP[Sw].State = 1;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case FOURSTATE:  // Select next state
-        SP[Sw].State++;
+        SP[Sw].State += delta;
         if (SP[Sw].State > 4) SP[Sw].State = 1;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case STEP:
         // Update byte1 with the new value
         val = SP[Sw].Target_byte1;
-        val += Step;
-        if (val > Max) val = Min;
+        if (delta > 0) {
+          for (uint8_t i = 0; i < abs(delta); i++) {
+            val += Step;
+            if (val > Max) val = Min;
+          }
+        }
+        else {
+          for (uint8_t i = 0; i < abs(delta); i++) {
+            if (val == Min) val = Max - 1;
+            else val -= Step;
+          }
+        }
         SP[Sw].Target_byte1 = val;
         if (Setting.MEP_control == 2) {
           if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
@@ -570,15 +704,34 @@ bool SCO_update_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t St
         }
         break;
       case UPDOWN:
-        updown_direction_can_change = true;
-        if (Setting.MEP_control >= 1) {
-          if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
-          switch_controlled_by_master_exp_pedal = Sw;
+        if (SC_switch_is_encoder()) {
+          val = SP[Sw].Target_byte1;
+          if (delta > 0) {
+            for (uint8_t i = 0; i < abs(delta); i++) {
+              val ++;
+              if (val > Max) val = Min;
+            }
+          }
+          else {
+            for (uint8_t i = 0; i < abs(delta); i++) {
+              if (val == Min) val = Max - 1;
+              else val --;
+            }
+          }
+          SP[Sw].Target_byte1 = val;
+          break;
         }
         else {
-          switch_controlled_by_master_exp_pedal = 0;
+          updown_direction_can_change = true;
+          if (Setting.MEP_control >= 1) {
+            if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
+            switch_controlled_by_master_exp_pedal = Sw;
+          }
+          else {
+            switch_controlled_by_master_exp_pedal = 0;
+          }
+          return false;
         }
-        return false;
         break;
     }
     DEBUGMSG("New state is " + String(SP[Sw].State));
@@ -605,20 +758,25 @@ void SCO_update_held_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8
   }
   if (SP[Sw].Latch == UPDOWN) {
     if (Max >= 128) { // Need double target byte for large numbers
-      val = SP[Sw].Target_byte1 * 128 + SP[Sw].Target_byte2;
+      val = (SP[Sw].Target_byte1 << 7) + SP[Sw].Target_byte2;
       uint16_t _max = 0;
+      uint16_t _min = 0;
       if (Max + 1 == TIME_2000) _max = 2000;
       if (Max + 1 == TIME_1000) _max = 1000;
       if (Max + 1 == TIME_500) _max = 500;
       if (Max + 1 == TIME_300) _max = 300;
+      if (Max + 1 == RPT_600) {
+        _max = 600;
+        _min = 40;
+      }
       if (SP[Sw].Direction) { // Up
         if (val < _max) val++;
       }
       else { // Down
-        if (val > Min) val--;
+        if (val > _min) val--;
       }
-      SP[Sw].Target_byte1 = val / 128;
-      SP[Sw].Target_byte2 = val % 128;
+      SP[Sw].Target_byte1 = val >> 7;
+      SP[Sw].Target_byte2 = val & 0x7F;
     }
     else {
       // Update byte1 with the new value
@@ -638,6 +796,7 @@ uint8_t SCO_return_parameter_value(uint8_t Sw, Cmd_struct * cmd) {
   if (SP[Sw].Latch == RANGE) return SP[Sw].Target_byte1;
   if (SP[Sw].Latch == STEP) return SP[Sw].Target_byte1;
   if (SP[Sw].Latch == UPDOWN) return SP[Sw].Target_byte1;
+  // Latch is MOMENTARY or TOGGLE
   if (SP[Sw].Type == PARAMETER) { //Parameters are read directly from the switch config.
     if (SP[Sw].State == 1) return cmd->Value1;
     if (SP[Sw].State == 2) return cmd->Value2;
@@ -645,8 +804,7 @@ uint8_t SCO_return_parameter_value(uint8_t Sw, Cmd_struct * cmd) {
     if (SP[Sw].State == 4) return cmd->Value4;
     //if (SP[Sw].State == 5) return cmd->Value5;
   }
-  //Return values from the SP array
-  //return SP[Sw].State;
+  // Type is PAR_BANK or ASSIGN, so we return 1 or 0.
   if (SP[Sw].State == 1) return 1;
   return 0;
 }
@@ -687,7 +845,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
   uint8_t val;
   String msg;
 
-  if (switch_is_expression_pedal) {
+  if (SC_switch_is_expr_pedal()) {
     if (SP[Sw].Latch == CC_RANGE) {
       val = map(Expr_ped_value, 0, 127, value2, value1);
       if (val != SP[Sw].Target_byte1) { // Check if we have a new value
@@ -705,7 +863,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
       LCD_add_3digit_number(CC_number, msg);
       msg += ":";
       LCD_add_3digit_number(val, msg);
-      LCD_show_status_message(msg);
+      LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
     }
   }
   else {
@@ -790,9 +948,16 @@ void SCO_select_page(uint8_t new_page) {
       EEPROM.write(EEPROM_CURRENT_DEVICE_ADDR, Current_device);
     }
     if (Current_page == PAGE_MENU) menu_open();
+    if ((Current_page == PAGE_CURRENT_DIRECT_SELECT) && (Current_device < NUMBER_OF_DEVICES)) {
+      Device[Current_device]->direct_select_start();
+    }
     my_looper_lcd = 0;
     update_page = RELOAD_PAGE;
     update_main_lcd = true;
+    device_in_bank_selection = 0;
+    SC_skip_release_and_hold_until_next_press(); // So no release, long press or hold commands will be triggered on the new page by the switch that is still pressed now
+    if (Current_page != PAGE_MENU) LCD_show_page_name(); // Temporary show page name on main display
+    DEBUGMAIN("*** SCO_select_page: " + String(new_page));
   }
 }
 
@@ -805,7 +970,7 @@ bool SCO_valid_page(uint8_t page) {
 void SCO_select_page(uint8_t new_page, uint8_t device) {
   if (device < NUMBER_OF_DEVICES) {
     Previous_device = Current_device;
-    Current_device = device;
+    set_current_device(device);
   }
   SCO_select_page(new_page);
 }
@@ -820,7 +985,7 @@ void SCO_select_next_device() { // Will select the next device that is connected
   if (Current_device >= NUMBER_OF_DEVICES) return;
 
   device_in_bank_selection = 0;
-    
+
   // Go to the page of the current device if we are on some other page (often coming from menu)
   if (Current_page != Device[Current_device]->read_current_device_page()) {
     SCO_select_page(Device[Current_device]->read_current_device_page());
@@ -842,19 +1007,33 @@ void SCO_select_next_device() { // Will select the next device that is connected
   }
   if (device_connected) {
     Previous_device = Current_device;
-    Current_device = current_selected_device;
-    SCO_select_page(Device[current_selected_device]->read_current_device_page()); // Load the patch page associated to this device
+    set_current_device(current_selected_device);
+    SCO_select_page(Device[current_selected_device]->read_current_device_page()); // Load the current page associated to this device
   }
   else {
     SCO_select_page(DEFAULT_PAGE);
-    LCD_show_status_message("No devices...");
+    LCD_show_popup_label("No devices...", MESSAGE_TIMER_LENGTH);
   }
+}
+
+uint8_t SCO_get_number_of_next_device() {
+  uint8_t current_selected_device = Current_device;
+  uint8_t tries = NUMBER_OF_DEVICES; // Limited the number of tries for the loop, in case no device is
+  while (tries > 0) {
+    tries--;
+    current_selected_device++;
+    if (current_selected_device >= NUMBER_OF_DEVICES) current_selected_device = 0;
+    if (Device[current_selected_device]->connected) { // device is selected
+      tries = 0; //And we are done
+    }
+  }
+  return current_selected_device;
 }
 
 void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page of the current device. These can be set in programmed on the unit. Defaults are in init() of the device class
   uint8_t new_page;
   if (Dev < NUMBER_OF_DEVICES) {
-    Current_device = Dev;
+    set_current_device(Dev);
 
     // Move to next device page
     new_page = Device[Dev]->select_next_device_page();
@@ -866,6 +1045,49 @@ void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page
 
     device_in_bank_selection = 0;
   }
+}
+
+void SCO_page_up_down(signed int delta) {
+  uint8_t New_page = 0;
+  if (delta > 0) {
+    for (uint8_t i = 0; i < delta; i++) {
+      if (Current_page < (Number_of_pages - 1)) New_page = Current_page + 1;
+      else New_page = LOWEST_USER_PAGE;
+    }
+  }
+  if (delta < 0) {
+    for (uint8_t i = 0; i < abs(delta); i++) {
+      if (Current_page > LOWEST_USER_PAGE) New_page = Current_page - 1;
+      else New_page = Number_of_pages - 1;
+    }
+  }
+  SCO_trigger_default_page_cmds(New_page);
+  SCO_select_page(New_page);
+}
+
+void SC_page_bank_updown(signed int delta, uint8_t bank_size) {
+
+  uint16_t page_max = Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
+
+  if (device_in_bank_selection != PAGE_BANK_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = PAGE_BANK_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
+    page_bank_select_number = page_bank_number; //Reset the bank to current patch
+  }
+  // Perform bank up:
+  if (delta > 0) {
+    for (uint8_t i = 0; i < delta; i++) {
+      if (page_bank_select_number >= (page_max / bank_size)) page_bank_select_number = 0; // Check if we've reached the top
+      else page_bank_select_number ++;
+    }
+  }
+  if (delta < 0) {
+    for (uint8_t i = 0; i < abs(delta); i++) {
+      if (page_bank_select_number <= 0) page_bank_select_number = (page_max / bank_size); // Check if we've reached the bottom
+      else page_bank_select_number --;
+    }
+  }
+
+  if (page_bank_select_number == page_bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
 }
 
 // ********************************* Section 6: Global Tuner Commands ********************************************
@@ -909,6 +1131,7 @@ uint8_t tap_time_index = 0;
 uint32_t new_time, time_diff, avg_time;
 uint32_t prev_time = 0;
 bool tap_array_full = false;
+bool send_new_bpm_value = false;
 
 void SCO_global_tap_external() { // For external tapping sources
   time_switch_pressed = micros();
@@ -968,7 +1191,7 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
       tap_array_full = true; // So we need to calculate the average tap time in a different way
     }
   }
-  LCD_show_status_message("Tempo " + String(Setting.Bpm) + " bpm"); // Show the tempo on the main display
+  LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
   update_lcd = sw; // Update the LCD of the display above the tap tempo button
   SCO_reset_tap_tempo_LED(); // Reset the LED state, so it will flash in time with the new tempo
 }
@@ -976,6 +1199,23 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
 void SCO_set_global_tempo_press(uint8_t new_bpm) {
   Setting.Bpm = new_bpm;
   // Send it to the devices
+  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    Device[d]->set_bpm();
+  }
+  tap = 0; // So the tempo will be retapped (done from SCO_update_tap_tempo_LED)
+  update_page = REFRESH_PAGE; //Refresh the page, so any present tap tempo button display will also be updated.
+}
+
+void SCO_set_global_tempo_with_encoder(signed int delta) {
+  if (delta > 0) {
+    Setting.Bpm += delta;
+    if (Setting.Bpm > 240) Setting.Bpm = 40;
+  }
+  if (delta <= 0) {
+    Setting.Bpm -= abs(delta);
+    if (Setting.Bpm < 40) Setting.Bpm = 240;
+  }
+  send_new_bpm_value = true;
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     Device[d]->set_bpm();
   }
@@ -1008,7 +1248,14 @@ void SCO_update_tap_tempo_LED() {
       global_tap_tempo_LED = Setting.LED_bpm_colour;   // Turn the LED on
       bpm_LED_timer_length = BPM_LED_ON_TIME; // Set the time for the timer
 
-      if (tap < NUMBER_OF_TAPS) {
+      if (send_new_bpm_value) { // Send updated tempo to the devices
+        send_new_bpm_value = false;
+        for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+          Device[d]->set_bpm();
+        }
+      }
+
+      if (tap < NUMBER_OF_TAPS) { // Send automatic cc tap message
         SCO_tap_on_device();
         tap++;
       }
@@ -1123,7 +1370,7 @@ void SCO_switch_power_off() {
   EEP_write_eeprom_common_data(); // Save current settings
   LCD_clear_all_displays();
   LED_turn_all_off();
-  LCD_show_status_message("Bye bye...");
+  LCD_show_popup_label("Bye bye...", MESSAGE_TIMER_LENGTH);
 
 #ifdef POWER_PIN
   // Lower the power pin
@@ -1133,7 +1380,7 @@ void SCO_switch_power_off() {
 #else
   // Simulate power down as there is no power pin
   // Here we start a temporary loop to emulate being switched off in case there is no poer switching
-  LCD_show_status_message(""); // Clear Bye bye
+  LCD_show_popup_label("", MESSAGE_TIMER_LENGTH); // Clear Bye bye
   LCD_backlight_off();
 
   while (switch_pressed == 0) { // Wait for switch being pressed
@@ -1144,6 +1391,12 @@ void SCO_switch_power_off() {
   reboot(); // Do a proper reboot!
 #endif
 }
+
+#ifdef IS_VCMINI
+#define YES_SWITCH 7
+#else
+#define YES_SWITCH 10
+#endif
 
 bool SCO_are_you_sure() {
 
@@ -1165,8 +1418,15 @@ bool SCO_are_you_sure() {
 
     LED_update_pressed_state_only(); // Get the LEDs to respond
   }
-  bool pressed_yes = (switch_pressed == 10);
+  bool pressed_yes = (switch_pressed == YES_SWITCH);
   switch_pressed = 0;
+
+  if (pressed_yes) {
+    DEBUGMSG("Pressed YES");
+  }
+  else {
+    DEBUGMSG("Pressed NO");
+  }
 
   return pressed_yes;
 }
@@ -1182,11 +1442,17 @@ void SCO_move_master_exp_pedal(uint8_t Sw, uint8_t Dev) {
 
   if (switch_controlled_by_master_exp_pedal > 0) { // If updown or step switch is pressed last, update this switch with the expression pedal
     uint8_t prev_latch_type = SP[switch_controlled_by_master_exp_pedal].Latch; // We temporary change the Latch type of this switch and run the main switch control command
+
     if (master_expr_from_cc == false) SP[switch_controlled_by_master_exp_pedal].Latch = RANGE;
     else SP[switch_controlled_by_master_exp_pedal].Latch = CC_RANGE;
+    prev_switch_pressed = current_cmd_switch & SWITCH_MASK; // To trigger a re-read from EEPROM of the commands
     switch_pressed = switch_controlled_by_master_exp_pedal;
+    DEBUGMSG("MEP triggers switch " + String(switch_pressed));
     main_switch_control();
+
     SP[switch_controlled_by_master_exp_pedal].Latch = prev_latch_type;
+    prev_switch_pressed = switch_controlled_by_master_exp_pedal; // To trigger a re-read again
+    update_page = REFRESH_FX_ONLY;
     return;
   }
 
@@ -1195,4 +1461,3 @@ void SCO_move_master_exp_pedal(uint8_t Sw, uint8_t Dev) {
     Device[Dev]->move_expression_pedal(Sw, Expr_ped_value, SP[Sw].Exp_pedal);
   }
 }
-

@@ -58,7 +58,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void VG99_class::init() // Default values for variables
+void MD_VG99_class::init() // Default values for variables
 {
   // Roland VG-99 variables:
   enabled = DEVICE_DETECT; // Default value
@@ -68,25 +68,25 @@ void VG99_class::init() // Default values for variables
   current_patch_name = "                ";
   patch_min = VG99_PATCH_MIN;
   patch_max = VG99_PATCH_MAX;
-  bank_size = 10;
+  //bank_size = 10;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the VG-99 does not have to respond before disconnection
   COSM_A_onoff = 0;
   COSM_B_onoff = 0;
   sysex_delay_length = 0; // time between sysex messages (in msec)
   my_LED_colour = 2; // Default value: red
   MIDI_channel = VG99_MIDI_CHANNEL; // Default value
-  bank_number = 0; // Default value
+  //bank_number = 0; // Default value
   is_always_on = true; // Default value
-  my_device_page1 = PAGE_CURRENT_PATCH_BANK;  // Default value
-  my_device_page2 = PAGE_VG99_EDIT; // Default value
-  my_device_page3 = PAGE_VG99_ASSIGNS; // Default value
-  my_device_page4 = 0; // Default value
+  my_device_page1 = VG99_DEFAULT_PAGE1;  // Default value
+  my_device_page2 = VG99_DEFAULT_PAGE2; // Default value
+  my_device_page3 = VG99_DEFAULT_PAGE3; // Default value
+  my_device_page4 = VG99_DEFAULT_PAGE4; // Default value
   count_parameter_categories();
 }
 
 // ********************************* Section 2: VG99 common MIDI in functions ********************************************
 
-void VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a VG-99
   if ((port == MIDI_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x1C) && (sxdata[6] == 0x12)) {
@@ -152,7 +152,7 @@ void VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int 
   check_SYSEX_in_fc300(sxdata, sxlength);
 }
 
-void VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsigned int sxlength) { // Check incoming sysex messages from VG99/FC300. Called from MIDI:OnSysEx/OnSerialSysEx
+void MD_VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsigned int sxlength) { // Check incoming sysex messages from VG99/FC300. Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a VG-99 in FC300 mode.
   if ((sxdata[1] == 0x41) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x20)) {
@@ -180,7 +180,7 @@ void VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsigne
   }
 }
 
-void VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
+void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // VG99 sends a program change
@@ -197,7 +197,7 @@ void VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { /
 
 // Detection of VG-99
 
-void VG99_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_VG99_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a VG-99
   if ((sxdata[5] == 0x41) && (sxdata[6] == 0x1C) && (sxdata[7] == 0x02)) {
     no_response_counter = 0;
@@ -205,7 +205,7 @@ void VG99_class::identity_check(const unsigned char* sxdata, short unsigned int 
   }
 }
 
-void VG99_class::do_after_connect() {
+void MD_VG99_class::do_after_connect() {
   //write_sysex(VG99_EDITOR_MODE_ON); // Put the VG-99 into editor mode - saves lots of messages on the VG99 display, but may hangs the VController
   //editor_mode = true;
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NUMBER);
@@ -217,7 +217,7 @@ void VG99_class::do_after_connect() {
 
 // ********************************* Section 3: VG99 common MIDI out functions ********************************************
 
-void VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
+void MD_VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value); // Calculate the Roland checksum
@@ -226,7 +226,7 @@ void VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending o
   MIDI_send_sysex(sysexmessage, 14, MIDI_port);
 }
 
-void VG99_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
+void MD_VG99_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2); // Calculate the Roland checksum
@@ -235,7 +235,7 @@ void VG99_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) {
   MIDI_send_sysex(sysexmessage, 15, MIDI_port);
 }
 
-void VG99_class::write_sysexfc(uint16_t address, uint8_t value) { // VG99 writing to the FC300
+void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value) { // VG99 writing to the FC300
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into two bytes: ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[1] + ad[0] + value); // Calculate the Roland checksum
@@ -244,7 +244,7 @@ void VG99_class::write_sysexfc(uint16_t address, uint8_t value) { // VG99 writin
   MIDI_send_sysex(sysexmessage, 12, MIDI_port);
 }
 
-void VG99_class::write_sysexfc(uint16_t address, uint8_t value1, uint8_t value2, uint8_t value3) { // VG99 writing to the FC300 - 3 bytes version
+void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value1, uint8_t value2, uint8_t value3) { // VG99 writing to the FC300 - 3 bytes version
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into two bytes: ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[1] + ad[0] + value1 + value2 + value3); // Calculate the Roland checksum
@@ -253,7 +253,7 @@ void VG99_class::write_sysexfc(uint16_t address, uint8_t value1, uint8_t value2,
   MIDI_send_sysex(sysexmessage, 14, MIDI_port);
 }
 
-void VG99_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
+void MD_VG99_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] +  no_of_bytes); // Calculate the Roland checksum
   uint8_t sysexmessage[17] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x1C, 0x11, ad[3], ad[2], ad[1], ad[0], 0x00, 0x00, 0x00, no_of_bytes, checksum, 0xF7};
@@ -261,19 +261,19 @@ void VG99_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   MIDI_send_sysex(sysexmessage, 17, MIDI_port);
 }
 
-void VG99_class::set_bpm() {
+void MD_VG99_class::set_bpm() {
   if (connected) {
     write_sysex(VG99_TEMPO, (Setting.Bpm - 40) >> 7, (Setting.Bpm - 40) & 0x7F); // Tempo is modulus 128 on the  And sending 0 gives tempo 40.
   }
 }
 
-void VG99_class::start_tuner() {
+void MD_VG99_class::start_tuner() {
   if (connected) {
     write_sysex(VG99_TUNER_ON); // Start tuner on VG-99
   }
 }
 
-void VG99_class::stop_tuner() {
+void MD_VG99_class::stop_tuner() {
   if (connected) {
     write_sysex(VG99_TUNER_OFF); // Stop tuner on VG-99
   }
@@ -281,7 +281,7 @@ void VG99_class::stop_tuner() {
 
 // ********************************* Section 4: VG99 program change ********************************************
 
-void VG99_class::select_patch(uint16_t new_patch) {
+void MD_VG99_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
   patch_number = new_patch;
 
@@ -293,7 +293,7 @@ void VG99_class::select_patch(uint16_t new_patch) {
   do_after_patch_selection();
 }
 
-void VG99_class::do_after_patch_selection() {
+void MD_VG99_class::do_after_patch_selection() {
   request_onoff = false;
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) set_bpm();
@@ -311,7 +311,7 @@ void VG99_class::do_after_patch_selection() {
   }
 }
 
-bool VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
+bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
   if (number > patch_max) return true;
   uint32_t Address = 0x71010000 + (((number * 0x10) / 0x80) * 0x100) + ((number * 0x10) % 0x80); //Calculate the address where the patchname is stored on the VG-99
   last_requested_sysex_address = Address;
@@ -321,11 +321,11 @@ bool VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void VG99_class::request_current_patch_name() {
+void MD_VG99_class::request_current_patch_name() {
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME);
 }
 
-void VG99_class::number_format(uint16_t number, String &Output) {
+void MD_VG99_class::number_format(uint16_t number, String &Output) {
   // Uses patch_number as input and returns Current_patch_number_string as output in format "U001"
   // First character is U for User or P for Preset patches
   if (number > 199) Output +=  "P";
@@ -336,7 +336,7 @@ void VG99_class::number_format(uint16_t number, String &Output) {
   Output +=  String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
 }
 
-void VG99_class::direct_select_format(uint16_t number, String &Output) {
+void MD_VG99_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) {
     if (bank_select_number >= 2) Output +=  "P";
     else Output +=  "U";
@@ -354,14 +354,14 @@ void VG99_class::direct_select_format(uint16_t number, String &Output) {
 // Selecting and muting the VG99 is done by storing the settings of COSM guitar switch and Normal PU switch
 // and switching both off when guitar is muted and back to original state when the VG99 is selected
 
-void VG99_class::request_guitar_switch_states() {
+void MD_VG99_class::request_guitar_switch_states() {
   //VG99_select_LED = VG99_PATCH_COLOUR; //Switch the LED on
   request_sysex(VG99_COSM_GUITAR_A_SW, 1);
   request_sysex(VG99_COSM_GUITAR_B_SW, 1);
   request_onoff = true;
 }
 
-void VG99_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_VG99_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
@@ -376,7 +376,7 @@ void VG99_class::check_guitar_switch_states(const unsigned char* sxdata, short u
   }
 }
 
-void VG99_class::unmute() {
+void MD_VG99_class::unmute() {
   is_on = connected;
   //VG99_select_LED = VG99_PATCH_COLOUR; //Switch the LED on
   //write_sysex(VG99_COSM_GUITAR_A_SW, COSM_A_onoff); // Switch COSM guitar on
@@ -384,13 +384,13 @@ void VG99_class::unmute() {
   select_patch(patch_number); //Just sending the program change will put the sound back on
 }
 
-void VG99_class::mute() {
+void MD_VG99_class::mute() {
   if ((Setting.US20_emulation_active) && (!is_always_on) && (is_on)) {
     mute_now();
   }
 }
 
-void VG99_class::mute_now() {
+void MD_VG99_class::mute_now() {
   is_on = false;
   //  VG99_select_LED = VG99_OFF_COLOUR; //Switch the LED off
   write_sysex(VG99_COSM_GUITAR_A_SW, 0x00); // Switch COSM guitar off
@@ -563,34 +563,34 @@ const PROGMEM VG99_parameter_struct VG99_parameters[] = {
   {0x3802, 2, "[B]GTR EQ SW", 0, FX_FILTER_TYPE, VG99_CAT_GTR_B},
   {0x3818, 101, "[B]COSM LVL", SHOW_NUMBER, FX_GTR_TYPE, VG99_CAT_GTR_B},
   {0x381A, 101, "[B]NPU LEVEL", SHOW_NUMBER, FX_GTR_TYPE, VG99_CAT_GTR_B},
-  {0x3C57, 2, "[B]NS SW", 0, FX_FILTER_TYPE, VG99_CAT_GTR_B},
+  {0x3C57, 2, "[B]NS SW", 0, FX_DYNAMICS_TYPE, VG99_CAT_GTR_B},
   //},
 
   //{ // part 4: 4000 - 5000 Poly FX
-  {0x4000, 2, "POLY FX CHAN", 261, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
   {0x4001, 2, "POLYFX", 157 | SUBLIST_FROM_BYTE2, VG99_POLYFX_COLOUR, VG99_CAT_POLY_FX},
   {0x4002, 4, "POLY TYPE", 157, VG99_POLYFX_TYPE_COLOUR, VG99_CAT_POLY_FX},
-  {0x4009, 2, "POLY COMP LEVEL", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x400A, 2, "POLY COMP BAL", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x400B, 2, "POLY DIST MODE", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400C, 2, "POLY DIST DRIVE", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400D, 2, "POLY D HIGH CUT", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400E, 2, "POLY D POLY BAL", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400F, 2, "POLY D DRIVE BAL", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x4000, 2, "POLY FX CHAN", 261, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
+  {0x4009, 101, "POLY COMP LEVEL", SHOW_NUMBER, FX_DYNAMICS_TYPE, VG99_CAT_POLY_FX},
+  {0x400A, 101, "POLY COMP BAL", SHOW_NUMBER, FX_DYNAMICS_TYPE, VG99_CAT_POLY_FX},
+  {0x400B, 5, "POLY DIST MODE", 263, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400C, 101, "POLY DIST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400D, 10, "POLY D HIGH CUT", 268, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400E, 101, "POLY D POLY BAL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400F, 101, "POLY D DRIVE BAL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
   {0x4010, 101, "PDIST LVL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x402F, 2, "POLY SG RISETIME", 0, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
-  {0x4030, 2, "POLY SG SENS", 0, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
+  {0x402F, 101, "POLY SG RISETIME", SHOW_NUMBER, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
+  {0x4030, 101, "POLY SG SENS", SHOW_NUMBER, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
   //},
 
   //{ // part 5: 5000 - 6000 FX and amps chain A
-  {0x502B, 2, "[A]COMP SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_A},
-  {0x502C, 2, "[A]COMP TP", 217, FX_FILTER_TYPE, VG99_CAT_FX_A},
+  {0x502B, 2, "[A]COMP SW", 0, FX_DYNAMICS_TYPE, VG99_CAT_FX_A},
+  {0x502C, 2, "[A]COMP TP", 217, FX_DYNAMICS_TYPE, VG99_CAT_FX_A},
   {0x5033, 2, "[A]OD", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, VG99_CAT_FX_A},
   {0x5034, 31, "[A]OD T", 1, FX_DIST_TYPE, VG99_CAT_FX_A},
-  {0x503F, 2, "[A]WAH SW", 219 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, VG99_CAT_FX_A},
-  {0x5040, 7, "[A]WAH TP", 219, FX_FILTER_TYPE, VG99_CAT_FX_A}, // Parameter number: 155
-  {0x5041, 101, "[A]WAH POS", SHOW_NUMBER, FX_FILTER_TYPE, VG99_CAT_FX_A},
-  {0x5042, 101, "[A]WAH LVL", SHOW_NUMBER, FX_FILTER_TYPE, VG99_CAT_FX_A},
+  {0x503F, 2, "[A]WAH SW", 219 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE, VG99_CAT_FX_A},
+  {0x5040, 7, "[A]WAH TP", 219, FX_WAH_TYPE, VG99_CAT_FX_A}, // Parameter number: 155
+  {0x5041, 101, "[A]WAH POS", SHOW_NUMBER, FX_WAH_TYPE, VG99_CAT_FX_A},
+  {0x5042, 101, "[A]WAH LVL", SHOW_NUMBER, FX_WAH_TYPE, VG99_CAT_FX_A},
   {0x5048, 2, "[A]EQ SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_A},
   {0x5054, 2, "[A]DLY SW", 226 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, VG99_CAT_FX_A},
   {0x5055, 11, "[A]DLY TP", 226, FX_DELAY_TYPE, VG99_CAT_FX_A},
@@ -605,7 +605,7 @@ const PROGMEM VG99_parameter_struct VG99_parameters[] = {
   {0x5401, 33, "[A]M1 TP", 32, VG99_FX_TYPE_COLOUR, VG99_CAT_FX_A},
   {0x5800, 2, "[A]M2", 32 | SUBLIST_FROM_BYTE2, VG99_FX_COLOUR, VG99_CAT_FX_A}, // Check VG99_mod_type table (2)
   {0x5801, 33, "[A]M2 TP", 32, VG99_FX_TYPE_COLOUR, VG99_CAT_FX_A},
-  {0x507E, 2, "[A]NS SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_A},
+  {0x507E, 2, "[A]NS SW", 0, FX_DYNAMICS_TYPE, VG99_CAT_FX_A},
   {0x5102, 101, "[A]FOOT VOL", SHOW_NUMBER, FX_DEFAULT_TYPE, VG99_CAT_FX_A},
 
   {0x500D, 2, "[A]AMP", 95 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, VG99_CAT_AMP_A},
@@ -623,14 +623,14 @@ const PROGMEM VG99_parameter_struct VG99_parameters[] = {
   //},
 
   //{ // part 6: 6000 - 7000 FX and amps chain B
-  {0x602B, 2, "[B]COMP SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_B},
-  {0x602C, 2, "[B]COMP TP", 217, FX_FILTER_TYPE, VG99_CAT_FX_B},
+  {0x602B, 2, "[B]COMP SW", 0, FX_DYNAMICS_TYPE, VG99_CAT_FX_B},
+  {0x602C, 2, "[B]COMP TP", 217, FX_DYNAMICS_TYPE, VG99_CAT_FX_B},
   {0x6033, 2, "[B]OD", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, VG99_CAT_FX_B}, // Check VG99_odds_type table (1)
   {0x6034, 31, "[B]OD T", 1, FX_DIST_TYPE, VG99_CAT_FX_B},
-  {0x603F, 2, "[B]WAH SW", 219 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, VG99_CAT_FX_B},
-  {0x6040, 7, "[B]WAH TP", 219, FX_FILTER_TYPE, VG99_CAT_FX_B},
-  {0x6041, 101, "[B]WAH POS", SHOW_NUMBER, FX_FILTER_TYPE, VG99_CAT_FX_B},
-  {0x6042, 101, "[B]WAH LVL", SHOW_NUMBER, FX_FILTER_TYPE, VG99_CAT_FX_B},
+  {0x603F, 2, "[B]WAH SW", 219 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE, VG99_CAT_FX_B},
+  {0x6040, 7, "[B]WAH TP", 219, FX_WAH_TYPE, VG99_CAT_FX_B},
+  {0x6041, 101, "[B]WAH POS", SHOW_NUMBER, FX_WAH_TYPE, VG99_CAT_FX_B},
+  {0x6042, 101, "[B]WAH LVL", SHOW_NUMBER, FX_WAH_TYPE, VG99_CAT_FX_B},
   {0x6048, 2, "[B]EQ SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_B},
   {0x6054, 2, "[B]DLY SW", 226 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, VG99_CAT_FX_B},
   {0x6055, 11, "[B]DLY TP", 226, FX_DELAY_TYPE, VG99_CAT_FX_B},
@@ -645,7 +645,7 @@ const PROGMEM VG99_parameter_struct VG99_parameters[] = {
   {0x6401, 33, "[B]M1 TYPE", 32, VG99_FX_TYPE_COLOUR, VG99_CAT_FX_B},
   {0x6800, 2, "[B]M2", 32 | SUBLIST_FROM_BYTE2, VG99_FX_COLOUR, VG99_CAT_FX_B}, // Check VG99_mod_type table (2)
   {0x6801, 33, "[B]M2 TYPE", 32, VG99_FX_TYPE_COLOUR, VG99_CAT_FX_B},
-  {0x607E, 2, "[B]NS SW", 0, FX_FILTER_TYPE, VG99_CAT_FX_B},
+  {0x607E, 2, "[B]NS SW", 0, FX_DYNAMICS_TYPE, VG99_CAT_FX_B},
   {0x6102, 101, "[B]FOOT VOL", SHOW_NUMBER, FX_DEFAULT_TYPE, VG99_CAT_FX_B},
 
   {0x600D, 2, "[B]AMP", 95 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, VG99_CAT_AMP_B}, // Sublist amps
@@ -767,16 +767,22 @@ const PROGMEM char VG99_sublists[][8] = {
 
   // Sublist 261 - 262: Poly FX channel
   "CH A", "CH B",
+
+  // Sublist 263 - 267: Poly DIST mode
+  "CLA OD", "TurboOD", "DS1", "DS2", "FUZZ",
+
+  // Sublist 268 - 277: Poly DIST high cut
+  "700 Hz", "1.0 kHz", "1.4 kHz", "2.0 kHz", "3.0 kHz", "4.0 kHz", "6,0 kHz", "8.0 kHz", "11 kHz", "FLAT",
 };
 
 const uint16_t VG99_SIZE_OF_SUBLIST = sizeof(VG99_sublists) / sizeof(VG99_sublists[0]);
 
 const PROGMEM uint8_t VG99_FX_colours[33] = {
-  FX_FILTER_TYPE, // Colour for "COMPRSR"
-  FX_FILTER_TYPE, // Colour for "LIMITER"
-  FX_FILTER_TYPE, // Colour for "T. WAH"
-  FX_FILTER_TYPE, // Colour for "AUTOWAH"
-  FX_FILTER_TYPE, // Colour for "T_WAH"
+  FX_DYNAMICS_TYPE, // Colour for "COMPRSR"
+  FX_DYNAMICS_TYPE, // Colour for "LIMITER"
+  FX_WAH_TYPE, // Colour for "T. WAH"
+  FX_WAH_TYPE, // Colour for "AUTOWAH"
+  FX_WAH_TYPE, // Colour for "T_WAH"
   FX_DEFAULT_TYPE, // Colour for "GUITAR SIM" - not implemented in VG99
   FX_MODULATE_TYPE, // Colour for "TREMOLO"
   FX_MODULATE_TYPE, // Colour for "PHASER"
@@ -791,7 +797,7 @@ const PROGMEM uint8_t VG99_FX_colours[33] = {
   FX_FILTER_TYPE, // Colour for "FEEDBKR"
   FX_FILTER_TYPE, // Colour for "ANTI FB"
   FX_FILTER_TYPE, // Colour for "HUMANZR"
-  FX_FILTER_TYPE, // Colour for "SLICER"
+  FX_MODULATE_TYPE, // Colour for "SLICER"
   FX_DEFAULT_TYPE, // Colour for "SITAR" - not implemented in VG99
   FX_FILTER_TYPE, // Colour for "SUB EQ"
   FX_PITCH_TYPE, // Colour for "HARMO"
@@ -808,7 +814,7 @@ const PROGMEM uint8_t VG99_FX_colours[33] = {
 };
 
 const PROGMEM uint8_t VG99_polyFX_colours[4] = {
-  FX_FILTER_TYPE, // Colour for "COMPR"
+  FX_DYNAMICS_TYPE, // Colour for "COMPR"
   FX_DIST_TYPE, // Colour for "DISTORT"
   FX_PITCH_TYPE, // Colour for "OCTAVE"
   FX_FILTER_TYPE // Colour for "SLOW GR"
@@ -816,7 +822,7 @@ const PROGMEM uint8_t VG99_polyFX_colours[4] = {
 
 uint8_t VG99_number_of_items_in_category[VG99_NUMBER_OF_FX_CATEGORIES];
 
-void VG99_class::count_parameter_categories() {
+void MD_VG99_class::count_parameter_categories() {
   uint8_t c;
   for (uint16_t i = 0; i < VG99_NUMBER_OF_PARAMETERS; i++) {
     c = VG99_parameters[i].Category;
@@ -824,19 +830,19 @@ void VG99_class::count_parameter_categories() {
   }
 }
 
-void VG99_class::request_par_bank_category_name(uint8_t sw) {
+void MD_VG99_class::request_par_bank_category_name(uint8_t sw) {
   uint8_t index = SP[sw].PP_number;
   if ((index > 0) && (index <= VG99_NUMBER_OF_FX_CATEGORIES))
     LCD_set_SP_label(sw, (const char*) &VG99_parameter_category[index - 1].Name);
   else LCD_clear_SP_label(sw);
 }
 
-void VG99_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+void MD_VG99_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = VG99_parameters[number].Name;
   else Output = "?";
 }
 
-void VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+void MD_VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters())  {
     //Output += VG99_parameters[number].Name;
     if ((VG99_parameters[number].Sublist > 0) && !(VG99_parameters[number].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -865,7 +871,7 @@ void VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, Stri
 }
 
 // Toggle VG99 stompbox parameter
-void VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   // Send sysex MIDI command to VG-99
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
@@ -882,15 +888,21 @@ void VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
     write_sysex(0x60000000 + VG99_parameters[number].Address, value);
     SP[Sw].Offline_value = value;
 
-    // Show message
+    // Show popup message
     check_update_label(Sw, value);
-    LCD_show_status_message(SP[Sw].Label);
+    String lbl = "";
+    if (SP[Sw].Type != ASSIGN) {
+      lbl = VG99_parameters[number].Name;
+      lbl += ":";
+    }
+    lbl += SP[Sw].Label;
+    LCD_show_popup_label(lbl, ACTION_TIMER_LENGTH);
 
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
   }
 }
 
-void VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   if ((SP[Sw].Latch == MOMENTARY) && (number < VG99_NUMBER_OF_PARAMETERS)) {
     SP[Sw].State = 2; // Switch state off
@@ -901,7 +913,11 @@ void VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
 }
 
-bool VG99_class::request_parameter(uint8_t sw, uint16_t number) {
+void MD_VG99_class::read_parameter_title(uint16_t number, String &Output) {
+  Output += VG99_parameters[number].Name;
+}
+
+bool MD_VG99_class::request_parameter(uint8_t sw, uint16_t number) {
   if (can_request_sysex_data()) {
     uint32_t my_address = 0x60000000 + VG99_parameters[number].Address;
     last_requested_sysex_address = my_address;
@@ -911,13 +927,13 @@ bool VG99_class::request_parameter(uint8_t sw, uint16_t number) {
     return false; // Move to next switch is false. We need to read the parameter first
   }
   else {
-    if ((sw < NUMBER_OF_SWITCHES) && (SP[sw].Type == PAR_BANK)) read_parameter(sw, SP[sw].Offline_value, SP[sw + 1].Offline_value);
+    if ((sw < TOTAL_NUMBER_OF_SWITCHES) && (SP[sw].Type == PAR_BANK)) read_parameter(sw, SP[sw].Offline_value, SP[sw + 1].Offline_value);
     else read_parameter(sw, SP[sw].Offline_value, 0);
     return true;
   }
 }
 
-void VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current VG99 parameter
+void MD_VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current VG99 parameter
   SP[sw].Target_byte1 = byte1;
   SP[sw].Target_byte2 = byte2;
 
@@ -952,13 +968,14 @@ void VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Re
   }
 
   // Set the display message
-  String msg = VG99_parameters[index].Name;
+  String msg = "";
+  if ((SP[sw].Type == ASSIGN) || (SP[sw].Type == TOGGLE_EXP_PEDAL) || (SP[sw].Type == MASTER_EXP_PEDAL)) msg = VG99_parameters[index].Name;
   if (VG99_parameters[index].Sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
     String type_name = VG99_sublists[VG99_parameters[index].Sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
-    msg += " (" + type_name + ")";
+    msg += "(" + type_name + ")";
   }
   if ((VG99_parameters[index].Sublist > 0) && !(VG99_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) {
-    msg += ":";
+    if ((SP[sw].Type == ASSIGN) || (SP[sw].Type == TOGGLE_EXP_PEDAL) || (SP[sw].Type == MASTER_EXP_PEDAL)) msg += ":";
     read_parameter_value_name(index, byte1, msg);
   }
 
@@ -966,7 +983,7 @@ void VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Re
   LCD_set_SP_label(sw, msg);
 }
 
-void VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+void MD_VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number;
   if (index != NOT_FOUND) {
 
@@ -974,8 +991,11 @@ void VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the 
       LCD_clear_SP_label(Sw);
 
       // Set the display message
-      String msg = VG99_parameters[index].Name;
-      msg += ":";
+      String msg = "";
+      if ((SP[Sw].Type == ASSIGN) || (SP[Sw].Type == TOGGLE_EXP_PEDAL) || (SP[Sw].Type == MASTER_EXP_PEDAL)) {
+        msg = VG99_parameters[index].Name;
+        msg += ":";
+      }
       read_parameter_value_name(index, value, msg);
 
       //Copy it to the display name:
@@ -987,11 +1007,11 @@ void VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the 
   }
 }
 
-uint16_t VG99_class::number_of_parameters() {
+uint16_t MD_VG99_class::number_of_parameters() {
   return VG99_NUMBER_OF_PARAMETERS - VG99_NON_PARAMETER_TARGETS;
 }
 
-uint8_t VG99_class::number_of_values(uint16_t parameter) {
+uint8_t MD_VG99_class::number_of_values(uint16_t parameter) {
   if (parameter < VG99_NUMBER_OF_PARAMETERS) {
     //uint8_t part = parameter / 30; // Split the parameter number in part and index
     //uint8_t index = parameter % 30;
@@ -1000,12 +1020,14 @@ uint8_t VG99_class::number_of_values(uint16_t parameter) {
   else return 0;
 }
 
-uint16_t VG99_class::number_of_parbank_parameters() {
+uint16_t MD_VG99_class::number_of_parbank_parameters() {
   if (parameter_bank_category == 0) return VG99_NUMBER_OF_PARAMETERS;
   else return VG99_number_of_items_in_category[parameter_bank_category - 1];
 }
 
-uint16_t VG99_class::get_parbank_parameter_id(uint16_t par_number) {
+uint16_t MD_VG99_class::get_parbank_parameter_id(uint16_t par_number) {
+  if (parameter_bank_category == 0) return par_number; // In category 0 all FX are accessible
+
   //Find the correct parameter number for this parameter number
   uint8_t active_fx_number = 0;
   for (uint8_t i = 0; i < VG99_NUMBER_OF_PARAMETERS; i++) { // We go through the effect_state array and look for effects that are enabled
@@ -1025,75 +1047,81 @@ uint16_t VG99_class::get_parbank_parameter_id(uint16_t par_number) {
 // GK S1/S2, GK VOL, EXP, CTL1, CTL2, CTL3, CTL4, DBEAM-V, DBEAM H, RIBBON ACT and RIBBON POS assigns can be read but not controlled from the VController!
 
 // Procedures for VG99_ASSIGN:
-// 1. Load in SP array - VG99_class::assign_load() below
-// 2. Request - VG99_class::request_current_assign(uint8_t sw)
-// 3. Read assign - VG99_class::read_current_assign(uint8_t sw) - also requests parameter state
-// 4. Read parameter state - VG99_class::read_parameter() above
-// 5. Press switch - VG99_class::assign_press() below
-// 6. Release switch - VG99_class::assign_release() below
+// 1. Load in SP array - MD_VG99_class::assign_load() below
+// 2. Request - MD_VG99_class::request_current_assign(uint8_t sw)
+// 3. Read assign - MD_VG99_class::read_current_assign(uint8_t sw) - also requests parameter state
+// 4. Read parameter state - MD_VG99_class::read_parameter() above
+// 5. Press switch - MD_VG99_class::assign_press() below
+// 6. Release switch - MD_VG99_class::assign_release() below
 
 struct VG99_assign_struct {
   char Title[14];
+  char Title_short[5];
   uint32_t Address;
 };
 
 const PROGMEM VG99_assign_struct VG99_assigns[] = {
-  {"ASSIGN 1", 0x60007000},
-  {"ASSIGN 2", 0x6000701C},
-  {"ASSIGN 3", 0x60007038},
-  {"ASSIGN 4", 0x60007054},
-  {"ASSIGN 5", 0x60007100},
-  {"ASSIGN 6", 0x6000711C},
-  {"ASSIGN 7", 0x60007138},
-  {"ASSIGN 8", 0x60007154},
-  {"ASSIGN 9", 0x60007200},
-  {"ASSIGN 10", 0x6000721C},
-  {"ASSIGN 11", 0x60007238},
-  {"ASSIGN 12", 0x60007254},
-  {"ASSIGN 13", 0x60007300},
-  {"ASSIGN 14", 0x6000731C},
-  {"ASSIGN 15", 0x60007338},
-  {"ASSIGN 16", 0x60007354},
-  {"FC300 CTL1", 0x60000600},
-  {"FC300 CTL2", 0x60000614},
-  {"FC300 CTL3", 0x60000628},
-  {"FC300 CTL4", 0x6000063C},
-  {"FC300 CTL5", 0x60000650},
-  {"FC300 CTL6", 0x60000664},
-  {"FC300 CTL7", 0x60000678},
-  {"FC300 CTL8", 0x6000070C},
-  {"FC300 EXP1", 0x60000500},
-  {"FC300 EXP SW1", 0x60000514},
-  {"FC300 EXP2", 0x60000528},
-  {"FC300 EXP SW2", 0x6000053C},
-  {"GK S1/S2", 0x60000114},
-  {"GK VOL", 0x60000100},
-  {"EXP", 0x60000150},
-  {"CTL1", 0x60000128},
-  {"CTL2", 0x6000013C},
-  {"CTL3", 0x60000164},
-  {"CTL4", 0x60000178},
-  {"DBEAM-V", 0x60000300},
-  {"DBEAM-H", 0x60000314},
-  {"RIBBON ACT", 0x60000328},
-  {"RIBBON POS", 0x6000033C}
+  {"FC300 CTL1", "FC 1", 0x60000600},
+  {"FC300 CTL2", "FC 2", 0x60000614},
+  {"FC300 CTL3", "FC 3", 0x60000628},
+  {"FC300 CTL4", "FC 4", 0x6000063C},
+  {"FC300 CTL5", "FC 5", 0x60000650},
+  {"FC300 CTL6", "FC 6", 0x60000664},
+  {"FC300 CTL7", "FC 7", 0x60000678},
+  {"FC300 CTL8", "FC 8", 0x6000070C},
+  {"FC300 EXP1", "EXP1", 0x60000500},
+  {"FC300 EXP SW1", "E S1", 0x60000514},
+  {"FC300 EXP2", "EXP2", 0x60000528},
+  {"FC300 EXP SW2", "E S2", 0x6000053C},
+  {"GK S1/S2", "GK12", 0x60000114},
+  {"GK VOL", "GK V", 0x60000100},
+  {"EXP", "EXP", 0x60000150},
+  {"CTL1", "CTL1", 0x60000128},
+  {"CTL2", "CTL2", 0x6000013C},
+  {"CTL3", "CTL3", 0x60000164},
+  {"CTL4", "CTL4", 0x60000178},
+  {"DBEAM-V", "DB-V", 0x60000300},
+  {"DBEAM-H", "DB-H", 0x60000314},
+  {"RIBBON ACT", "RACT", 0x60000328},
+  {"RIBBON POS", "RPOS", 0x6000033C},
+  {"ASSIGN 1", "ASG1", 0x60007000},
+  {"ASSIGN 2", "ASG2", 0x6000701C},
+  {"ASSIGN 3", "ASG3", 0x60007038},
+  {"ASSIGN 4", "ASG4", 0x60007054},
+  {"ASSIGN 5", "ASG5", 0x60007100},
+  {"ASSIGN 6", "ASG6", 0x6000711C},
+  {"ASSIGN 7", "ASG7", 0x60007138},
+  {"ASSIGN 8", "ASG8", 0x60007154},
+  {"ASSIGN 9", "ASG9", 0x60007200},
+  {"ASSIGN 10", "AS10", 0x6000721C},
+  {"ASSIGN 11", "AS11", 0x60007238},
+  {"ASSIGN 12", "AS12", 0x60007254},
+  {"ASSIGN 13", "AS13", 0x60007300},
+  {"ASSIGN 14", "AS14", 0x6000731C},
+  {"ASSIGN 15", "AS15", 0x60007338},
+  {"ASSIGN 16", "AS16", 0x60007354},
 };
 
 const uint16_t VG99_NUMBER_OF_ASSIGNS = sizeof(VG99_assigns) / sizeof(VG99_assigns[0]);
 
 const PROGMEM uint16_t FC300_CTL[12] = {0x2100, 0x2101, 0x2402, 0x2102, 0x2403, 0x2103, 0x2404, 0x2104, 0x2400, 0x2200, 0x2401, 0x2201}; //CTL 1-8, EXP1, EP SW1, EXP2, EP SW2
 
-#define VG99_FC300_EXP1 24
-#define VG99_FC300_EXP2 26
+#define VG99_FC300_EXP1 8
+#define VG99_FC300_EXP2 10
 
 //const PROGMEM char FC300_ASGN_NAME[12][8] = {"CTL1", "CTL2", "CTL3", "CTL4", "CTL5", "CTL6", "CTL7", "CTL8", "EXP1", "EXP SW1", "EXP2", "EXP SW2",};
 
-void VG99_class::read_assign_name(uint8_t number, String & Output) {
+void MD_VG99_class::read_assign_name(uint8_t number, String & Output) {
   if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title;
   else Output += "?";
 }
 
-void VG99_class::read_assign_trigger(uint8_t number, String & Output) {
+void MD_VG99_class::read_assign_short_name(uint8_t number, String & Output) {
+  if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title_short;
+  else Output += "?";
+}
+
+void MD_VG99_class::read_assign_trigger(uint8_t number, String & Output) {
   if ((number > 0) && (number <= 8))  Output = "FC300 CTL" + String(number);
   else if (number == 9) Output = "FC300 EXP1";
   else if (number == 10) Output = "FC300 EXP SW1";
@@ -1103,25 +1131,25 @@ void VG99_class::read_assign_trigger(uint8_t number, String & Output) {
   else Output = "-";
 }
 
-uint8_t VG99_class::get_number_of_assigns() {
+uint8_t MD_VG99_class::get_number_of_assigns() {
   return VG99_NUMBER_OF_ASSIGNS;
 }
 
-uint8_t VG99_class::trigger_follow_assign(uint8_t number) {
-  if (number < 16) return number + 21; // Default cc numbers are 21 and up
-  if ((number >= 16) && (number < 28)) return number - 15; // Return the trigger for the FC300 pedals
+uint8_t MD_VG99_class::trigger_follow_assign(uint8_t number) {
+  if (number < 12) return number + 1; // Return the trigger for the FC300 pedals
+  if ((number >= 23) && (number <= 33))  return number - 2; // Default cc numbers are 21 - 31
+  if ((number >= 34) && (number <= 65)) return number + 30; // And higher up it is 64 - 95
   return 0;
 }
 
-void VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to VG99_ASSIGN is pressed
+void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to VG99_ASSIGN is pressed
 
   // Send cc MIDI command to VG-99. If cc is 1 - 8, send the FC300 CTL sysex code
   uint8_t cc_number = SP[Sw].Trigger;
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], value);
-  else if (cc_number < 128) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
-
-  if (cc_number == 255) {
-    LCD_show_status_message("Assign read only");
+  else if ((cc_number <= 31) || ((cc_number >=64) && (cc_number < 95))) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
+  else {
+    LCD_show_popup_label("Assign read only", MESSAGE_TIMER_LENGTH);
     SCO_update_parameter_state(Sw, 0, 1, 1); // Undo update parameter state by repeating the toggle
     return;
   }
@@ -1133,24 +1161,25 @@ void VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to VG99
     else new_val = SP[Sw].Assign_min;
     check_update_label(Sw, new_val);
   }
-  LCD_show_status_message(SP[Sw].Label);
+  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 
   if (SP[Sw].Assign_on) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is released
+void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is released
 
   // Send cc MIDI command to VG-99. If cc is 1 - 8, send the FC300 CTL sysex code
   uint8_t cc_number = SP[Sw].Trigger;
+  delay(20); // To fix the release message not being picked up when ASSIGN command is triggered on switch release as well
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], 0);
-  else if (cc_number < 128) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
+  else if ((cc_number <= 31) || ((cc_number >=64) && (cc_number < 95))) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
 
   // Update status
   if (SP[Sw].Latch == MOMENTARY) {
     if ((SP[Sw].Assign_on) && (SP[Sw].Trigger != 255)) {
       SP[Sw].State = 2; // Switch state off
       check_update_label(Sw, SP[Sw].Assign_min);
-      LCD_show_status_message(SP[Sw].Label);
+      LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
     }
     else SP[Sw].State = 0; // Assign off, so LED should be off as well
 
@@ -1158,23 +1187,23 @@ void VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is re
   }
 }
 
-void VG99_class::fix_reverse_pedals() {
-  // Pedal 3,5 and 7 are reversed. The VG99 also ignores the first press on them
-  // But by operating them once the VG99 will respond correctly form here-on.
-  write_sysexfc(FC300_CTL[3], 0x7F); // Press CTL-3
-  write_sysexfc(FC300_CTL[3], 0x00); // Release CTL-3
-  write_sysexfc(FC300_CTL[5], 0x7F); // Press CTL-5
-  write_sysexfc(FC300_CTL[5], 0x00); // Release CTL-5
-  write_sysexfc(FC300_CTL[7], 0x7F); // Press CTL-7
-  write_sysexfc(FC300_CTL[7], 0x00); // Release CTL-7
+void MD_VG99_class::fix_reverse_pedals() {
+  // This fixes first time non or reverse responding FC300 CTL pedals
+  write_sysexfc(FC300_CTL[2], 0x7F); // Press CTL-3
+  write_sysexfc(FC300_CTL[4], 0x7F); // Press CTL-5
+  write_sysexfc(FC300_CTL[6], 0x7F); // Press CTL-7
+
+  for (uint8_t i = 0; i < 7; i++) { // Release all pedals
+    write_sysexfc(FC300_CTL[i], 0x00);
+  }
 }
 
-void VG99_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t my_trigger) { // Switch set to VG99_ASSIGN is loaded in SP array
+void MD_VG99_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t my_trigger) { // Switch set to VG99_ASSIGN is loaded in SP array
   SP[sw].Trigger = my_trigger; //Save the cc_number / FC300 pedal number in the Trigger variable
   SP[sw].Assign_number = assign_number;
 }
 
-void VG99_class::request_current_assign(uint8_t sw) {
+void MD_VG99_class::request_current_assign(uint8_t sw) {
   uint8_t index = SP[sw].Assign_number;
   if (index < VG99_NUMBER_OF_ASSIGNS) {
     DEBUGMSG("Request assign " + String(index + 1));
@@ -1189,7 +1218,7 @@ void VG99_class::request_current_assign(uint8_t sw) {
   else PAGE_request_next_switch(); // Wrong assign number given in Config - skip it
 }
 
-void VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   bool assign_on, found;
   String msg;
   uint8_t assign_switch = sxdata[11];
@@ -1209,7 +1238,7 @@ void VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigne
   else if ((my_trigger >= 9) && (my_trigger <= 31)) my_trigger = my_trigger + 24; // Trigger is cc09 - cc31 Add 24 to match the VG99 implemntation of these sources (0x19 - 0x37)
   else if ((my_trigger >= 64) && (my_trigger <= 95)) my_trigger = my_trigger - 8; // Trigger is cc64 - cc95 Add 24 to match the VG99 implemntation of these sources (0x38 - 0x57)
 
-  if (SP[sw].Assign_number < 16) assign_on = ((assign_switch == 0x01) && (my_trigger == assign_source)); // Check if assign is on by checking assign switch and source is set to correct cc number
+  if (SP[sw].Assign_number >= 23) assign_on = ((assign_switch == 0x01) && (my_trigger == assign_source)); // Check if assign is on by checking assign switch and source is set to correct cc number
   else assign_on = (assign_switch == 0x01); // Assign is FC300 CTL1-8 type, so we do not need to check the source
 
   //DEBUGMSG("VG-99 Assign_switch: 0x" + String(assign_switch, HEX));
@@ -1221,7 +1250,7 @@ void VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigne
   //DEBUGMSG("VG-99 Assign_trigger-check:" + String(my_trigger) + "==" + String(assign_source));
 
   if (assign_on) {
-    SP[sw].Assign_on = true; // Switch the pedal off
+    SP[sw].Assign_on = true; // Switch the pedal on
     SP[sw].Latch = assign_latch;
 
     // Allow for VG-99 assign min and max swap. Is neccesary, because the VG-99 will not save a parameter in the on-state, unless you swap the assign min and max values
@@ -1254,7 +1283,7 @@ void VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigne
       SP[sw].PP_number = NOT_FOUND;
       SP[sw].Colour = FX_DEFAULT_TYPE;
       // Set the Label
-      if (SP[sw].Assign_number < 16) msg = "CC#" + String(SP[sw].Trigger) + " (ASGN" + String(SP[sw].Assign_number) + ")";
+      if (SP[sw].Assign_number >= 23) msg = "CC#" + String(SP[sw].Trigger) + " (ASGN" + String(SP[sw].Assign_number - 22) + ")";
       else if (SP[sw].Assign_number < VG99_NUMBER_OF_ASSIGNS) read_assign_name(SP[sw].Assign_number, msg);
       else msg = "?";
       LCD_set_SP_label(sw, msg);
@@ -1268,14 +1297,14 @@ void VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigne
     SP[sw].Latch = MOMENTARY; // Make it momentary
     SP[sw].Colour = FX_DEFAULT_TYPE; // Set the on colour to default
     // Set the Label
-    if (SP[sw].Assign_number < 16) msg = "CC#" + String(SP[sw].Trigger);
+    if (SP[sw].Assign_number >= 23) msg = "CC#" + String(SP[sw].Trigger);
     else msg = "--";
     LCD_set_SP_label(sw, msg);
     PAGE_request_next_switch();
   }
 }
 
-bool VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the VG99_parameters table
+bool MD_VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the VG99_parameters table
 
   // Lookup in VG99_parameter array
   //uint8_t part = (target / 0x1000); // As the array is divided in addresses by 1000, it is easy to find the right part
@@ -1291,7 +1320,7 @@ bool VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the targ
   return found;
 }
 
-void VG99_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+void MD_VG99_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal > 0) {
     LCD_show_bar(0, value); // Show it on the main display
@@ -1300,7 +1329,7 @@ void VG99_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pe
   }
 }
 
-void VG99_class::toggle_expression_pedal(uint8_t sw) {
+void MD_VG99_class::toggle_expression_pedal(uint8_t sw) {
   //uint8_t value;
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
@@ -1311,7 +1340,7 @@ void VG99_class::toggle_expression_pedal(uint8_t sw) {
   update_page = REFRESH_FX_ONLY;
 }
 
-bool VG99_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+bool MD_VG99_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   uint8_t number = 0;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal == 1) number = VG99_FC300_EXP1;
@@ -1325,4 +1354,3 @@ bool VG99_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   LCD_clear_SP_label(sw);
   return true;
 }
-

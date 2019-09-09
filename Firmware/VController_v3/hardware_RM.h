@@ -7,7 +7,7 @@
 // Make sure you include this file when updating to new firmware
 
 // Allowable i2c rates:
-// I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200, 
+// I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200,
 // I2C_RATE_1500, I2C_RATE_1800, I2C_RATE_2000, I2C_RATE_2400, I2C_RATE_2800, I2C_RATE_3000
 
 #define WIRE_SPEED I2C_RATE_800 // Speed i2c port 1 (pin 17/18)
@@ -27,13 +27,16 @@
 
 // *** Switches (internal)
 #define NUMBER_OF_SWITCHES 16 // Number of foot switches
+#define NUMBER_OF_ENCODERS 0
 #define NUMBER_OF_EXTERNAL_SWITCHES 8
+#define NUMBER_OF_MIDI_SWITCHES 0
+#define SWITCH_BOUNCE_TIME 100 // in ms
 
 // If we have a switchpad, define it here
 /*#define ROWS 4 //number of rows in switchpad
-#define COLS 4 //number of columns in switchpad
-#define ROWPINS 5, 4, 3, 2
-#define COLUMNPINS 13, 12, 11, 6*/
+  #define COLS 4 //number of columns in switchpad
+  #define ROWPINS 5, 4, 3, 2
+  #define COLUMNPINS 13, 12, 11, 6*/
 
 // *** Switches and expression pedals (external)
 #define NUMBER_OF_CTL_JACKS 3 // Number of jacks on the VController for connecting an expression pedal or two switches 
@@ -62,7 +65,7 @@
 #define NUMBER_OF_DISPLAY_BOARDS 4
 #define NUMBER_OF_DISPLAYS 12
 
-// Define the addresses and numbers of the displays using the VController display boards based on an MCP23017. Maximum 15 displays can be defined here. 
+// Define the addresses and numbers of the displays using the VController display boards based on an MCP23017. Maximum 15 displays can be defined here.
 // Make sure the number of displays here matches the NUMBER_OF_DIPLAYS variable.
 // You cannot declare displays both here and in the next section.
 
@@ -80,21 +83,21 @@
 #define DISPLAY_12_ADDRESS_AND_NUMBER 0x23, DISPLAY3
 
 
-// Define the addresses of the displays using regular i2C backpacks here. Maximum 15 displays can be defined here. 
+// Define the addresses of the displays using regular i2C backpacks here. Maximum 15 displays can be defined here.
 // Make sure the number of displays here matches the NUMBER_OF_DIPLAYS variable
 /*
-#define DISPLAY_01_ADDRESS 0x21
-#define DISPLAY_02_ADDRESS 0x22
-#define DISPLAY_03_ADDRESS 0x23
-#define DISPLAY_04_ADDRESS 0x24
-#define DISPLAY_05_ADDRESS 0x25
-#define DISPLAY_06_ADDRESS 0x26
-#define DISPLAY_07_ADDRESS 0x39
-#define DISPLAY_08_ADDRESS 0x3A
-#define DISPLAY_09_ADDRESS 0x3B
-#define DISPLAY_10_ADDRESS 0x3D
-#define DISPLAY_11_ADDRESS 0x20
-#define DISPLAY_12_ADDRESS 0x3E
+  #define DISPLAY_01_ADDRESS 0x21
+  #define DISPLAY_02_ADDRESS 0x22
+  #define DISPLAY_03_ADDRESS 0x23
+  #define DISPLAY_04_ADDRESS 0x24
+  #define DISPLAY_05_ADDRESS 0x25
+  #define DISPLAY_06_ADDRESS 0x26
+  #define DISPLAY_07_ADDRESS 0x39
+  #define DISPLAY_08_ADDRESS 0x3A
+  #define DISPLAY_09_ADDRESS 0x3B
+  #define DISPLAY_10_ADDRESS 0x3D
+  #define DISPLAY_11_ADDRESS 0x20
+  #define DISPLAY_12_ADDRESS 0x3E
 */
 
 // Pinout on PCF8745 i2c expanders
@@ -114,6 +117,6 @@
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 //#define MIDI3_BAUD_RATE 115200
 //#define MIDI3_BAUD_RATE 38400
+#define MIDI3_ENABLED
 
 #endif
-

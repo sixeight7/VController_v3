@@ -40,7 +40,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void GR55_class::init() // Default values for variables
+void MD_MD_GR55_class::init() // Default values for variables
 {
   // Boss GR-55 variables:
   enabled = DEVICE_DETECT; // Default value
@@ -50,7 +50,7 @@ void GR55_class::init() // Default values for variables
   current_patch_name = "                ";
   patch_min = GR55_PATCH_MIN;
   patch_max = GR55_PATCH_MAX;
-  bank_size = 3;
+  //bank_size = 3;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the GR-55 does not have to respond before disconnection
   preset_banks = 40; // Default number of preset banks is 40. When we are in bass mode, there are only 12.
   synth1_onoff = 0;
@@ -60,17 +60,17 @@ void GR55_class::init() // Default values for variables
   sysex_delay_length = GR55_SYSEX_DELAY; // time between sysex messages (in msec)
   my_LED_colour = 3; // Default value: blue
   MIDI_channel = GR55_MIDI_CHANNEL; // Default value
-  bank_number = 0; // Default value
+  //bank_number = 0; // Default value
   is_always_on = true; // Default value
-  my_device_page1 = PAGE_GR55_PATCH_BANK; // Default value
-  my_device_page2 = PAGE_CURRENT_PARAMETER; // Default value
-  my_device_page3 = PAGE_GR55_ASSIGNS; // Default value
-  my_device_page4 = 0; // Default value
+  my_device_page1 = GR55_DEFAULT_PAGE1; // Default value
+  my_device_page2 = GR55_DEFAULT_PAGE2; // Default value
+  my_device_page3 = GR55_DEFAULT_PAGE3; // Default value
+  my_device_page4 = GR55_DEFAULT_PAGE4; // Default value
 }
 
 // ********************************* Section 2: GR55 common MIDI in functions ********************************************
 
-void GR55_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+void MD_MD_GR55_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a GR-55
   if ((port == MIDI_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x53) && (sxdata[6] == 0x12)) {
@@ -167,7 +167,7 @@ void GR55_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int 
 }
 
 
-void GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
+void MD_MD_GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // GR55 sends a program change
@@ -185,7 +185,7 @@ void GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { /
 
 // Detection of GR-55
 
-void GR55_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_MD_GR55_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a GR-55
   if ((sxdata[5] == 0x41) && (sxdata[6] == 0x53) && (sxdata[7] == 0x02)) {
     no_response_counter = 0;
@@ -193,7 +193,7 @@ void GR55_class::identity_check(const unsigned char* sxdata, short unsigned int 
   }
 }
 
-void GR55_class::do_after_connect() {
+void MD_MD_GR55_class::do_after_connect() {
   request_sysex(GR55_REQUEST_CURRENT_PATCH_NUMBER);
   request_sysex(GR55_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
   request_sysex(GR55_REQUEST_MODE); // Check if the GR-55 is in bass mode
@@ -204,7 +204,7 @@ void GR55_class::do_after_connect() {
 
 // ********************************* Section 3: GR55 common MIDI out functions ********************************************
 
-void GR55_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
+void MD_MD_GR55_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value); // Calculate the Roland checksum
@@ -213,7 +213,7 @@ void GR55_class::write_sysex(uint32_t address, uint8_t value) { // For sending o
   MIDI_send_sysex(sysexmessage, 14, MIDI_port);
 }
 
-void GR55_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
+void MD_MD_GR55_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2); // Calculate the Roland checksum
@@ -222,7 +222,7 @@ void GR55_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) {
   MIDI_send_sysex(sysexmessage, 15, MIDI_port);
 }
 
-void GR55_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
+void MD_MD_GR55_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] +  no_of_bytes); // Calculate the Roland checksum
   uint8_t sysexmessage[17] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x53, 0x11, ad[3], ad[2], ad[1], ad[0], 0x00, 0x00, 0x00, no_of_bytes, checksum, 0xF7};
@@ -230,26 +230,26 @@ void GR55_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   MIDI_send_sysex(sysexmessage, 17, MIDI_port);
 }
 
-void GR55_class::set_bpm() {
+void MD_MD_GR55_class::set_bpm() {
   if (connected) {
     write_sysex(GR55_TEMPO, Setting.Bpm >> 4, Setting.Bpm & 0x0F); // Tempo is modulus 16. It's all so very logical. NOT.
   }
 }
 
-void GR55_class::start_tuner() {
+void MD_MD_GR55_class::start_tuner() {
   if (connected) {
     was_on = is_on;
     mute_now(); // Mute the GR-55. There is no documentation on how to start the tuner on the GR55 through sysex.
   }
 }
 
-void GR55_class::stop_tuner() {
+void MD_MD_GR55_class::stop_tuner() {
   if (was_on) {
     unmute(); // Unmute the GR-55. There is no documentation on how to start the tuner on the GR55 through sysex.
   }
 }
 
-void GR55_class::sendGR55BankPatch(uint16_t patchno)
+void MD_MD_GR55_class::sendGR55BankPatch(uint16_t patchno)
 {
   byte SysArray[135]; // Create 9 messages of 15 bytes = 135 bytes
   const uint8_t byte_eight[9] = { 0x00, 0x03, 0x06, 0x07, 0x10, 0x20, 0x21, 0x30, 0x31};
@@ -281,7 +281,7 @@ void GR55_class::sendGR55BankPatch(uint16_t patchno)
 
 // ********************************* Section 4: GR55 program change ********************************************
 
-void GR55_class::select_patch(uint16_t new_patch) {
+void MD_MD_GR55_class::select_patch(uint16_t new_patch) {
 
   if (new_patch == patch_number) unmute();
   patch_number = new_patch;
@@ -306,7 +306,7 @@ void GR55_class::select_patch(uint16_t new_patch) {
   do_after_patch_selection();
 }
 
-void GR55_class::do_after_patch_selection() {
+void MD_MD_GR55_class::do_after_patch_selection() {
   request_onoff = false;
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) set_bpm();
@@ -327,7 +327,7 @@ void GR55_class::do_after_patch_selection() {
   flash_bank_of_three = 255;
 }
 
-bool GR55_class::request_patch_name(uint8_t sw, uint16_t number) {
+bool MD_MD_GR55_class::request_patch_name(uint8_t sw, uint16_t number) {
   if (number > patch_max) return true;
   if (number < 297) { // This is a user patch - we read these from memory
     uint32_t Address = 0x20000001 + ((number / 0x80) * 0x1000000) + ((number % 0x80) * 0x10000); //Calculate the address where the patchname is stored on the GR-55
@@ -345,11 +345,11 @@ bool GR55_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void GR55_class::request_current_patch_name() {
+void MD_MD_GR55_class::request_current_patch_name() {
   request_sysex(GR55_REQUEST_CURRENT_PATCH_NAME);
 }
 
-bool GR55_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
+bool MD_MD_GR55_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
   if (!bank_selection_active()) return false;
 
   if (flash_bank_of_three == 255) return true; // We are not coming from direct select, so all LEDs should flash
@@ -362,7 +362,7 @@ bool GR55_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash th
   return false;
 }
 
-void GR55_class::number_format(uint16_t number, String &Output) {
+void MD_MD_GR55_class::number_format(uint16_t number, String &Output) {
   // Uses patch_number as input and returns Current_patch_number_string as output in format "U01-1"
   // First character is L for Lead, R for Rhythm, O for Other or U for User
   // In guitar mode preset_banks is set to 40, in bass mode it is set to 12, because there a less preset banks in bass mode.
@@ -405,12 +405,12 @@ void GR55_class::number_format(uint16_t number, String &Output) {
   Output += "-" + String((patch_number_corrected % 3) + 1);
 }
 
-void GR55_class::direct_select_format(uint16_t number, String &Output) {
+void MD_MD_GR55_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) Output += "U" + String(number) + "_-_";
   else Output += "U" + String(bank_select_number) + String(number) + "-_";
 }
 
-void GR55_class::direct_select_start() {
+void MD_MD_GR55_class::direct_select_start() {
   Previous_bank_size = bank_size; // Remember the bank size
   device_in_bank_selection = my_device_number + 1;
   bank_size = 300;
@@ -418,7 +418,7 @@ void GR55_class::direct_select_start() {
   direct_select_state = 0;
 }
 
-uint16_t GR55_class::direct_select_patch_number_to_request(uint8_t number) {
+uint16_t MD_MD_GR55_class::direct_select_patch_number_to_request(uint8_t number) {
   uint16_t new_patch_number;
   if (direct_select_state == 0) new_patch_number = (number * 30);
   else new_patch_number = (bank_select_number * 30) + (number * 3);
@@ -426,7 +426,7 @@ uint16_t GR55_class::direct_select_patch_number_to_request(uint8_t number) {
   return new_patch_number - 3;
 }
 
-void GR55_class::direct_select_press(uint8_t number) {
+void MD_MD_GR55_class::direct_select_press(uint8_t number) {
   if (!valid_direct_select_switch(number)) return;
   if (direct_select_state == 0) {
     // First digit pressed
@@ -443,7 +443,7 @@ void GR55_class::direct_select_press(uint8_t number) {
     bank_size = 9;
     bank_select_number = (base_patch / bank_size);
     Current_page = Previous_page; // SCO_select_page will overwrite Previous_page with Current_page, now it will know the way back
-    SCO_select_page(PAGE_GR55_PATCH_BANK);
+    SCO_select_page(GR55_DEFAULT_PAGE1); // Which should give PAGE_GR55_PATCH_BANK
   }
 }
 
@@ -451,7 +451,7 @@ void GR55_class::direct_select_press(uint8_t number) {
 // Selecting and muting the GR55 is done by storing the settings of COSM guitar switch and Normal PU switch
 // and switching both off when guitar is muted and back to original state when the GR55 is selected
 
-void GR55_class::request_guitar_switch_states() {
+void MD_MD_GR55_class::request_guitar_switch_states() {
   delay(10); // Extra delay, otherwise first parameter is not read after patch change
   request_sysex(GR55_SYNTH1_SW, 1);
   request_sysex(GR55_SYNTH2_SW, 1);
@@ -460,7 +460,7 @@ void GR55_class::request_guitar_switch_states() {
   request_onoff = true;
 }
 
-void GR55_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_MD_GR55_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
@@ -483,7 +483,7 @@ void GR55_class::check_guitar_switch_states(const unsigned char* sxdata, short u
   }
 }
 
-void GR55_class::unmute() {
+void MD_MD_GR55_class::unmute() {
   is_on = connected;
   //GR55_select_LED = GR55_PATCH_COLOUR; //Switch the LED on
   write_sysex(GR55_SYNTH1_SW, synth1_onoff); // Switch synth 1 off
@@ -492,13 +492,13 @@ void GR55_class::unmute() {
   write_sysex(GR55_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
 }
 
-void GR55_class::mute() {
+void MD_MD_GR55_class::mute() {
   if ((Setting.US20_emulation_active) && (!is_always_on) && (is_on)) {
     mute_now();
   }
 }
 
-void GR55_class::mute_now() { // Also called when engaging global tuner.
+void MD_MD_GR55_class::mute_now() { // Also called when engaging global tuner.
   is_on = false;
   //  GR55_select_LED = GR55_OFF_COLOUR; //Switch the LED off
   write_sysex(GR55_SYNTH1_SW, 0x01); // Switch synth 1 off
@@ -573,7 +573,7 @@ const PROGMEM GR55_parameter_struct GR55_parameters[] = {
   {0x0DF, 0x1800070A, 101, "AMP PRESC", SHOW_NUMBER, FX_AMP_TYPE, false},
   {0x0E0, 0x1800070B, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, false}, // 20
   {0x0E1, 0x1800070C, 9, "SPKR TYPE", 144, FX_AMP_TYPE, false},
-  {0x128, 0x1800075A, 2, "NS SWITCH", 0, FX_FILTER_TYPE, false},
+  {0x128, 0x1800075A, 2, "NS SWITCH", 0, FX_DYNAMICS_TYPE, false},
   {0x1EC, 0x18000605, 2, "DLY SW", 129 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, false},
   {0x1ED, 0x18000606, 7, "DLY TYPE", 129, FX_DELAY_TYPE, false},
   {0x1F4, 0x1800060C, 2, "RVRB SW", 136 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, false},
@@ -676,8 +676,8 @@ const PROGMEM uint8_t GR55_MFX_colours[20] = {
   FX_MODULATE_TYPE, // Colour for"FLANGER",
   FX_MODULATE_TYPE, // Colour for"STEP FLR",
   FX_AMP_TYPE, // Colour for"AMP SIM",
-  FX_FILTER_TYPE, // Colour for"COMPRESS",
-  FX_FILTER_TYPE, // Colour for"LIMITER",
+  FX_DYNAMICS_TYPE, // Colour for"COMPRESS",
+  FX_DYNAMICS_TYPE, // Colour for"LIMITER",
   FX_DELAY_TYPE, // Colour for"3TAP DLY",
   FX_DELAY_TYPE, // Colour for"TIME DLY",
   FX_FILTER_TYPE, // Colour for"LOFI CPS",
@@ -686,9 +686,9 @@ const PROGMEM uint8_t GR55_MFX_colours[20] = {
 
 const PROGMEM uint8_t GR55_MOD_colours[14] = {
   FX_DIST_TYPE, // Colour for"OD/DS",
-  FX_FILTER_TYPE, // Colour for"WAH",
-  FX_FILTER_TYPE, // Colour for"COMP",
-  FX_FILTER_TYPE, // Colour for"LIMITER",
+  FX_WAH_TYPE, // Colour for"WAH",
+  FX_DYNAMICS_TYPE, // Colour for"COMP",
+  FX_DYNAMICS_TYPE, // Colour for"LIMITER",
   FX_PITCH_TYPE, // Colour for"OCTAVE",
   FX_MODULATE_TYPE, // Colour for"PHASER",
   FX_MODULATE_TYPE, // Colour for"FLANGER",
@@ -701,12 +701,12 @@ const PROGMEM uint8_t GR55_MOD_colours[14] = {
   FX_FILTER_TYPE // Colour for"EQ"
 };
 
-void GR55_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+void MD_MD_GR55_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = GR55_parameters[number].Name;
   else Output = "?";
 }
 
-void GR55_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+void MD_MD_GR55_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters())  {
     uint16_t my_sublist = GR55_parameters[number].Sublist;
     if ((my_sublist > 0) && !(my_sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -734,7 +734,7 @@ void GR55_class::read_parameter_value_name(uint16_t number, uint16_t value, Stri
 }
 
 // Toggle GR55 stompbox parameter
-void GR55_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_MD_GR55_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
 
@@ -750,12 +750,18 @@ void GR55_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
     SP[Sw].Offline_value = value;
     // Show message
     check_update_label(Sw, value);
-    LCD_show_status_message(SP[Sw].Label);
+    String msg = "";
+    if (SP[Sw].Type != ASSIGN) {
+      msg = GR55_parameters[number].Name;
+      msg += ":";
+    }
+    msg += SP[Sw].Label;
+    LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
   }
 }
 
-void GR55_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+void MD_MD_GR55_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   // Work out state of pedal
   if (SP[Sw].Latch == MOMENTARY) {
     SP[Sw].State = 2; // Switch state off
@@ -767,7 +773,11 @@ void GR55_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
 }
 
-bool GR55_class::request_parameter(uint8_t sw, uint16_t number) {
+void MD_MD_GR55_class::read_parameter_title(uint16_t number, String &Output) {
+  Output += GR55_parameters[number].Name;
+}
+
+bool MD_MD_GR55_class::request_parameter(uint8_t sw, uint16_t number) {
   if (can_request_sysex_data()) {
     uint32_t my_address = GR55_parameters[number].Address;
     last_requested_sysex_address = my_address;
@@ -778,13 +788,13 @@ bool GR55_class::request_parameter(uint8_t sw, uint16_t number) {
     return false; // Move to next switch is false. We need to read the parameter first
   }
   else {
-    if ((sw < NUMBER_OF_SWITCHES) && (SP[sw].Type == PAR_BANK)) read_parameter(sw, SP[sw].Offline_value, SP[sw + 1].Offline_value);
+    if ((sw < TOTAL_NUMBER_OF_SWITCHES) && (SP[sw].Type == PAR_BANK)) read_parameter(sw, SP[sw].Offline_value, SP[sw + 1].Offline_value);
     else read_parameter(sw, SP[sw].Offline_value, 0);
     return true;
   }
 }
 
-void GR55_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current GR55 parameter
+void MD_MD_GR55_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current GR55 parameter
   SP[sw].Target_byte1 = byte1;
   SP[sw].Target_byte2 = byte2;
 
@@ -832,13 +842,14 @@ void GR55_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Re
   }
 
   // Set the display message
-  String msg = GR55_parameters[index].Name;
+  String msg = "";
+  if (SP[sw].Type == ASSIGN) msg = GR55_parameters[index].Name;
   if (GR55_parameters[index].Sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
     String type_name = GR55_sublists[GR55_parameters[index].Sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
-    msg += " (" + type_name + ")";
+    msg += "(" + type_name + ")";
   }
   if ((GR55_parameters[index].Sublist > 0) && !(GR55_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
-    msg += ":";
+    if (SP[sw].Type == ASSIGN) msg += ":";
     read_parameter_value_name(index, byte1, msg);
     //  String type_name = GR55_sublists[GR55_parameters[index].Sublist + byte1 - 1];
     //  msg += ":" + type_name;
@@ -847,16 +858,16 @@ void GR55_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Re
   LCD_set_SP_label(sw, msg);
 }
 
-void GR55_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+void MD_MD_GR55_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number; // Read the parameter number (index to GR55-parameter array)
   if (index != NOT_FOUND) {
     if ((GR55_parameters[index].Sublist > 0) && !(GR55_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
       LCD_clear_SP_label(Sw);
       // Set the display message
-      String msg = GR55_parameters[index].Name;
+      String msg = "";
       //String type_name = GR55_sublists[GR55_parameters[index].Sublist + value - 1];
       //msg += ":" + type_name;
-      msg += ":";
+      //msg += ":";
       read_parameter_value_name(index, value, msg);
 
       //Copy it to the display name:
@@ -868,11 +879,11 @@ void GR55_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the 
   }
 }
 
-uint16_t GR55_class::number_of_parameters() {
+uint16_t MD_MD_GR55_class::number_of_parameters() {
   return GR55_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t GR55_class::number_of_values(uint16_t parameter) {
+uint8_t MD_MD_GR55_class::number_of_values(uint16_t parameter) {
   if (parameter < GR55_NUMBER_OF_PARAMETERS) return GR55_parameters[parameter].NumVals;
   else return 0;
 }
@@ -896,26 +907,32 @@ uint8_t GR55_class::number_of_values(uint16_t parameter) {
   };*/
 const PROGMEM uint32_t GR55_assign_address[GR55_NUMBER_OF_ASSIGNS] = { 0x1800010C, 0x1800011F, 0x18000132, 0x18000145, 0x18000158, 0x1800016B, 0x1800017E, 0x18000211 };
 
-void GR55_class::read_assign_name(uint8_t number, String & Output) {
+void MD_MD_GR55_class::read_assign_name(uint8_t number, String & Output) {
   //if (number < GR55_NUMBER_OF_ASSIGNS)  Output += GR55_assign_title[number];
   if (number < GR55_NUMBER_OF_ASSIGNS)  Output += "ASSIGN " + String(number + 1);
   else Output += "?";
 }
 
-void GR55_class::read_assign_trigger(uint8_t number, String & Output) {
+void MD_MD_GR55_class::read_assign_short_name(uint8_t number, String & Output) {
+  //if (number < GR55_NUMBER_OF_ASSIGNS)  Output += GR55_assign_title[number];
+  if (number < GR55_NUMBER_OF_ASSIGNS)  Output += "ASG" + String(number + 1);
+  else Output += "?";
+}
+
+void MD_MD_GR55_class::read_assign_trigger(uint8_t number, String & Output) {
   if ((number > 0) && (number < 128)) Output = "CC#" + String(number);
   else Output = "-";
 }
 
-uint8_t GR55_class::get_number_of_assigns() {
+uint8_t MD_MD_GR55_class::get_number_of_assigns() {
   return GR55_NUMBER_OF_ASSIGNS;
 }
 
-uint8_t GR55_class::trigger_follow_assign(uint8_t number) {
+uint8_t MD_MD_GR55_class::trigger_follow_assign(uint8_t number) {
   return number + 21; // Default cc numbers are 21 and up
 }
 
-void GR55_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to GR55_ASSIGN is pressed
+void MD_MD_GR55_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to GR55_ASSIGN is pressed
   // Send cc MIDI command to GR-55
   uint8_t cc_number = SP[Sw].Trigger;
   MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
@@ -927,12 +944,12 @@ void GR55_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to GR55
     else value = SP[Sw].Assign_min;
     check_update_label(Sw, value);
   }
-  LCD_show_status_message(SP[Sw].Label);
+  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 
   if (SP[Sw].Assign_on) update_page = REFRESH_PAGE; // To update the other switch states, we re-load the current page
 }
 
-void GR55_class::assign_release(uint8_t Sw) { // Switch set to GR55_ASSIGN is released
+void MD_MD_GR55_class::assign_release(uint8_t Sw) { // Switch set to GR55_ASSIGN is released
   // Send cc MIDI command to GR-55
   uint8_t cc_number = SP[Sw].Trigger;
   MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
@@ -942,7 +959,7 @@ void GR55_class::assign_release(uint8_t Sw) { // Switch set to GR55_ASSIGN is re
     if (SP[Sw].Assign_on) {
       SP[Sw].State = 2; // Switch state off
       check_update_label(Sw, SP[Sw].Assign_min);
-      LCD_show_status_message(SP[Sw].Label);
+      LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
     }
     else SP[Sw].State = 0; // Assign off, so LED should be off as well
 
@@ -950,12 +967,12 @@ void GR55_class::assign_release(uint8_t Sw) { // Switch set to GR55_ASSIGN is re
   }
 }
 
-void GR55_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to GR55_ASSIGN is loaded in SP array
+void MD_MD_GR55_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to GR55_ASSIGN is loaded in SP array
   SP[sw].Trigger = cc_number; //Save the cc_number in the Trigger variable
   SP[sw].Assign_number = assign_number;
 }
 
-void GR55_class::request_current_assign(uint8_t sw) {
+void MD_MD_GR55_class::request_current_assign(uint8_t sw) {
   uint8_t index = SP[sw].Assign_number;  //index should be between 0 and 7
   //SP[sw].Address = GR55_assign_address[index];
 
@@ -971,7 +988,7 @@ void GR55_class::request_current_assign(uint8_t sw) {
   else PAGE_request_next_switch(); // Wrong assign number given in Config - skip it
 }
 
-void GR55_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_MD_GR55_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   bool found;
   String msg;
   uint8_t assign_switch = sxdata[11];
@@ -1042,7 +1059,7 @@ void GR55_class::read_current_assign(uint8_t sw, uint32_t address, const unsigne
   }
 }
 
-bool GR55_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the GR55_parameters table
+bool MD_MD_GR55_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the GR55_parameters table
 
   // Lookup in GR55_parameter array
   bool found = false;
@@ -1133,7 +1150,7 @@ const PROGMEM char GR55_preset_bass_patch_names[GR55_NUMBER_OF_FACTORY_BASS_PATC
   "for Normal PU O1", "for Normal PU O2", "for Normal PU O3", "WINE-N-BASSDELAY", "AEROPLANESUSTAIN", "Space SAW", "Gtr Hi/Bass Lo", "CompuRhythm", "S&H Groove/CTL"
 };
 
-void GR55_class::read_preset_name(uint8_t number, uint16_t patch) {
+void MD_MD_GR55_class::read_preset_name(uint8_t number, uint16_t patch) {
   String lbl;
   if (!bass_mode) lbl = GR55_preset_patch_names[patch - 297]; //Read the label from the guitar array
   else lbl = GR55_preset_bass_patch_names[patch - 297]; //Read the label from the bass array
@@ -1143,13 +1160,13 @@ void GR55_class::read_preset_name(uint8_t number, uint16_t patch) {
 
 // ********************************* Section 7: GR55 Expression pedal control ********************************************
 
-void GR55_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+void MD_MD_GR55_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   LCD_show_bar(0, value); // Show it on the main display
-  LCD_show_status_message("Use GR55 EXP PDL");
+  LCD_show_popup_label("Use GR55 EXP PDL", MESSAGE_TIMER_LENGTH);
   //update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page*/
 }
 
-void GR55_class::toggle_expression_pedal(uint8_t sw) {
+void MD_MD_GR55_class::toggle_expression_pedal(uint8_t sw) {
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 2) current_exp_pedal = 1;
@@ -1159,12 +1176,12 @@ void GR55_class::toggle_expression_pedal(uint8_t sw) {
   write_sysex(0x1800004D, value);
   SP[sw].PP_number = GR55_EXP_SW;
   read_parameter(sw, exp_sw_type, 0); // Update label temporary to show switch state
-  LCD_show_status_message(SP[sw].Label);
+  LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
   update_exp_label(sw);
   update_page = REFRESH_FX_ONLY;
 }
 
-bool GR55_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
+bool MD_MD_GR55_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal <= 2) {
     last_requested_sysex_switch = sw;
@@ -1175,7 +1192,7 @@ bool GR55_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for 
   return true;
 }
 
-void GR55_class::update_exp_label(uint8_t sw) {
+void MD_MD_GR55_class::update_exp_label(uint8_t sw) {
   if (current_exp_pedal == 1) {
     SP[sw].PP_number = GR55_EXP;
     read_parameter(sw, exp_type, 0);
@@ -1185,8 +1202,3 @@ void GR55_class::update_exp_label(uint8_t sw) {
     read_parameter(sw, exp_on_type, 0);
   }
 }
-
-
-
-
-

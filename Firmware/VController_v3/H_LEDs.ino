@@ -39,24 +39,26 @@ struct colour {
 #define FX_DELAY_TYPE 233 // For delays
 #define FX_REVERB_TYPE 232// For reverb FX
 #define FX_LOOPER_TYPE 231 // For looper
+#define FX_WAH_TYPE 230 // For wahs
+#define FX_DYNAMICS_TYPE 229 // For gates/etc
 
 //Lets make some colours (R,G,B)
 
 
 #define NUMBER_OF_COLOURS 32
-#define NUMBER_OF_SELECTABLE_COLOURS 10
+#define NUMBER_OF_SELECTABLE_COLOURS 11
 colour colours[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 0 is LED OFF
   {0, 255, 0} ,  // Colour 1 is Green
   {255, 0, 0} ,  //  Colour 2 is Red
   {0, 0, 255} ,  // Colour 3 is Blue
-  {255, 128, 0} ,  // Colour 4 is Orange
+  {255, 92, 0} ,  // Colour 4 is Orange
   {0, 204, 128} ,  // Colour 5 is Cyan
   {204, 255, 204} ,  // Colour 6 is White
   {204, 204, 0} ,   // Colour 7 is Yellow
-  {128, 0, 204} ,   // Colour 8 is Purple
+  {128, 0, 255} ,   // Colour 8 is Purple
   {255, 0, 128} ,   // Colour 9 is Pink
-  {0, 0, 0} ,   // Colour 10 is spare
+  {92, 255, 114} ,   // Colour 10 is Soft green
   {0, 0, 0} ,   // Colour 11 is spare
   {0, 0, 0} ,   // Colour 12 is spare
   {0, 0, 0} ,   // Colour 13 is spare
@@ -66,13 +68,13 @@ colour colours[NUMBER_OF_COLOURS] = {
   {0, 51, 0} ,  // Colour 17 is Green dimmed
   {51, 0, 0} ,  //  Colour 18 is Red dimmed
   {0, 0, 51} ,  // Colour 19 is Blue dimmed
-  {51, 51, 0} ,  // Colour 20 is Orange dimmed
+  {51, 26, 0} ,  // Colour 20 is Orange dimmed
   {0, 41, 25} ,  // Colour 21 is Cyan dimmed
   {51, 51, 51} ,  // Colour 22 is White dimmed
   {51, 51, 0} ,   // Colour 23 is Yellow dimmed
-  {51, 0, 102} ,   // Colour 24 is Purple dimmed
-  {51, 0, 51} ,   // Colour 25 is Pink dimmed
-  {0, 0, 0} ,   // Colour 26 is spare dimmed
+  {36, 0, 72} ,   // Colour 24 is Purple dimmed
+  {36, 0, 36} ,   // Colour 25 is Pink dimmed
+  {18, 40, 23} ,   // Colour 26 is Soft green dimmed
   {0, 0, 0} ,   // Colour 27 is spare dimmed
   {0, 0, 0} ,   // Colour 28 is spare dimmed
   {0, 0, 0} ,   // Colour 29 is spare dimmed
@@ -91,7 +93,7 @@ colour Backlight_colours[NUMBER_OF_COLOURS] = {
   {204, 204, 0} ,   // Colour 7 is Yellow
   {128, 50, 204} ,   // Colour 8 is Purple
   {255, 50, 128} ,   // Colour 9 is Pink
-  {0, 0, 0} ,   // Colour 10 is spare
+  {92, 255, 114} ,   // Colour 10 is Soft Green
   {0, 0, 0} ,   // Colour 11 is spare
   {0, 0, 0} ,   // Colour 12 is spare
   {0, 0, 0} ,   // Colour 13 is spare
@@ -117,10 +119,34 @@ Adafruit_NeoPixel Backlights = Adafruit_NeoPixel(NUMBER_OF_BACKLIGHTS, BACKLIGHT
 uint8_t Backlight_order[NUMBER_OF_BACKLIGHTS] = {BACKLIGHT_ORDER};
 #endif
 
+#ifdef MAINDISPLAYBACKLIGHTPIN
+Adafruit_NeoPixel Main_backlight = Adafruit_NeoPixel(1, MAINDISPLAYBACKLIGHTPIN, NEO_RGB + NEO_KHZ400);
+#endif
+
 boolean update_LEDS = true;
 uint8_t global_tap_tempo_LED;
 uint8_t prev_page_shown = 255;
-uint8_t MIDI_LEDs[NUMBER_OF_LEDS]; 
+uint8_t MIDI_LEDs[NUMBER_OF_LEDS];
+uint8_t main_backlight_colour = 0;
+
+class LED_init_class
+{
+  public:
+    LED_init_class(); // Constructor
+};
+
+LED_init_class::LED_init_class() {
+  LEDs.begin(); // This initializes the NeoPixel library.
+
+  //Turn the LEDs off repeatedly for 100 ms to reduce startup flash of LEDs
+  //When neopixel LEDs are powered on, they burn at 100%.
+  unsigned int startupTimer = millis();
+  while (millis() - startupTimer <= STARTUP_TIMER_LENGTH) {
+    LEDs.show();
+  }
+}
+
+LED_init_class LED_init; // This will dim the Neopixel LEDs earlier in the code...
 
 void setup_LED_control()
 {
@@ -132,13 +158,19 @@ void setup_LED_control()
   while (millis() - startupTimer <= STARTUP_TIMER_LENGTH) {
     LEDs.show();
   }
-  LEDflashTimer = millis(); // Set the timer
+  LEDflashTimer = millis(); // Initialize timer for flashing LEDs
 
   // Startup backlights
 #ifdef BACKLIGHTNEOPIXELPIN
   Backlights.begin();
   //Backlights.setPixelColor(0,255,255,255);
   Backlights.show();
+#endif
+
+#ifdef MAINDISPLAYBACKLIGHTPIN
+  Main_backlight.begin();
+  //Main_backlight_show_colour(6);
+  Main_backlight.show();
 #endif
 }
 
@@ -164,6 +196,10 @@ void LED_update() {
   Backlights.setBrightness(Setting.Backlight_brightness);
 #endif
 
+#ifdef MAINDISPLAYBACKLIGHTPIN
+  Main_backlight.setBrightness(Setting.Backlight_brightness);
+#endif
+
   //Check the switch_states on the current page
   for (uint8_t s = 0; s < NUMBER_OF_LEDS; s++) {
 
@@ -175,38 +211,28 @@ void LED_update() {
 
     if (Dev < NUMBER_OF_DEVICES) {
       switch (SP[sw].Type) {
-        case PATCH_SEL:
-          if (Device[Dev]->patch_number == SP[sw].PP_number) {
-            if (Device[Dev]->is_on) LED_show_colour(s, SP[sw].Colour);
-            else LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show off colour
-          }
-          else LED_show_colour(s, 0);
-          Backlight_show_colour(s, SP[sw].Colour);
-          break;
-        case PATCH_BANK:
-          if (Device[Dev]->flash_LEDs_for_patch_bank_switch(sw)) LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
-          else {
-            if (Device[Dev]->patch_number == SP[sw].PP_number) {
-              if (Device[Dev]->is_on) {
-                LED_show_colour(s, SP[sw].Colour);
-              }
-              else LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show off colour
+        case PATCH:
+          if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
+            if ((SP[sw].Sel_type == BANKSELECT) && (Device[Dev]->flash_LEDs_for_patch_bank_switch(sw))) {
+              LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
             }
             else {
-              LED_show_colour(s, 0);
+              if (Device[Dev]->patch_number == SP[sw].PP_number) {
+                if (Device[Dev]->is_on) LED_show_colour(s, SP[sw].Colour);
+                else LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show dimmed colour for devices that are not connected
+              }
+              else LED_show_colour(s, 0);
             }
+          }
+          else {
+            if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
+            else LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
           }
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case PAR_BANK_CATEGORY:
-        case BANK_UP:
-        case BANK_DOWN:
         case PAR_BANK_UP:
         case PAR_BANK_DOWN:
-        //case ASG_BANK_UP:
-        //case ASG_BANK_DOWN:
-        case PREV_PATCH:
-        case NEXT_PATCH:
         case TOGGLE_EXP_PEDAL:
         case SAVE_PATCH:
           colour = SP[sw].Colour;
@@ -227,7 +253,6 @@ void LED_update() {
           break;
         case PARAMETER:
         case PAR_BANK:
-        case ASSIGN:
           if ((SP[sw].Latch == MOMENTARY) || (SP[sw].Latch == TOGGLE)) {
             //DEBUGMSG("State pedal " + String(s) + ": " + String(SP[sw].State));
             if (SP[sw].State == 1) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));  // LED on
@@ -238,11 +263,35 @@ void LED_update() {
             if (SP[sw].Pressed) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
             else LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour));
           }
-          Backlight_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
+          if (Device[Dev]->connected) Backlight_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
+          else Backlight_show_colour(s, Device[Dev]->my_LED_colour);
+          break;
+        case ASSIGN:
+          if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
+            if ((SP[sw].Latch == MOMENTARY) || (SP[sw].Latch == TOGGLE)) {
+              //DEBUGMSG("State pedal " + String(s) + ": " + String(SP[sw].State));
+              if (SP[sw].State == 1) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));  // LED on
+              if (SP[sw].State == 2) LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour)); // LED dimmed
+              if (SP[sw].State == 0) LED_show_colour(s, 0); // LED off
+            }
+            else { // For the TRI/FOUR/STEP/RANGE/UPDOWN only light up when pressed.
+              if (SP[sw].Pressed) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
+              else LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour));
+            }
+            if (Device[Dev]->connected) Backlight_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
+            else Backlight_show_colour(s, Device[Dev]->my_LED_colour);
+          }
+          else {
+            colour = SP[sw].Colour;
+            if (SP[sw].Pressed) LED_show_colour(s, colour);
+            else LED_show_colour(s, colour | LED_DIMMED);
+            Backlight_show_colour(s, colour);
+          }
           break;
         case OPEN_PAGE_DEVICE:
         case OPEN_NEXT_PAGE_OF_DEVICE:
-          if ((SP[sw].Pressed) || ((SP[sw].PP_number == prev_page_shown) && (SP[sw].Device == Current_device))) LED_show_colour(s, Setting.LED_global_colour);
+          //if ((SP[sw].Pressed) || ((SP[sw].PP_number == prev_page_shown) && (SP[sw].Device == Current_device))) LED_show_colour(s, Setting.LED_global_colour);
+          if (SP[sw].Pressed) LED_show_colour(s, Setting.LED_global_colour);
           else LED_show_colour(s, 0);
           Backlight_show_colour(s, Setting.LED_global_colour);
           break;
@@ -258,7 +307,7 @@ void LED_update() {
           break;
         case LOOPER:
           LED_show_colour(s, Device[Dev]->show_looper_LED(sw));
-          Backlight_show_colour(s, Setting.FX_LOOPER_colour);
+          Backlight_show_colour(s, Device[Dev]->show_looper_LED(sw) & 0x0F);
           break;
         default:
           LED_show_colour(s, 0); // Show nothing with undefined LED
@@ -283,6 +332,7 @@ void LED_update() {
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case MIDI_NOTE:
+        case MENU:
           if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
           else LED_show_colour(s, 0);
           Backlight_show_colour(s, SP[sw].Colour);
@@ -300,12 +350,19 @@ void LED_update() {
           }
           Backlight_show_colour(s, SP[sw].Colour);
           break;
-        case OPEN_PAGE:
-        case MENU:
-        case SELECT_NEXT_DEVICE:
-          if ((SP[sw].Pressed) || (SP[sw].PP_number == prev_page_shown)) LED_show_colour(s, SP[sw].Colour);
+        case PAGE:
+          if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
           else LED_show_colour(s, 0);
+          if (SP[sw].Latch == BANKSELECT) { // Override colour if bank is in selection
+            if ((device_in_bank_selection == PAGE_BANK_SELECTION_IN_PROGRESS) && (SCO_valid_page(SP[sw].PP_number))) LED_show_colour(s, SP[sw].Colour | LED_FLASHING);
+          }
           Backlight_show_colour(s, SP[sw].Colour);
+          break;
+        case SELECT_NEXT_DEVICE:
+          colour = Device[SCO_get_number_of_next_device()]->my_LED_colour;
+          if (SP[sw].Pressed) LED_show_colour(s, colour);
+          else LED_show_dimmed(s, colour);
+          Backlight_show_colour(s, colour);
           break;
         case GLOBAL_TUNER:
           if (global_tuner_active) LED_show_colour(s, Setting.LED_global_colour);
@@ -319,6 +376,9 @@ void LED_update() {
     }
   }
   LEDs.show();
+  //#ifdef MAINDISPLAYBACKLIGHTPIN
+  //  Main_backlight.show();
+  //#endif
 #ifdef BACKLIGHTNEOPIXELPIN
   Backlights.show();
 #endif
@@ -343,6 +403,8 @@ uint8_t LED_FX_type_colour(uint8_t type) { // Read the FX colour from the settin
     case FX_DELAY_TYPE: return Setting.FX_DELAY_colour;
     case FX_REVERB_TYPE: return Setting.FX_REVERB_colour;
     case FX_LOOPER_TYPE: return Setting.FX_LOOPER_colour;
+    case FX_WAH_TYPE: return Setting.FX_WAH_colour;
+    case FX_DYNAMICS_TYPE: return Setting.FX_DYNAMICS_colour;
     default: return type;
   }
 }
@@ -397,6 +459,18 @@ void Backlight_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets 
 #endif
 }
 
+
+void Main_backlight_show_colour(uint8_t colour_number) { // Sets the specified LED to the specified colour
+#ifdef MAINDISPLAYBACKLIGHTPIN
+  if ((colour_number != main_backlight_colour) && (colour_number < NUMBER_OF_COLOURS)) {
+    DEBUGMSG("Main Backlight gets colour #" + String(colour_number));
+    Main_backlight.setPixelColor(0, LEDs.Color(Backlight_colours[colour_number].red, Backlight_colours[colour_number].green, Backlight_colours[colour_number].blue));
+    Main_backlight.show();
+    main_backlight_colour = colour_number;
+  }
+#endif
+}
+
 void LED_turn_all_off() {
   for (uint8_t l = 0; l < NUMBER_OF_LEDS; l++) {
     LEDs.setPixelColor(l, LEDs.Color(0, 0, 0));
@@ -410,12 +484,21 @@ void LED_turn_all_off() {
 #endif
 }
 
-void LED_show_middle_four() { // To indicate EEPROM memory being written.
+void LED_show_initializing_data() { // To indicate EEPROM memory being written.
+#ifdef VCMINI
+  if (NUMBER_OF_LEDS < 3) return;
+  LED_show_colour(0, Setting.LED_global_colour);
+  LED_show_colour(1, Setting.LED_global_colour);
+  LED_show_colour(2, Setting.LED_global_colour);
+  LEDs.show();
+#else
+  if (NUMBER_OF_LEDS < 10) return;
   LED_show_colour(5, Setting.LED_global_colour);
   LED_show_colour(6, Setting.LED_global_colour);
   LED_show_colour(9, Setting.LED_global_colour);
   LED_show_colour(10, Setting.LED_global_colour);
   LEDs.show();
+#endif
 }
 
 void LED_flash() {
@@ -447,4 +530,3 @@ void LED_show_are_you_sure() {
   LCD_switch_on_backlight(10);
 #endif
 }
-

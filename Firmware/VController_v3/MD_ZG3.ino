@@ -13,6 +13,7 @@
 #define ZG3_MIDI_CHANNEL 1
 #define ZG3_PATCH_MIN 0
 #define ZG3_PATCH_MAX 99
+#define ZG3_MIDI_TIME 100 // Minimal time inbetween requests for patch data from MS70
 
 // Documentation of Zoom sysex has been moved to http://www.vguitarforums.com/smf/index.php?topic=4329.msg131444#msg131444 (The ZOOM G3 v2 MIDI specification)
 // The relevant messages are repeated here
@@ -36,7 +37,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void ZG3_class::init() // Default values for variables
+void MD_ZG3_class::init() // Default values for variables
 {
   // Variables
   enabled = DEVICE_DETECT; // Default value
@@ -49,20 +50,30 @@ void ZG3_class::init() // Default values for variables
   patch_max = ZG3_PATCH_MAX;
   sysex_delay_length = 5; // time between sysex messages (in msec).
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the Zoom G3 does not have to respond before disconnection
-  bank_size = 10;
+  //bank_size = 10;
   my_LED_colour = 1; // Default value: green
   MIDI_channel = ZG3_MIDI_CHANNEL; // Default value
-  bank_number = 0; // Default value
+  //bank_number = 0; // Default value
   is_always_on = true; // Default value
-  my_device_page1 = PAGE_ZOOM_PATCH_BANK; // Default value
-  my_device_page2 = 0; // Default value
-  my_device_page3 = 0; // Default value
-  my_device_page4 = 0; // Default value
+  my_device_page1 = ZG3_DEFAULT_PAGE1; // Default value
+  my_device_page2 = ZG3_DEFAULT_PAGE2; // Default value
+  my_device_page3 = ZG3_DEFAULT_PAGE3; // Default value
+  my_device_page4 = ZG3_DEFAULT_PAGE4; // Default value
+}
+
+void MD_ZG3_class::update() {
+  if ((send_patch_change) && (millis() > midi_timer)) { // We delay the sending of a PC message if these come to close together.
+    MIDI_send_PC(patch_number, MIDI_channel, MIDI_port);
+    DEBUGMSG("out(" + String(device_name) + ") PC" + String(patch_number)); //Debug
+    do_after_patch_selection();
+    midi_timer = millis() + ZG3_MIDI_TIME;
+    send_patch_change = false;
+  }
 }
 
 // ********************************* Section 2: ZOOM G3 common MIDI in functions ********************************************
 
-void ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+void MD_ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a ZOOM G3
   if ((port == MIDI_port) && (sxdata[1] == 0x52) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == ZG3_MODEL_NUMBER)) {
@@ -134,7 +145,7 @@ void ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int s
 
 // Detection of Zoom G3
 
-void ZG3_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_ZG3_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Zoom G3
   if ((sxdata[5] == 0x52) && (sxdata[6] == ZG3_MODEL_NUMBER) && (sxdata[7] == 0x00)) {
     no_response_counter = 0;
@@ -142,7 +153,7 @@ void ZG3_class::identity_check(const unsigned char* sxdata, short unsigned int s
   }
 }
 
-void ZG3_class::do_after_connect() {
+void MD_ZG3_class::do_after_connect() {
   is_on = true;
   write_sysex(ZG3_EDITOR_MODE_ON); // Put the Zoom G3 in EDITOR mode
   write_sysex(ZG3_REQUEST_CURRENT_PATCH_NUMBER);
@@ -151,25 +162,25 @@ void ZG3_class::do_after_connect() {
 
 // ********************************* Section 3: ZOOM G3 common MIDI out functions ********************************************
 
-void ZG3_class::write_sysex(uint8_t message) {
+void MD_ZG3_class::write_sysex(uint8_t message) {
   uint8_t sysexmessage[6] = {0xF0, 0x52, MIDI_device_id, ZG3_MODEL_NUMBER, message, 0xF7};
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 6, MIDI_port);
 }
 
-void ZG3_class::request_patch(uint8_t number) { //Will request the complete patch information from the Zoom G3 (will receive 120 bytes as an answer)
+void MD_ZG3_class::request_patch(uint8_t number) { //Will request the complete patch information from the Zoom G3 (will receive 120 bytes as an answer)
   uint8_t sysexmessage[9] = {0xF0, 0x52, MIDI_device_id, ZG3_MODEL_NUMBER, 0x09, 0x00, 0x00, number, 0xF7};
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 9, MIDI_port);
 }
 
-void ZG3_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an effect on or off
+void MD_ZG3_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an effect on or off
   uint8_t sysexmessage[10] = {0xF0, 0x52, MIDI_device_id, ZG3_MODEL_NUMBER, 0x31, number, 0x00, state, 0x00, 0xF7}; // F0 52 00 5A 31 00 (FX) 00 01 (on) 00 F7
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 10, MIDI_port);
 }
 
-void ZG3_class::set_bpm() { //Will change the bpm to the specified value
+void MD_ZG3_class::set_bpm() { //Will change the bpm to the specified value
   if (connected) {
     uint8_t sysexmessage[10] = {0xF0, 0x52, MIDI_device_id, ZG3_MODEL_NUMBER, 0x31, 0x06, 0x08, (uint8_t)(Setting.Bpm & 0x7F), (uint8_t)(Setting.Bpm >> 7), 0xF7}; // F0 52 00 5A 31 06 08 7A 01 F7
     //check_sysex_delay();
@@ -177,13 +188,13 @@ void ZG3_class::set_bpm() { //Will change the bpm to the specified value
   }
 }
 
-void ZG3_class::start_tuner() {
+void MD_ZG3_class::start_tuner() {
   if (connected) {
     MIDI_send_CC(0x4A, 0x40, MIDI_channel, MIDI_port); // Only works for v1 firmware on the G3
   }
 }
 
-void ZG3_class::stop_tuner() {
+void MD_ZG3_class::stop_tuner() {
   if (connected) {
     MIDI_send_CC(0x4A, 0x00, MIDI_channel, MIDI_port); // Only works for v1 firmware on the G3
   }
@@ -191,7 +202,16 @@ void ZG3_class::stop_tuner() {
 
 // ********************************* Section 4: G3 program change ********************************************
 
-void ZG3_class::do_after_patch_selection() {
+void MD_ZG3_class::select_patch(uint16_t new_patch) {
+
+  if (new_patch == patch_number) unmute();
+  patch_number = new_patch;
+  send_patch_change = true;
+  update_LEDS = true;
+  update_main_lcd = true;
+}
+
+void MD_ZG3_class::do_after_patch_selection() {
   is_on = connected;
   Current_patch_number = patch_number;
   update_LEDS = true;
@@ -206,10 +226,10 @@ void ZG3_class::do_after_patch_selection() {
   }
 }
 
-void ZG3_class::page_check() { // Checks if the current patch is on the page
+void MD_ZG3_class::page_check() { // Checks if the current patch is on the page
   bool onpage = false;
   for (uint8_t s = 0; s < NUMBER_OF_SWITCHES; s++) {
-    if ((SP[s].Type == PATCH_BANK) && (SP[s].PP_number == patch_number)) {
+    if ((SP[s].Type == PATCH) && (SP[s].Sel_type == BANKSELECT) && (SP[s].PP_number == patch_number)) {
       onpage = true;
       current_patch_name = SP[s].Label; // Set patchname correctly
       ZG3_Recall_FXs(s); // Copy the FX button states from memory
@@ -222,7 +242,7 @@ void ZG3_class::page_check() { // Checks if the current patch is on the page
   }
 }
 
-bool ZG3_class::request_patch_name(uint8_t sw, uint16_t number) {
+bool MD_ZG3_class::request_patch_name(uint8_t sw, uint16_t number) {
   DEBUGMSG("Requesting patch " + String(number));
   if (number > patch_max) return true;
   last_requested_sysex_switch = sw;
@@ -231,13 +251,13 @@ bool ZG3_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void ZG3_class::number_format(uint16_t number, String &Output) {
+void MD_ZG3_class::number_format(uint16_t number, String &Output) {
   char BankChar = char(65 + (number / 10));
   Output.append(BankChar);
   Output.append(String(number % 10));
 }
 
-void ZG3_class::direct_select_format(uint16_t number, String &Output) {
+void MD_ZG3_class::direct_select_format(uint16_t number, String &Output) {
   char BankChar;
   if (direct_select_state == 0) {
     BankChar = 65 + number;
@@ -263,7 +283,7 @@ const PROGMEM ZG3_FX_type_struct ZG3_FX_types[] = { // Table with the name and c
   {"M-FILTER", FX_FILTER_TYPE}, // 01
   {"THE VIBE", FX_MODULATE_TYPE}, // 02
   {"Z-ORGAN", FX_MODULATE_TYPE}, // 03
-  {"SLICER", FX_FILTER_TYPE}, // 04
+  {"SLICER", FX_MODULATE_TYPE}, // 04
   {"PHASE DELAY", FX_DELAY_TYPE}, // 05
   {"FILTER DELAY", FX_DELAY_TYPE}, // 06
   {"PITCH DELAY", FX_DELAY_TYPE}, // 07
@@ -282,21 +302,21 @@ const PROGMEM ZG3_FX_type_struct ZG3_FX_types[] = { // Table with the name and c
   {"COMP PHASER", FX_MODULATE_TYPE}, // 20
   {"COMP AWAH", FX_MODULATE_TYPE}, // 21
   {"FLANGER V-CHO", FX_MODULATE_TYPE}, // 22
-  {"COMP OD", FX_FILTER_TYPE}, // 23
-  {"COMP", FX_FILTER_TYPE}, // 24 -Start
-  {"Rock COMP", FX_FILTER_TYPE}, // 25
-  {"M COMP", FX_FILTER_TYPE}, // 26
+  {"COMP OD", FX_DYNAMICS_TYPE}, // 23
+  {"COMP", FX_DYNAMICS_TYPE}, // 24 -Start
+  {"Rock COMP", FX_DYNAMICS_TYPE}, // 25
+  {"M COMP", FX_DYNAMICS_TYPE}, // 26
   {"SLOW ATTACK", FX_FILTER_TYPE}, // 27
-  {"ZNR", FX_FILTER_TYPE}, // 28
-  {"NOISE GATE", FX_FILTER_TYPE}, // 29
+  {"ZNR", FX_DYNAMICS_TYPE}, // 28
+  {"NOISE GATE", FX_DYNAMICS_TYPE}, // 29
   {"DIRTY GATE", FX_AMP_TYPE}, // 30
   {"GRAPHIC EQ", FX_FILTER_TYPE}, // 31
   {"PARA EQ", FX_FILTER_TYPE}, // 32
   {"COMB FILTER", FX_FILTER_TYPE}, // 33
-  {"AUTO WAH", FX_FILTER_TYPE}, // 34
-  {"RESONANCE", FX_FILTER_TYPE}, // 35
-  {"STEP", FX_FILTER_TYPE}, // 36
-  {"CRY", FX_FILTER_TYPE}, // 37
+  {"AUTO WAH", FX_WAH_TYPE}, // 34
+  {"RESONANCE", FX_WAH_TYPE}, // 35
+  {"STEP", FX_WAH_TYPE}, // 36
+  {"CRY", FX_WAH_TYPE}, // 37
   {"OCTAVE", FX_PITCH_TYPE}, // 38
   {"TREMOLO", FX_MODULATE_TYPE}, // 39
   {"PHASER", FX_MODULATE_TYPE}, // 40
@@ -327,8 +347,8 @@ const PROGMEM ZG3_FX_type_struct ZG3_FX_types[] = { // Table with the name and c
   {"ARENA REVERB", FX_REVERB_TYPE}, // 65
   {"EARLY REFLECTION", FX_REVERB_TYPE}, // 66
   {"AIR", FX_REVERB_TYPE}, // 67
-  {"PEDAL VX", FX_FILTER_TYPE}, // 68
-  {"PEDAL CRY", FX_FILTER_TYPE}, // 69
+  {"PEDAL VX", FX_WAH_TYPE}, // 68
+  {"PEDAL CRY", FX_WAH_TYPE}, // 69
   {"PEDAL PITCH", FX_PITCH_TYPE}, // 70
   {"PEDAL MN PIT", FX_PITCH_TYPE}, // 71
   {"BOOSTER", FX_DIST_TYPE}, // 72
@@ -384,20 +404,31 @@ const PROGMEM ZG3_FX_type_struct ZG3_FX_types[] = { // Table with the name and c
 
 const uint16_t ZG3_NUMBER_OF_FX = sizeof(ZG3_FX_types) / sizeof(ZG3_FX_types[0]);
 
-void ZG3_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+void MD_ZG3_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
   // Send sysex MIDI command to Zoom G3
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   set_FX_state(SP[Sw].PP_number, value & 0x01);
+  
+  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 }
 
-void ZG3_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+void MD_ZG3_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
   if (SP[Sw].Latch == MOMENTARY) {
     set_FX_state(SP[Sw].PP_number, cmd->Value2);
   }
 }
 
 // Parameters are the 6 FX buttons
-bool ZG3_class::request_parameter(uint8_t sw, uint16_t number) {
+void MD_ZG3_class::read_parameter_title(uint16_t number, String &Output) {
+  Output += "FX " + String(number + 1);
+}
+
+void MD_ZG3_class::read_parameter_title_short(uint16_t number, String &Output) {
+  uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
+  Output += String(number + 1) + ":" + ZG3_FX_types[FX_type].Name;
+}
+
+bool MD_ZG3_class::request_parameter(uint8_t sw, uint16_t number) {
   //Effect type and state are stored in the ZG3_FX array
   //Effect can have three states: 0 = no effect, 1 = on, 2 = off
   if (number < NUMBER_OF_FX_SLOTS) {
@@ -406,32 +437,30 @@ bool ZG3_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 
   uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
-  String msg = "FX" + String(number + 1) + ":" + ZG3_FX_types[FX_type].Name;  //Find the patch name in the ZG3_FX_types array
-  LCD_set_SP_label(sw, msg);
+  LCD_set_SP_label(sw, ZG3_FX_types[FX_type].Name); //Find the patch name in the ZG3_FX_types array
   SP[sw].Colour = ZG3_FX_types[FX_type].Colour; //Find the LED colour in the ZG3_FX_types array
   return true; // Move to next switch is true
 }
 
 // Menu options for FX states
-void ZG3_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
+void MD_ZG3_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
   if (number < number_of_parameters())  Output = "FX" + String(number + 1) + " SW";
   else Output = "?";
 }
 
-uint16_t ZG3_class::number_of_parameters() {
+uint16_t MD_ZG3_class::number_of_parameters() {
   return 6;
 }
 
-uint8_t ZG3_class::number_of_values(uint16_t parameter) {
+uint8_t MD_ZG3_class::number_of_values(uint16_t parameter) {
   if (parameter < number_of_parameters()) return 2; // So far all parameters have two states: on and off
   else return 0;
 }
 
-void ZG3_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) {
+void MD_ZG3_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) {
   if (number < number_of_parameters())  {
     if (value == 1) Output += "ON";
     else Output += "OFF";
   }
   else Output += "?";
 }
-

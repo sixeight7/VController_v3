@@ -7,6 +7,7 @@
 // Section 4: MIDI Functions for Device Detection
 // Section 5: MIDI PC and CC Ledger
 // Section 6: MIDI Editor Communication
+// Section 7: MIDI switch command reading
 
 // ********************************* Section 1: MIDI Port Initialization ********************************************
 
@@ -19,6 +20,7 @@
 //   with CC #119 on MIDI channel 16. Both the VController and VCbridge will send and receive this message to select the port.
 // * A MIDI port consists of two parts. First hexadecimal digit is the real port number: 0x00 = USB_MIDI, 0x10 is serial port 1, 0x20 is serial port 2, etc.
 //   The second nibble is the virtual port number from VCbridge: 0x10 is all virtual ports, 0x11 is virtual port 1, 0x12 is virtual port 2,etc
+//   The USB host port also supports up to eight virtual ports. Via a USB hub eight USB MIDI devices can be connected. Virtual port 0 will send the message to all connected USB devices.
 
 // Change buffersize of usbMIDI:
 // Edit on Mac: /Applications/Arduino.app/Contents/Resources/Java/hardware/teensy/avr/cores/teensy3/usb_midi.h in Teksteditor and change USB_MIDI_SYSEX_MAX 256
@@ -28,7 +30,11 @@
 // Midi IDs for sysex messages of the VController
 #define VC_MANUFACTURING_ID 0x7D // Universal for simple midi device
 #define VC_FAMILY_CODE 0x68      // Family code for Sixeight's products
+#ifndef IS_VCMINI
 #define VC_MODEL_NUMBER 0x01     // The product code for the VController
+#else
+#define VC_MODEL_NUMBER 0x02     // The product code for the VC-mini
+#endif
 #define VC_DEVICE_ID 0x01        // The device id of the VController
 
 // Midi sysex commands of the V-Controller
@@ -40,10 +46,14 @@
 #define VC_REQUEST_ALL_SETTINGS 6
 #define VC_SET_GENERAL_SETTINGS 7
 #define VC_SET_DEVICE_SETTINGS 8
+#define VC_SET_MIDI_SWITCH_SETTINGS 13
+#define VC_SAVE_SETTINGS 16
 #define VC_REQUEST_COMMANDS_DUMP 9
 #define VC_START_COMMANDS_DUMP 10
 #define VC_SET_COMMAND 11
 #define VC_FINISH_COMMANDS_DUMP 12
+#define VC_REQUEST_KATANA_PATCHES 14
+#define VC_SET_KATANA_PATCH 15
 
 
 #define CHECK4DEVICES_TIMER_LENGTH 250 // Check every second which Roland devices are connected
@@ -51,11 +61,9 @@
 unsigned long Check4DevicesTimer = 0;
 bool device_check_enabled = true; // This check should not occur during page sysex reading.
 
-#define NUMBER_OF_MIDI_PORTS 4 // USB MIDI, serial 1 and 2, and 3
-
 uint8_t Current_MIDI_port; // The MIDI port that is being read.
-uint8_t VCbridge_in_port[NUMBER_OF_MIDI_PORTS] = { 0 };
-uint8_t VCbridge_out_port[NUMBER_OF_MIDI_PORTS] = { 0 };
+uint8_t VCbridge_in_port[NUMBER_OF_MIDI_PORTS];
+uint8_t VCbridge_out_port[NUMBER_OF_MIDI_PORTS];
 bool bank_selection_active = false;
 
 bool remote_control_active = false;
@@ -72,15 +80,44 @@ struct MySettings : public midi::DefaultSettings
 
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial1, MIDI1, MySettings); // Enables serial1 port for MIDI communication with custom settings
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI2, MySettings); // Enables serial2 port for MIDI communication with custom settings
+#ifdef MIDI3_ENABLED
 MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial3, MIDI3, MySettings); // Enables serial3 port for MIDI communication with custom settings
+#endif
+
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+#include <USBHost_t36.h>
+
+USBHost myusb;
+USBHub hub1(myusb);
+USBHub hub2(myusb);
+USBHub hub3(myusb);
+USBHub hub4(myusb);
+#define NUMBER_OF_USB_HOST_MIDI_PORTS 8
+MIDIDevice_BigBuffer usbhMIDI01(myusb); // With bigbuffer, newer Roland devices are working properly!
+MIDIDevice_BigBuffer usbhMIDI02(myusb);
+MIDIDevice_BigBuffer usbhMIDI03(myusb);
+MIDIDevice_BigBuffer usbhMIDI04(myusb);
+MIDIDevice_BigBuffer usbhMIDI05(myusb);
+MIDIDevice_BigBuffer usbhMIDI06(myusb);
+MIDIDevice_BigBuffer usbhMIDI07(myusb);
+MIDIDevice_BigBuffer usbhMIDI08(myusb);
+MIDIDevice_BigBuffer * usbhMIDI[NUMBER_OF_USB_HOST_MIDI_PORTS] = {
+  &usbhMIDI01, &usbhMIDI02, &usbhMIDI03, &usbhMIDI04, &usbhMIDI05, &usbhMIDI06, &usbhMIDI07, &usbhMIDI08
+};
+#endif
 
 void setup_MIDI_common()
 {
+  for (uint8_t i = 0; i < NUMBER_OF_MIDI_PORTS; i++) {
+    VCbridge_in_port[i] = 0;
+    VCbridge_out_port[i] = 0;
+  }
   usbMIDI.setHandleNoteOff(OnNoteOff);
   usbMIDI.setHandleNoteOn(OnNoteOn) ;
   usbMIDI.setHandleProgramChange(OnProgramChange);
   usbMIDI.setHandleControlChange(OnControlChange);
   usbMIDI.setHandleSysEx(OnSysEx);
+  usbMIDI.setHandleActiveSensing(OnActiveSense);
 
   //pinMode(0, INPUT_PULLUP); //Add the internal pullup resistor to pin 0 (Rx)
   delay(100);
@@ -91,7 +128,7 @@ void setup_MIDI_common()
   MIDI1.setHandleProgramChange(OnProgramChange);
   MIDI1.setHandleControlChange(OnControlChange);
   MIDI1.setHandleSystemExclusive(OnSerialSysEx);
-  //MIDI1.setHandleActiveSensing(OnActiveSenseMIDI1);
+  MIDI1.setHandleActiveSensing(OnActiveSense);
 
   delay(100);
   MIDI2.begin(MIDI_CHANNEL_OMNI);
@@ -101,8 +138,9 @@ void setup_MIDI_common()
   MIDI2.setHandleProgramChange(OnProgramChange);
   MIDI2.setHandleControlChange(OnControlChange);
   MIDI2.setHandleSystemExclusive(OnSerialSysEx);
-  //MIDI2.setHandleActiveSensing(OnActiveSenseMIDI2);
+  MIDI2.setHandleActiveSensing(OnActiveSense);
 
+#ifdef MIDI3_ENABLED
   delay(100);
   MIDI3.begin(MIDI_CHANNEL_OMNI);
   MIDI3.turnThruOff();
@@ -111,7 +149,20 @@ void setup_MIDI_common()
   MIDI3.setHandleProgramChange(OnProgramChange);
   MIDI3.setHandleControlChange(OnControlChange);
   MIDI3.setHandleSystemExclusive(OnSerialSysEx);
-  //MIDI3.setHandleActiveSensing(OnActiveSenseMIDI3);
+  MIDI3.setHandleActiveSensing(OnActiveSense);
+#endif
+
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  myusb.begin();
+  for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+    usbhMIDI[p]->setHandleNoteOff(OnNoteOff);
+    usbhMIDI[p]->setHandleNoteOn(OnNoteOn) ;
+    usbhMIDI[p]->setHandleProgramChange(OnProgramChange);
+    usbhMIDI[p]->setHandleControlChange(OnControlChange);
+    usbhMIDI[p]->setHandleSysEx(OnSysEx);
+    usbhMIDI[p]->setHandleActiveSensing(OnActiveSense);
+  }
+#endif
 
 }
 
@@ -123,23 +174,36 @@ void main_MIDI_common()
   MIDI1.read();
   Current_MIDI_port = MIDI2_PORT;
   MIDI2.read();
+#ifdef MIDI3_ENABLED
   Current_MIDI_port = MIDI3_PORT;
   MIDI3.read();
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  Current_MIDI_port = USBHMIDI_PORT;
+  myusb.Task();
+  for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+    VCbridge_in_port[USBHMIDI_PORT >> 4] = p + 1;
+    usbhMIDI[p]->read();
+  }
+#endif
 
   MIDI_check_for_devices();  // Check actively if any devices are out there
   PAGE_check_sysex_watchdog(); // check if the watchdog has not expired
 }
 
-void MIDI_check_MIDI3() // Because serial3 is not FIFO, we do an extra check in the loop, so it can keep up.
+void MIDI_check_USBHMIDI()
 {
-  Current_MIDI_port = MIDI3_PORT;
-  MIDI3.read();
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  Current_MIDI_port = USBHMIDI_PORT;
+  myusb.Task();
+  for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+    VCbridge_in_port[USBHMIDI_PORT >> 4] = p;
+    usbhMIDI[p]->read();
+  }
+#endif
 }
 
 // ********************************* Section 2: MIDI In Functions ********************************************
-
-// Sysex for detecting MIDI devices
-#define Anybody_out_there {0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7}  // Ask all MIDI devices to respond with their Manufacturing ID, Device ID and version number
 
 void OnNoteOn(byte channel, byte note, byte velocity)
 {
@@ -178,6 +242,7 @@ void OnControlChange(byte channel, byte control, byte value)
       Device[d]->check_CC_in(control, value, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
     }
   }
+  MIDI_check_switch_cc(control, value, channel, Current_MIDI_port);
 }
 
 void OnSysEx(const unsigned char* sxdata, short unsigned int sxlength, bool sx_comp)
@@ -185,7 +250,7 @@ void OnSysEx(const unsigned char* sxdata, short unsigned int sxlength, bool sx_c
   uint8_t VCbridge_index = Current_MIDI_port >> 4;
   //MIDI1.sendSysEx(sxlength, sxdata); // MIDI through usb to serial
   //MIDI2.sendSysEx(sxlength, sxdata); // MIDI through usb to serial
-  MIDI_debug_sysex(sxdata, sxlength, USBMIDI_PORT, false);
+  MIDI_debug_sysex(sxdata, sxlength, Current_MIDI_port, false);
 
   if (sxdata[1] == 0x7E) { //Check if it is a Universal Non-Real Time message
     MIDI_check_SYSEX_in_universal(sxdata, sxlength, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
@@ -198,9 +263,11 @@ void OnSysEx(const unsigned char* sxdata, short unsigned int sxlength, bool sx_c
   }
 
   // Midi forwarding
-  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+  if (Current_MIDI_port == USBMIDI_PORT) {
+    for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
       Device[d]->forward_MIDI_message(sxdata, sxlength);
     }
+  }
 }
 
 
@@ -220,6 +287,12 @@ void OnSerialSysEx(byte *sxdata, unsigned sxlength)
   }
 }
 
+void OnActiveSense() {
+  uint8_t VCbridge_index = Current_MIDI_port >> 4;
+  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    Device[d]->check_active_sense_in(Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
+  }
+}
 
 // ********************************* Section 3: MIDI Out Functions ********************************************
 
@@ -230,12 +303,40 @@ void MIDI_send_PC(uint8_t Program, uint8_t Channel, uint8_t Port) {
   if ((Port & 0xF0) == USBMIDI_PORT) usbMIDI.sendProgramChange(Program, Channel);
   if ((Port & 0xF0) == MIDI1_PORT) MIDI1.sendProgramChange(Program, Channel);
   if ((Port & 0xF0) == MIDI2_PORT) MIDI2.sendProgramChange(Program, Channel);
+#ifdef MIDI3_ENABLED
   if ((Port & 0xF0) == MIDI3_PORT) MIDI3.sendProgramChange(Program, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  if ((Port & 0xF0) == USBHMIDI_PORT) {
+    if ((Port & 0x0F) == 0) { // Send message to all USB host ports
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendProgramChange(Program, Channel);
+      }
+    }
+    else {
+      usbhMIDI[(Port & 0x0F) - 1]->sendProgramChange(Program, Channel);
+    }
+  }
+#endif
+
   if ((Port & 0xF0) == ALL_PORTS) {
     usbMIDI.sendProgramChange(Program, Channel);
     MIDI1.sendProgramChange(Program, Channel);
     MIDI2.sendProgramChange(Program, Channel);
+#ifdef MIDI3_ENABLED
     MIDI3.sendProgramChange(Program, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+    for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+      usbhMIDI[p]->sendProgramChange(Program, Channel);
+    }
+#endif
+  }
+}
+
+void MIDI_forward_PC_to_all_ports_but_mine(uint8_t Program, uint8_t Channel, uint8_t Exclude_port) {
+  for (uint8_t p = 0; p < NUMBER_OF_MIDI_PORTS; p++) {
+    if (MIDI_set_port_number_from_menu(p) != Exclude_port) MIDI_send_PC(Program, Channel, MIDI_set_port_number_from_menu(p));
   }
 }
 
@@ -245,12 +346,39 @@ void MIDI_send_CC(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Po
   if ((Port & 0xF0) == USBMIDI_PORT) usbMIDI.sendControlChange(Controller, Value, Channel);
   if ((Port & 0xF0) == MIDI1_PORT) MIDI1.sendControlChange(Controller, Value, Channel);
   if ((Port & 0xF0) == MIDI2_PORT) MIDI2.sendControlChange(Controller, Value, Channel);
+#ifdef MIDI3_ENABLED
   if ((Port & 0xF0) == MIDI3_PORT) MIDI3.sendControlChange(Controller, Value, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  if ((Port & 0xF0) == USBHMIDI_PORT) {
+    if ((Port & 0x0F) == 0) { // Send message to all USB host ports
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendControlChange(Controller, Value, Channel);
+      }
+    }
+    else {
+      usbhMIDI[(Port & 0x0F) - 1]->sendControlChange(Controller, Value, Channel);
+    }
+  }
+#endif
   if ((Port & 0xF0) == ALL_PORTS) {
     usbMIDI.sendControlChange(Controller, Value, Channel);
     MIDI1.sendControlChange(Controller, Value, Channel);
     MIDI2.sendControlChange(Controller, Value, Channel);
+#ifdef MIDI3_ENABLED
     MIDI3.sendControlChange(Controller, Value, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+    for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+      usbhMIDI[p]->sendControlChange(Controller, Value, Channel);
+    }
+#endif
+  }
+}
+
+void MIDI_forward_CC_to_all_ports_but_mine(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Exclude_port) {
+  for (uint8_t p = 0; p < NUMBER_OF_MIDI_PORTS; p++) {
+    if (MIDI_set_port_number_from_menu(p) != Exclude_port) MIDI_send_CC(Controller, Value, Channel, MIDI_set_port_number_from_menu(p));
   }
 }
 
@@ -260,12 +388,33 @@ void MIDI_send_note_on(uint8_t Note, uint8_t Velocity, uint8_t Channel, uint8_t 
   if ((Port & 0xF0) == USBMIDI_PORT) usbMIDI.sendNoteOn(Note, Velocity, Channel);
   if ((Port & 0xF0) == MIDI1_PORT) MIDI1.sendNoteOn(Note, Velocity, Channel);
   if ((Port & 0xF0) == MIDI2_PORT) MIDI2.sendNoteOn(Note, Velocity, Channel);
+#ifdef MIDI3_ENABLED
   if ((Port & 0xF0) == MIDI3_PORT) MIDI3.sendNoteOn(Note, Velocity, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  if ((Port & 0xF0) == USBHMIDI_PORT) {
+    if ((Port & 0x0F) == 0) { // Send message to all USB host ports
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendNoteOn(Note, Velocity, Channel);
+      }
+    }
+    else {
+      usbhMIDI[(Port & 0x0F) - 1]->sendNoteOn(Note, Velocity, Channel);
+    }
+  }
+#endif
   if ((Port & 0xF0) == ALL_PORTS) {
     usbMIDI.sendNoteOn(Note, Velocity, Channel);
     MIDI1.sendNoteOn(Note, Velocity, Channel);
     MIDI2.sendNoteOn(Note, Velocity, Channel);
+#ifdef MIDI3_ENABLED
     MIDI3.sendNoteOn(Note, Velocity, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+    for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+      usbhMIDI[p]->sendNoteOn(Note, Velocity, Channel);
+    }
+#endif
   }
 }
 
@@ -275,16 +424,37 @@ void  MIDI_send_note_off(uint8_t Note, uint8_t Velocity, uint8_t Channel, uint8_
   if ((Port & 0xF0) == USBMIDI_PORT) usbMIDI.sendNoteOff(Note, Velocity, Channel);
   if ((Port & 0xF0) == MIDI1_PORT) MIDI1.sendNoteOff(Note, Velocity, Channel);
   if ((Port & 0xF0) == MIDI2_PORT) MIDI2.sendNoteOff(Note, Velocity, Channel);
+#ifdef MIDI3_ENABLED
   if ((Port & 0xF0) == MIDI3_PORT) MIDI3.sendNoteOff(Note, Velocity, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+  if ((Port & 0xF0) == USBHMIDI_PORT) {
+    if ((Port & 0x0F) == 0) { // Send message to all USB host ports
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendNoteOff(Note, Velocity, Channel);
+      }
+    }
+    else {
+      usbhMIDI[(Port & 0x0F) - 1]->sendNoteOff(Note, Velocity, Channel);
+    }
+  }
+#endif
   if ((Port & 0xF0) == ALL_PORTS) {
     usbMIDI.sendNoteOff(Note, Velocity, Channel);
     MIDI1.sendNoteOff(Note, Velocity, Channel);
     MIDI2.sendNoteOff(Note, Velocity, Channel);
+#ifdef MIDI3_ENABLED
     MIDI3.sendNoteOff(Note, Velocity, Channel);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+    for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+      usbhMIDI[p]->sendNoteOff(Note, Velocity, Channel);
+    }
+#endif
   }
 }
 
-void MIDI_send_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t Port) {
+void MIDI_send_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t Port, uint8_t cable = 0) {
   MIDI_check_port_message(Port);
   switch (Port & 0xF0) {
     case USBMIDI_PORT:
@@ -300,9 +470,24 @@ void MIDI_send_sysex(const unsigned char* sxdata, short unsigned int sxlength, u
     case MIDI2_PORT:
       MIDI2.sendSysEx(sxlength - 2, &sxdata[1]); // Otherwise they will be send twice.
       break;
+#ifdef MIDI3_ENABLED
     case MIDI3_PORT:
       MIDI3.sendSysEx(sxlength - 2, &sxdata[1]);
       break;
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+    case USBHMIDI_PORT:
+      if ((Port & 0x0F) == 0) { // Send message to all USB host ports
+        for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+          usbhMIDI[p]->sendSysEx(sxlength, sxdata, true, cable);  // hasterm = true, which means no extra 0xF0 and 0xF7 bytes will be added
+        }
+      }
+      else {
+        usbhMIDI[(Port & 0x0F) - 1]->sendSysEx(sxlength, sxdata, true, cable); // hasterm = true, which means no extra 0xF0 and 0xF7 bytes will be added
+        //usbhMIDI[(Port & 0x0F) - 1]->send_now();
+      }
+      break;
+#endif
     case ALL_PORTS:
 #if defined(ARDUINO) && ARDUINO >= 10800
       usbMIDI.sendSysEx(sxlength - 2, &sxdata[1]);
@@ -311,7 +496,14 @@ void MIDI_send_sysex(const unsigned char* sxdata, short unsigned int sxlength, u
 #endif
       MIDI1.sendSysEx(sxlength - 2, &sxdata[1]);
       MIDI2.sendSysEx(sxlength - 2, &sxdata[1]);
+#ifdef MIDI3_ENABLED
       MIDI3.sendSysEx(sxlength - 2, &sxdata[1]);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendSysEx(sxlength, sxdata, true, cable);  // hasterm = true, which means no extra 0xF0 and 0xF7 bytes will be added
+      }
+#endif
       break;
   }
 
@@ -331,20 +523,29 @@ void MIDI_check_port_message(uint8_t Port) { // Check if we need to tell the VCb
     if ((Port & 0xF0) == USBMIDI_PORT) usbMIDI.sendControlChange(LINE_SELECT_CC_NUMBER, new_port_number, VCONTROLLER_MIDI_CHANNEL);
     if ((Port & 0xF0) == MIDI1_PORT) MIDI1.sendControlChange(LINE_SELECT_CC_NUMBER, new_port_number, VCONTROLLER_MIDI_CHANNEL);
     if ((Port & 0xF0) == MIDI2_PORT) MIDI2.sendControlChange(LINE_SELECT_CC_NUMBER, new_port_number, VCONTROLLER_MIDI_CHANNEL);
+#ifdef MIDI3_ENABLED
     if ((Port & 0xF0) == MIDI3_PORT) MIDI3.sendControlChange(LINE_SELECT_CC_NUMBER, new_port_number, VCONTROLLER_MIDI_CHANNEL);
-
-    DEBUGMSG("!!!Changed virtual output channel for port " + String(VCbridge_index) + " to: " + String(new_port_number));
+#endif
+    if ((Port & 0xF0) != USBHMIDI_PORT) { // The USB host port does not need the CC messages to change port
+      DEBUGMSG("!!!Changed virtual output channel for port " + String(VCbridge_index) + " to: " + String(new_port_number));
+    }
   }
 
   if ((Port & 0xF0) == ALL_PORTS) { // Call it recursively for all ports
     MIDI_check_port_message(USBMIDI_PORT | (Port & 0x0F));
     MIDI_check_port_message(MIDI1_PORT | (Port & 0x0F));
     MIDI_check_port_message(MIDI2_PORT | (Port & 0x0F));
+#ifdef MIDI3_ENABLED
     MIDI_check_port_message(MIDI3_PORT | (Port & 0x0F));
+#endif
+    // The USB host port does not need these messages
   }
 }
 
 // ********************************* Section 4: MIDI Functions for Device Detection ********************************************
+
+// Sysex for detecting MIDI devices
+#define Anybody_out_there {0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7}  // Ask all MIDI devices to respond with their Manufacturing ID, Device ID and version number
 
 void MIDI_check_SYSEX_in_universal(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) // Check for universal SYSEX message - identity reply
 {
@@ -393,7 +594,16 @@ void MIDI_check_for_devices()
       }
       if (check_device_no == 1 ) MIDI_send_sysex(sysexbuffer, 6, MIDI1_PORT);
       if (check_device_no == 2 ) MIDI_send_sysex(sysexbuffer, 6, MIDI2_PORT);
+#ifdef MIDI3_ENABLED
       if (check_device_no == 3 ) MIDI_send_sysex(sysexbuffer, 6, MIDI3_PORT);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+      if (check_device_no == 4 ) {
+        MIDI_send_sysex(sysexbuffer, 6, USBHMIDI_PORT); // Send message on default cable 0.
+        MIDI_send_sysex(sysexbuffer, 6, USBHMIDI_PORT, 1); // Also send message on cable 1, so the GP-10 can be detected, which only supports sysex messages on cable 1
+      }
+#endif
+
 
       for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
         Device[d]->send_alternative_identity_request(check_device_no);
@@ -420,6 +630,18 @@ inline void MIDI_disable_device_check() {
 inline void MIDI_enable_device_check() {
   device_check_enabled = true;
   Check4DevicesTimer = millis(); // Reset the timer
+}
+
+uint8_t MIDI_set_port_number_from_menu(uint8_t mport) {
+  switch (mport) {
+    case 0: return USBMIDI_PORT;
+    case 1: return MIDI1_PORT;
+    case 2: return MIDI2_PORT;
+    case 3: return MIDI3_PORT;
+    case 4: return USBHMIDI_PORT;
+    case 5: return ALL_PORTS;
+  }
+  return USBMIDI_PORT;
 }
 
 // ********************************* Section 5: MIDI PC and CC Ledger ********************************************
@@ -543,6 +765,7 @@ uint8_t MIDI_recall_CC(uint8_t controller, uint8_t channel, uint8_t port) {
   return NOT_FOUND; // Not found
 }
 
+
 // ********************************* Section 6: MIDI Editor Communication ********************************************
 
 
@@ -570,13 +793,27 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         MIDI_editor_send_settings();
         for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
           MIDI_editor_send_device_settings(d);
+          //MIDI_show_dump_progress(d, NUMBER_OF_DEVICES + TOTAL_NUMBER_OF_SWITCHES);
         }
+        for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
+          MIDI_editor_send_midi_switch_settings(s);
+          //MIDI_show_dump_progress(NUMBER_OF_DEVICES + s, NUMBER_OF_DEVICES + TOTAL_NUMBER_OF_SWITCHES);
+        }
+        //LCD_show_popup_label("Settings sent!");
         break;
       case VC_SET_GENERAL_SETTINGS:
         MIDI_editor_receive_settings(sxdata, sxlength);
         break;
       case VC_SET_DEVICE_SETTINGS:
         MIDI_editor_receive_device_settings(sxdata, sxlength);
+        break;
+      case VC_SET_MIDI_SWITCH_SETTINGS:
+        MIDI_editor_receive_midi_switch_settings(sxdata, sxlength);
+        break;
+      case VC_SAVE_SETTINGS:
+        EEP_write_eeprom_common_data(); // Save settings to EEPROM
+        delay(100);
+        update_page = RELOAD_PAGE;
         break;
       case VC_REQUEST_COMMANDS_DUMP:
         MIDI_send_commands_dump();
@@ -587,11 +824,15 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         break;
       case VC_SET_COMMAND:
         MIDI_editor_receive_command(sxdata, sxlength);
-        MIDI_show_dump_progress(number_of_cmds);
+        MIDI_show_dump_progress(number_of_cmds, editor_dump_size);
         break;
       case VC_FINISH_COMMANDS_DUMP:
         MIDI_editor_receive_finish_commands_dump(sxdata, sxlength);
         editor_dump_size = 0;
+        break;
+      case VC_REQUEST_KATANA_PATCHES:
+        break;
+      case VC_SET_KATANA_PATCH:
         break;
     }
   }
@@ -635,7 +876,7 @@ void MIDI_read_data(const unsigned char* sxdata, short unsigned int sxlength, ui
 }
 
 void MIDI_show_error() {
-  LCD_show_status_message("MIDI read error!");
+  LCD_show_popup_label("MIDI read error!", MESSAGE_TIMER_LENGTH);
   DEBUGMSG("MIDI error - message length incorrect");
 }
 
@@ -651,8 +892,8 @@ void MIDI_editor_receive_settings(const unsigned char* sxdata, short unsigned in
   }
   uint8_t* settingbytes = (uint8_t*)&Setting;
   MIDI_read_data(sxdata, sxlength, settingbytes, sizeof(Setting));
-  EEP_write_eeprom_common_data(); // Save to EEPROM
-  update_page = RELOAD_PAGE;
+  //EEP_write_eeprom_common_data(); // Save to EEPROM
+  //update_page = RELOAD_PAGE;
 }
 
 void MIDI_editor_send_device_settings(uint8_t dev) { // Will send the device number, followed by the device settings
@@ -678,8 +919,37 @@ void MIDI_editor_receive_device_settings(const unsigned char* sxdata, short unsi
     Device[dev]->set_setting(i, dsettings[i + 1]);
     DEBUGMSG("Setting " + String(i) + " has value " + String(dsettings[i + 1]));
   }
-  EEP_write_eeprom_common_data(); // Save to EEPROM
-  update_page = RELOAD_PAGE;
+  //EEP_write_eeprom_common_data(); // Save to EEPROM
+  //update_page = RELOAD_PAGE;
+}
+
+void MIDI_editor_send_midi_switch_settings(uint8_t sw) { // Will send the device number, followed by the device settings
+  uint8_t mssettings[5];
+  if (sw >= TOTAL_NUMBER_OF_SWITCHES) return;
+  mssettings[0] = sw;
+  mssettings[1] = MIDI_switch[sw].type;
+  mssettings[2] = MIDI_switch[sw].port;
+  mssettings[3] = MIDI_switch[sw].channel;
+  mssettings[4] = MIDI_switch[sw].cc;
+  MIDI_send_data(VC_SET_MIDI_SWITCH_SETTINGS, mssettings, 5);
+}
+
+void MIDI_editor_receive_midi_switch_settings(const unsigned char* sxdata, short unsigned int sxlength) {
+  if (sxlength != EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE * 2 + 9) {
+    MIDI_show_error();
+    return;
+  }
+  uint8_t mssettings[EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE + 1];
+  MIDI_read_data(sxdata, sxlength, mssettings, EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE + 1);
+  uint8_t sw = mssettings[0];
+  if (sw >= TOTAL_NUMBER_OF_SWITCHES) return;
+  MIDI_switch[sw].type = mssettings[1];
+  MIDI_switch[sw].port = mssettings[2];
+  MIDI_switch[sw].channel = mssettings[3];
+  MIDI_switch[sw].cc = mssettings[4];
+  DEBUGMSG("!!! Received MIDI switch #" + String(sw) + ": type " + String(mssettings[1]) + ", port " + String(mssettings[2]) + ", chan " + String(mssettings[3]) + ", cc " + String(mssettings[4]));
+  // EEP_write_eeprom_common_data(); // Save to EEPROM
+  //  update_page = RELOAD_PAGE;
 }
 
 void MIDI_editor_send_start_commands_dump() {
@@ -715,12 +985,12 @@ void MIDI_send_commands_dump() {
   editor_dump_size = number_of_cmds;
   for (uint16_t c = 0; c < number_of_cmds; c++) {
     MIDI_editor_send_command(c);
-    MIDI_show_dump_progress(c);
+    MIDI_show_dump_progress(c, number_of_cmds);
     delay(10); // Matching progress bar speed with the editor
   }
   MIDI_editor_send_finish_commands_dump();
   editor_dump_size = 0;
-  LCD_show_status_message("Upload complete");
+  LCD_show_popup_label("Upload complete", MESSAGE_TIMER_LENGTH);
 }
 
 void MIDI_editor_send_command(uint16_t cmd_no) {
@@ -730,10 +1000,10 @@ void MIDI_editor_send_command(uint16_t cmd_no) {
   MIDI_send_data(VC_SET_COMMAND, cmdbytes, sizeof(cmd));
 }
 
-void MIDI_show_dump_progress(uint16_t cmd_no) {
-  if (editor_dump_size == 0) return;
+void MIDI_show_dump_progress(uint16_t number, uint16_t total) {
+  //if (editor_dump_size == 0) return;
 
-  LCD_show_bar(0, map(cmd_no, 0, editor_dump_size, 0, 127));
+  LCD_show_bar(0, map(number, 0, total, 0, 127));
 }
 
 void MIDI_editor_receive_command(const unsigned char* sxdata, short unsigned int sxlength) {
@@ -741,4 +1011,27 @@ void MIDI_editor_receive_command(const unsigned char* sxdata, short unsigned int
   uint8_t* cmdbytes = (uint8_t*)&cmd;
   MIDI_read_data(sxdata, sxlength, cmdbytes, sizeof(cmd));
   EEPROM_write_command_from_editor(&cmd);
+}
+
+// ********************************* Section 7: MIDI switch command reading ********************************************
+
+void MIDI_check_switch_cc(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
+  for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
+    if (MIDI_switch[s].type != MIDI_SWITCH_OFF) {
+      if (((MIDI_set_port_number_from_menu(MIDI_switch[s].port) == port) || (MIDI_set_port_number_from_menu(MIDI_switch[s].port) == ALL_PORTS)) && (MIDI_switch[s].cc == control)) {
+        switch (MIDI_switch[s].type) {
+          case MIDI_SWITCH_CC_MOMENTARY:
+            if (value >= 64) SC_remote_switch_pressed(s);
+            else SC_remote_switch_released(s);
+            break;
+          case MIDI_SWITCH_CC_TOGGLE:
+            SC_remote_switch_toggled(s);
+            break;
+          case MIDI_SWITCH_CC_RANGE:
+            SC_remote_expr_pedal(s, value);
+            break;
+        }
+      }
+    }
+  }
 }

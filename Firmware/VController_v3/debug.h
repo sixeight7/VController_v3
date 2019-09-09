@@ -12,8 +12,8 @@ void StartFreeTimer();
 //#define DEBUG_MAIN
 
 // Midi debugging
-//#define DEBUG_MIDI
-//#define DEBUG_SYSEX
+#define DEBUG_MIDI
+#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
 
 // Check for free memory - to detect memory leaks
@@ -56,16 +56,18 @@ void setup_debug() {
 #define MIDI1_PORT 0x10
 #define MIDI2_PORT 0x20
 #define MIDI3_PORT 0x30
+#define USBHMIDI_PORT 0x40
 #define ALL_PORTS 0xF0
 
 //Debug sysex messages by sending them to the serial monitor
 void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port, bool is_out) {
 
-  #if defined(DEBUG_NORMAL) || defined(DEBUG_MAIN) || defined(DEBUG_MIDI) || defined(DEBUG_SYSEX)
+#if defined(DEBUG_NORMAL) || defined(DEBUG_MAIN) || defined(DEBUG_MIDI) || defined(DEBUG_SYSEX)
   Serial.print((char)0); // Hack to keep serial running together with midi, char 0 prints as nothing, but it does keep the serial monitor from freezing
 #endif
 
 #ifndef DEBUG_SYSEX_UNIVERSAL
+  if (sxdata[1] == 0x7D) return; // Quit if we have a universal midi message
   if (sxdata[1] == 0x7E) return; // Quit if we have a universal midi message
   if (sxdata[2] == 0x7F) return; // Quit if we have an FC300 bloat message
   if ((sxdata[3] == 0x74) && (sxdata[4] == 0x7F)) return; // Quit if we have a Fractal connect message
@@ -87,6 +89,9 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
       break;
     case MIDI3_PORT:
       Serial.print("MIDI3:" + String(VCbridge_port) + " ");
+      break;
+    case USBHMIDI_PORT:
+      Serial.print("USBH_M:" + String(VCbridge_port) + " ");
       break;
     default:
       Serial.print("multiple:" + String(VCbridge_port) + " ");
@@ -127,9 +132,8 @@ void FreeTimerInterrupt() {
 
 void StartFreeTimer() {
 #ifdef DEBUG_FREE
-   FreeTimer.begin(FreeTimerInterrupt, 5000000); // Run every five seconds
+  FreeTimer.begin(FreeTimerInterrupt, 5000000); // Run every five seconds
 #endif
 }
 
 #endif
-

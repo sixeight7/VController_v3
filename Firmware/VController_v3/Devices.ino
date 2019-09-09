@@ -20,6 +20,9 @@ bool global_tuner_active = false;
 uint8_t update_page = OFF;
 uint8_t Number_of_pages = 0; // Real value is read in EEPROM_create_indexes()
 uint8_t Current_page = PAGE_CURRENT_PATCH_BANK;
+uint8_t page_bank_number = 0;
+uint8_t page_bank_select_number = 0;
+uint8_t page_last_selected = 1;
 uint8_t Current_device = 255;                     // The device that is currently selected
 uint8_t Previous_page = DEFAULT_PAGE;
 uint8_t Previous_device = 0;
@@ -29,6 +32,9 @@ uint8_t calibrate_exp_pedal = 0; // The selected expression pedal in the menu
 
 bool update_main_lcd = false; // True if main display needs updating
 uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
+#define MESSAGE_TIMER_LENGTH 1500 // time that status messages are shown (in msec)
+#define ACTION_TIMER_LENGTH 600 // for messages that are shown on press of buttons
+#define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 
 bool open_menu_for_Katana_edit = false;
 
@@ -42,28 +48,31 @@ bool open_menu_for_Katana_edit = false;
 #define DEVICE_DETECT 2
 
 bool menu_active = false;
+bool on_looper_page = false;
 
 // ********************************* Section 2: Common device settings ********************************************
 // Default values have been moved to the device classes. All values should be set in the VController menu or VC-edit
 
 // ********************************* Section 3: Device Object Creation and Initialization ********************************************
 
-GP10_class My_GP10 = GP10_class(GP10);
-GR55_class My_GR55 = GR55_class(GR55);
-VG99_class My_VG99 = VG99_class(VG99);
-ZG3_class My_ZG3 = ZG3_class(ZG3);
-ZMS70_class My_ZMS70 = ZMS70_class(ZMS70);
-M13_class My_M13 = M13_class(M13);
-HLX_class My_HLX = HLX_class(HLX);
-AXEFX_class My_AXEFX = AXEFX_class(AXEFX);
-KTN_class My_KTN = KTN_class(KTN);
+MD_GP10_class My_GP10 = MD_GP10_class(GP10);
+MD_MD_GR55_class My_GR55 = MD_MD_GR55_class(GR55);
+MD_VG99_class My_VG99 = MD_VG99_class(VG99);
+MD_ZG3_class My_ZG3 = MD_ZG3_class(ZG3);
+MD_ZMS70_class My_ZMS70 = MD_ZMS70_class(ZMS70);
+MD_M13_class My_M13 = MD_M13_class(M13);
+MD_HLX_class My_HLX = MD_HLX_class(HLX);
+MD_FAS_class My_AXEFX = MD_FAS_class(AXEFX);
+MD_KTN_class My_KTN = MD_KTN_class(KTN);
+MD_KPA_class My_KPA = MD_KPA_class(KPA);
 
 // Here we create an array for the devices, so we can access them by pointer reference
-//Device_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13};
-Device_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN};
+//MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13};
+MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA};
 
 void setup_devices() { // Trigger the initialization of  the devices
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    DEBUGMSG("Init device " + String(d));
     Device[d]->init();
   }
 }
@@ -71,7 +80,7 @@ void setup_devices() { // Trigger the initialization of  the devices
 void main_devices() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     Device[d]->update();
-  }  
+  }
 }
 
 void check_all_devices_for_manual_connection() { // Trigger the manual connection of all devices
@@ -81,3 +90,9 @@ void check_all_devices_for_manual_connection() { // Trigger the manual connectio
   update_page = RELOAD_PAGE;
 }
 
+void set_current_device(uint8_t dev) {
+  if (dev < NUMBER_OF_DEVICES) {
+    Current_device = dev;
+    Main_backlight_show_colour(Device[Current_device]->my_LED_colour);
+  }
+}

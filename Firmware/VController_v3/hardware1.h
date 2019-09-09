@@ -32,7 +32,10 @@
 // Pin 15,16, 20, 21, 22, 23, 27 and 28 are used for switches. They are declared below
 // *** Switches (internal)
 #define NUMBER_OF_SWITCHES 16 // Number of internal switches
+#define NUMBER_OF_ENCODERS 0
 #define NUMBER_OF_EXTERNAL_SWITCHES 8
+#define NUMBER_OF_MIDI_SWITCHES 0
+#define SWITCH_BOUNCE_TIME 100 // in ms
 
 // If we have a switchpad, define it here
 #define ROWS 4 //number of rows in switchpad
@@ -107,6 +110,6 @@
 
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 //#define MIDI3_BAUD_RATE 31250
+#define MIDI3_ENABLED
 
 #endif
-
