@@ -9,14 +9,21 @@
 #include <QLabel>
 #include "midi.h"
 #include "vcsettings.h"
+#include "vcmidiswitchsettings.h"
 #include "vcdevices.h"
 #include "vccommands.h"
 #include "customlistwidget.h"
 
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
-#define APP_VERSION "1.0.0"
+#define APP_VERSION "1.2.0"
 
 #define STATUS_BAR_MESSAGE_TIME 2000
+
+#ifndef IS_VCMINI
+#define NUMBER_OF_ON_SCREEN_BUTTONS 16
+#else
+#define NUMBER_OF_ON_SCREEN_BUTTONS 7
+#endif
 
 namespace Ui {
 class MainWindow;
@@ -138,6 +145,8 @@ private slots:
     void on_switch_16_pressed();
     void on_switch_16_released();
 
+    void on_refreshSettingsTreeButton_clicked();
+
 private:
     void setupLcdDisplays();
     void setupButtons();
@@ -160,6 +169,7 @@ private:
     QString MyMidiInPort, MyMidiOutPort;
     Midi *MyMidi;
     VCsettings *MyVCsettings;
+    VCmidiSwitches *MyVCmidiSwitches;
     VCdevices *MyVCdevices;
     VCcommands *MyVCcommands;
     int currentPage = 0;

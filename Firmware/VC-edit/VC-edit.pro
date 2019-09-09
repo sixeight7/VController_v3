@@ -21,6 +21,10 @@
 ##
 #############################################################################
 
+# Compiling options are set in Headers/VController/config.h
+# To compile the editor for the full VController, add // before the line #define IS_VCMINI
+# To compile the editor for the VC-mini, remove the // before the line //#define IS_VCMINI
+
 QT       += core gui
 
 QMAKE_CXXFLAGS += -std=c++11
@@ -38,7 +42,6 @@ SOURCES += main.cpp\
     vcsettings.cpp \
     customcombobox.cpp \
     customspinbox.cpp \
-    vcdevices.cpp \
     vceditsettingsdialog.cpp \
     vccommands.cpp \
     commandeditdialog.cpp \
@@ -57,7 +60,10 @@ SOURCES += main.cpp\
     devices/katana.cpp \
     customlistwidget.cpp \
     aboutdialog.cpp \
-    customslider.cpp
+    customslider.cpp \
+    devices/kpa.cpp \
+    vcmidiswitchsettings.cpp \
+    vcdevices.cpp
 
 HEADERS  += RtMidi.h \
     mainwindow.h \
@@ -65,7 +71,6 @@ HEADERS  += RtMidi.h \
     vcsettings.h \
     customcombobox.h \
     customspinbox.h \
-    vcdevices.h \
     vceditsettingsdialog.h \
     vccommands.h \
     commandeditdialog.h \
@@ -86,13 +91,18 @@ HEADERS  += RtMidi.h \
     devices/katana.h \
     customlistwidget.h \
     aboutdialog.h \
-    customslider.h
+    customslider.h \
+    devices/kpa.h \
+    vcmidiswitchsettings.h \
+    vcdevices.h
 
 FORMS += \
-    mainwindow.ui \
     vceditsettingsdialog.ui \
     commandeditdialog.ui \
-    aboutdialog.ui
+    mainwindow_VC-full.ui \
+    mainwindow_VC-mini.ui \
+    aboutdialog_VC-full.ui \
+    aboutdialog_VC-mini.ui
 
 RESOURCES += \
     myresources.qrc

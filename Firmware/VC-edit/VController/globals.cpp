@@ -34,4 +34,41 @@ Setting_struct Setting = {  // Default values for global settings
   {0, 0, 0, 0}, // The minumum values of the expression pedals (0 = auto calibrate)
   6,     // FX_LOOPER_colour (white)
   0,     // MEP_control - basic control
+  5,     // FX_WAH_colour (Purple)
+  7,     // FX_DYNAMICS_colour (Yellow)
+};
+
+MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 0
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 1
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 2
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 3
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 4
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 5
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 6
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 7
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 8
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 9
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 10
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 11
+  { MIDI_SWITCH_CC_MOMENTARY, 1, 9, 26 }, // switch 12
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 13
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 14
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 15
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 16
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 17
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 18
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 19
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 20
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 21
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 22
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 23
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 24
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 25
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 26
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 27
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 28
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 29
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 30
+  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 31
 };

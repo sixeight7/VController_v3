@@ -14,23 +14,18 @@ void AXEFX_class::init()
     MIDI_channel = AXEFX_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = PAGE_ZOOM_PATCH_BANK; // Default value
-    my_device_page2 = 0; // Default value
-    my_device_page3 = 0; // Default value
-    my_device_page4 = 0; // Default value
+    my_device_page1 = FAS_DEFAULT_PAGE1; // Default value
+    my_device_page2 = FAS_DEFAULT_PAGE2; // Default value
+    my_device_page3 = FAS_DEFAULT_PAGE3; // Default value
+    my_device_page4 = FAS_DEFAULT_PAGE4; // Default value
 }
 
 bool AXEFX_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
-    case PATCH_SEL:
+    case PATCH:
     case PARAMETER:
     //case ASSIGN:
-    case PATCH_BANK:
-    case BANK_UP:
-    case BANK_DOWN:
-    case NEXT_PATCH:
-    case PREV_PATCH:
     //case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:

@@ -22,6 +22,7 @@ public:
     virtual QString read_parameter_name(uint16_t par_no);
     virtual QString read_parameter_state(uint16_t par_no, uint8_t value);
     virtual uint16_t number_of_parameters();
+    virtual uint8_t number_of_values(uint16_t parameter);
     virtual uint8_t min_value(uint16_t par_no);
     virtual uint8_t max_value(uint16_t par_no);
     virtual uint8_t get_number_of_assigns();

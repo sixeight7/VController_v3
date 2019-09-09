@@ -101,7 +101,7 @@ void VCdevices::write(QJsonObject &json) const
     json["Devices"] = deviceHeader;
 }
 
-void VCdevices::readMidi()
+/*void VCdevices::readMidi()
 {
 
 }
@@ -120,7 +120,7 @@ uint8_t VCdevices::getDeviceSetting(uint8_t dev, uint8_t variable)
 {
     if (dev < NUMBER_OF_DEVICES) return Device[dev]->get_setting(variable);
     else return 0;
-}
+}*/
 
 
 void VCdevices::deviceSettingChanged(int dev, int index, int value)

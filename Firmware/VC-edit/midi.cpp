@@ -171,6 +171,9 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
         case VC_SET_DEVICE_SETTINGS:
             MIDI_editor_receive_device_settings(message);
             break;
+        case VC_SET_MIDI_SWITCH_SETTINGS:
+            MIDI_editor_receive_midi_switch_settings(message);
+            break;
         case VC_FINISH_COMMANDS_DUMP:
             MIDI_editor_receive_finish_commands_dump(message);
             break;
@@ -213,6 +216,25 @@ void Midi::MIDI_editor_send_device_settings(uint8_t dev)
 
    MIDI_send_data(VC_SET_DEVICE_SETTINGS, dsettings, NUMBER_OF_DEVICE_SETTINGS + 1);
 
+}
+
+void Midi::MIDI_editor_send_midi_switch_settings(uint8_t sw)
+{
+    if (sw >= NUMBER_OF_MIDI_SWITCHES) return;
+
+    uint8_t mssettings[5];
+    mssettings[0] = sw;
+    mssettings[1] = MIDI_switch[sw].type;
+    mssettings[2] = MIDI_switch[sw].port;
+    mssettings[3] = MIDI_switch[sw].channel;
+    mssettings[4] = MIDI_switch[sw].cc;
+    MIDI_send_data(VC_SET_MIDI_SWITCH_SETTINGS, mssettings, 5);
+}
+
+void Midi::MIDI_editor_send_save_settings()
+{
+    uint8_t dummy[1] = {0};
+    MIDI_send_data(VC_SAVE_SETTINGS, dummy, 1);
 }
 
 void Midi::MIDI_editor_send_finish_commands_dump()
@@ -336,7 +358,7 @@ void Midi::MIDI_editor_receive_device_settings(std::vector<unsigned char> *messa
             Device[dev]->set_setting(i, dsettings[i + 1]);
         }
         emit updateProgressBar(dev);
-        if (dev >= NUMBER_OF_DEVICES - 1) emit closeProgressBar("Settings download succesful");
+        //if (dev >= NUMBER_OF_DEVICES - 1) emit closeProgressBar("Settings download succesful");
     }
 }
 
@@ -368,6 +390,26 @@ void Midi::MIDI_editor_receive_command(std::vector<unsigned char> *message)
   emit updateProgressBar(Commands.size());
 }
 
+void Midi::MIDI_editor_receive_midi_switch_settings(std::vector<unsigned char> *message)
+{
+    if (message->size() != 4 * 2 + 9) {
+       MIDI_show_error();
+       return;
+    }
+    uint8_t mssettings[5];
+    MIDI_read_data(message, mssettings, sizeof(mssettings));
+    uint8_t sw = mssettings[0];
+
+    if (sw < NUMBER_OF_MIDI_SWITCHES) {
+        MIDI_switch[sw].type = mssettings[1];
+        MIDI_switch[sw].port = mssettings[2];
+        MIDI_switch[sw].channel = mssettings[3];
+        MIDI_switch[sw].cc = mssettings[4];
+        emit updateProgressBar(sw + NUMBER_OF_DEVICES);
+        if (sw >= NUMBER_OF_MIDI_SWITCHES - 1) emit closeProgressBar("Settings download succesful");
+    }
+}
+
 void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)
 {
     if (message->size() != sizeof(Setting) * 2 + 7) {
@@ -376,6 +418,6 @@ void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)
     }
     uint8_t* settingbytes = (uint8_t*)&Setting;
     MIDI_read_data(message, settingbytes, sizeof(Setting));
-    emit startProgressBar(NUMBER_OF_DEVICES, "Receiving settings");
+    emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving settings");
     emit updateSettings();
 }

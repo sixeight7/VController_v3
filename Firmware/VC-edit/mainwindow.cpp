@@ -1,8 +1,16 @@
 #include "mainwindow.h"
-#include "ui_mainwindow.h"
+
+// Load the proper ui
+#ifdef IS_VCMINI
+#include "ui_mainwindow_VC-mini.h"
+#else
+#include "ui_mainwindow_VC-full.h"
+#endif
+
 #include "vceditsettingsdialog.h"
 #include "midi.h"
 #include "vcsettings.h"
+#include "vcmidiswitchsettings.h"
 #include "vcdevices.h"
 #include "commandeditdialog.h"
 #include "aboutdialog.h"
@@ -31,7 +39,11 @@ MainWindow::MainWindow(QWidget *parent) :
     QCoreApplication::setApplicationName("VC-edit");
 
     //QApplication::setStyle(QStyleFactory::create("Fusion"));
-    setWindowTitle( QCoreApplication::applicationName() );
+#ifdef IS_VCMINI
+    setWindowTitle( QCoreApplication::applicationName() + " for VC-mini" );
+#else
+    setWindowTitle( QCoreApplication::applicationName() + " for the VController" );
+#endif
     statusLabel = new QLabel();
     ui->statusbar->addPermanentWidget(statusLabel);
 
@@ -53,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent) :
     loadAppSettings();
 
     MyVCsettings = new VCsettings();
+    MyVCmidiSwitches = new VCmidiSwitches();
     MyVCdevices = new VCdevices();
     MyVCcommands = new VCcommands();
     connect(MyVCcommands, SIGNAL(updateCommandScreens(bool)), this, SLOT(updateCommandScreens(bool)));
@@ -167,6 +180,7 @@ void MainWindow::setupLcdDisplays() {
     //LCD_Solid.setPointSize(28);
     LCD_Solid.setPixelSize(28);
     ui->lcd0->setFont(LCD_Solid);
+#ifndef IS_VCMINI
     //LCD_Solid.setPointSize(18);
     LCD_Solid.setPixelSize(18);
     ui->lcd1->setFont(LCD_Solid);
@@ -181,10 +195,11 @@ void MainWindow::setupLcdDisplays() {
     ui->lcd10->setFont(LCD_Solid);
     ui->lcd11->setFont(LCD_Solid);
     ui->lcd12->setFont(LCD_Solid);
+#endif
 }
 
 void MainWindow::setupButtons() {
-    for (int i = 1; i < 17; i++) {
+    for (int i = 1; i <= NUMBER_OF_ON_SCREEN_BUTTONS; i++) {
         updateLcdDisplay(i, "                ", "                ");
         setButtonColour(i, 0); // Make the button grey
     }
@@ -207,6 +222,7 @@ void MainWindow::fillTreeWidget(QTreeWidget *my_tree)
     //my_tree->verticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     my_tree->setStyleSheet("QTreeWidget::item { padding: 2 px; }");
     MyVCsettings->fillTreeWidget(my_tree);
+    MyVCmidiSwitches->fillTreeWidget(my_tree, MyVCmidiSwitches);
     MyVCdevices->fillTreeWidget(my_tree, MyVCcommands);
     connect(my_tree, SIGNAL(activated(QModelIndex)), this, SLOT(treeWidgetActivated(QModelIndex)));
 }
@@ -322,6 +338,7 @@ void MainWindow::updateLcdDisplay(int lcd_no, QString line1, QString line2) {
     }
     switch (lcd_no) {
       case 0: ui->lcd0->setText(richText); break;
+    #ifndef IS_VCMINI
       case 1: ui->lcd1->setText(richText); break;
       case 2: ui->lcd2->setText(richText); break;
       case 3: ui->lcd3->setText(richText); break;
@@ -334,6 +351,7 @@ void MainWindow::updateLcdDisplay(int lcd_no, QString line1, QString line2) {
       case 10: ui->lcd10->setText(richText); break;
       case 11: ui->lcd11->setText(richText); break;
       case 12: ui->lcd12->setText(richText); break;
+    #endif
     }
 }
 
@@ -347,10 +365,11 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 3: colourName = "blue"; break; // Colour 3 is Blue
       case 4: colourName = "rgb(255, 150, 20)"; break; // Colour 4 is Orange
       case 5: colourName = "cyan"; break; // Colour 5 is Cyan
-      case 6: colourName = "rgb(150, 150, 150)"; break; // Colour 6 is White
+      case 6: colourName = "rgb(200, 200, 200)"; break; // Colour 6 is White
       case 7: colourName = "yellow"; break;  // Colour 7 is Yellow
       case 8: colourName = "magenta"; break;  // Colour 8 is Magenta
       case 9: colourName = "rgb(250, 20, 147)"; break;  // Colour 9 is Pink
+      case 10: colourName = "rgb(102, 240, 150)"; break; // Colour 10 is Soft green
 
       case 17: colourName = "darkGreen"; break;  // Colour 17 is Green dimmed
       case 18: colourName = "darkRed"; break;  //  Colour 18 is Red dimmed
@@ -361,6 +380,7 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 23: colourName = "darkYellow"; break;   // Colour 23 is Yellow dimmed
       case 24: colourName = "darkMagenta"; break;   // Colour 24 is Magenta dimmed
       case 25: colourName = "rgb(180, 15, 100)"; break;   // Colour 25 is Pink dimmed
+      case 26: colourName = "rgb(75, 150, 100)"; break; // Colour 10 is Soft green dimmed
 
       default: colourName = "gray"; break;
     }
@@ -379,6 +399,7 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 5: ui->switch_5->setStyleSheet(styleSheetString); break;
       case 6: ui->switch_6->setStyleSheet(styleSheetString); break;
       case 7: ui->switch_7->setStyleSheet(styleSheetString); break;
+      #ifndef IS_VCMINI
       case 8: ui->switch_8->setStyleSheet(styleSheetString); break;
       case 9: ui->switch_9->setStyleSheet(styleSheetString); break;
       case 10: ui->switch_10->setStyleSheet(styleSheetString); break;
@@ -388,6 +409,7 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 14: ui->switch_14->setStyleSheet(styleSheetString); break;
       case 15: ui->switch_15->setStyleSheet(styleSheetString); break;
       case 16: ui->switch_16->setStyleSheet(styleSheetString); break;
+      #endif
     }
 }
 
@@ -480,6 +502,7 @@ void MainWindow::on_actionOpen_triggered()
                                             QMessageBox::Yes|QMessageBox::No).exec()) return;
         }
         MyVCsettings->read(loadDoc.object());
+        MyVCmidiSwitches->read(loadDoc.object());
         MyVCdevices->read(loadDoc.object());
         MyVCcommands->readAll(loadDoc.object());
         fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
@@ -519,6 +542,7 @@ void MainWindow::on_actionSave_triggered()
     QJsonObject saveObject;
     writeHeader(saveObject, "FullBackup");
     MyVCsettings->write(saveObject);
+    MyVCmidiSwitches->write(saveObject);
     MyVCdevices->write(saveObject);
     MyVCcommands->writeAll(saveObject);
     QJsonDocument saveDoc(saveObject);
@@ -771,12 +795,17 @@ void MainWindow::on_readSysexButton_clicked()
 void MainWindow::on_writeSysexButton_clicked()
 {
     try_reconnect_MIDI();
-    startProgressBar(NUMBER_OF_DEVICES, "Uploading settings...");
+    startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Uploading settings...");
     MyMidi->MIDI_editor_send_settings();
     for (int d = 0; d < NUMBER_OF_DEVICES; d++) {
         updateProgressBar(d);
         MyMidi->MIDI_editor_send_device_settings(d);
     }
+    for (int s = 0; s < NUMBER_OF_MIDI_SWITCHES; s++) {
+        updateProgressBar(s + NUMBER_OF_DEVICES);
+        MyMidi->MIDI_editor_send_midi_switch_settings(s);
+    }
+    MyMidi->MIDI_editor_send_save_settings();
     closeProgressBar("Settings upload complete.");
 }
 
@@ -1064,4 +1093,9 @@ void MainWindow::on_actionPreviousPage_triggered()
     if (index > 0) index--;
     currentPage = MyVCcommands->valueFromIndex(TYPE_PAGE, index);
     updateCommandScreens(false);
+}
+
+void MainWindow::on_refreshSettingsTreeButton_clicked()
+{
+    fillTreeWidget(ui->treeWidget);
 }

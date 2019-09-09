@@ -4,5 +4,6 @@
     </qresource>
     <qresource prefix="/images">
         <file>VController_RGB.JPG</file>
+        <file>VC-mini.jpg</file>
     </qresource>
 </RCC>

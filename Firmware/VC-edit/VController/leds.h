@@ -4,7 +4,7 @@
 #include <QApplication>
 #include <QVector>
 
-#define NUMBER_OF_SELECTABLE_COLOURS 10
+#define NUMBER_OF_SELECTABLE_COLOURS 11
 
 // Defining FX colours types - the colours are set in the menu.
 // Colour numbers 241 - 255 are reserved for colour sublists.
@@ -19,5 +19,7 @@
 #define FX_DELAY_TYPE 233 // For delays
 #define FX_REVERB_TYPE 232// For reverb FX
 #define FX_LOOPER_TYPE 231 // For looper
+#define FX_WAH_TYPE 230 // For wahs
+#define FX_DYNAMICS_TYPE 229 // For gates/etc
 
 #endif // LEDS_H

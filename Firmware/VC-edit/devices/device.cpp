@@ -64,14 +64,9 @@ QString Device_class::get_setting_name(uint8_t variable) // Setting names for js
 bool Device_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
-    case PATCH_SEL:
+    case PATCH:
     case PARAMETER:
     //case ASSIGN:
-    case PATCH_BANK:
-    case BANK_UP:
-    case BANK_DOWN:
-    case NEXT_PATCH:
-    case PREV_PATCH:
     //case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
@@ -99,6 +94,11 @@ QString Device_class::read_parameter_state(uint16_t, uint8_t)
 }
 
 uint16_t Device_class::number_of_parameters()
+{
+    return 0;
+}
+
+uint8_t Device_class::number_of_values(uint16_t)
 {
     return 0;
 }

@@ -13,23 +13,19 @@ void VG99_class::init()
     MIDI_channel = VG99_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = PAGE_CURRENT_PATCH_BANK; // Default value
-    my_device_page2 = PAGE_VG99_EDIT; // Default value
-    my_device_page3 = PAGE_VG99_ASSIGNS; // Default value
-    my_device_page4 = 0; // Default value
+    my_device_page1 = VG99_DEFAULT_PAGE1;  // Default value
+    my_device_page2 = VG99_DEFAULT_PAGE2; // Default value
+    my_device_page3 = VG99_DEFAULT_PAGE3; // Default value
+    my_device_page4 = VG99_DEFAULT_PAGE4; // Default value
+
 }
 
 bool VG99_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
-    case PATCH_SEL:
+    case PATCH:
     case PARAMETER:
     case ASSIGN:
-    case PATCH_BANK:
-    case BANK_UP:
-    case BANK_DOWN:
-    case NEXT_PATCH:
-    case PREV_PATCH:
     case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
@@ -212,25 +208,19 @@ QVector<VG99_parameter_struct> VG99_parameters = {
   //},
 
   //{ // part 4: 4000 - 5000 Poly FX
-  {0x4000, 2, "POLY FX CHAN", 261, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
   {0x4001, 2, "POLYFX", 157 | SUBLIST_FROM_BYTE2, VG99_POLYFX_COLOUR, VG99_CAT_POLY_FX},
   {0x4002, 4, "POLY TYPE", 157, VG99_POLYFX_TYPE_COLOUR, VG99_CAT_POLY_FX},
-  /*{0x4003, 2, "POLY COMP T", 217, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x4004, 2, "POLY COMP SUSTN", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x4005, 2, "POLY COMP ATTACK", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x4006, 2, "POLY COMP THRSH", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x4007, 2, "POLY COMP REL", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x4008, 2, "POLY COMP TONE", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},*/
-  {0x4009, 2, "POLY COMP LEVEL", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x400A, 2, "POLY COMP BAL", 0, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
-  {0x400B, 2, "POLY DIST MODE", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400C, 2, "POLY DIST DRIVE", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400D, 2, "POLY D HIGH CUT", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400E, 2, "POLY D POLY BAL", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x400F, 2, "POLY D DRIVE BAL", 0, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x4000, 2, "POLY FX CHAN", 261, FX_FILTER_TYPE, VG99_CAT_POLY_FX},
+  {0x4009, 101, "POLY COMP LEVEL", SHOW_NUMBER, FX_DYNAMICS_TYPE, VG99_CAT_POLY_FX},
+  {0x400A, 101, "POLY COMP BAL", SHOW_NUMBER, FX_DYNAMICS_TYPE, VG99_CAT_POLY_FX},
+  {0x400B, 5, "POLY DIST MODE", 263, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400C, 101, "POLY DIST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400D, 10, "POLY D HIGH CUT", 268, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400E, 101, "POLY D POLY BAL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
+  {0x400F, 101, "POLY D DRIVE BAL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
   {0x4010, 101, "PDIST LVL", SHOW_NUMBER, FX_DIST_TYPE, VG99_CAT_POLY_FX},
-  {0x402F, 2, "POLY SG RISETIME", 0, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
-  {0x4030, 2, "POLY SG SENS", 0, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
+  {0x402F, 101, "POLY SG RISETIME", SHOW_NUMBER, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
+  {0x4030, 101, "POLY SG SENS", SHOW_NUMBER, FX_MODULATE_TYPE, VG99_CAT_POLY_FX},
   //},
 
   //{ // part 5: 5000 - 6000 FX and amps chain A
@@ -418,6 +408,12 @@ QStringList VG99_sublists = {
 
   // Sublist 261 - 262: Poly FX channel
   "CH A", "CH B",
+
+   // Sublist 263 - 267: Poly DIST mode
+   "CLA OD", "TurboOD", "DS1", "DS2", "FUZZ",
+
+   // Sublist 268 - 277: Poly DIST high cut
+   "700 Hz", "1.0 kHz", "1.4 kHz", "2.0 kHz", "3.0 kHz", "4.0 kHz", "6,0 kHz", "8.0 kHz", "11 kHz", "FLAT",
 };
 
 const uint16_t VG99_SIZE_OF_SUBLIST = VG99_sublists.size();
@@ -469,50 +465,51 @@ uint8_t VG99_class::max_value(uint16_t par_no)
 
 struct VG99_assign_struct {
   QString Title;
+  QString Short_title;
   uint32_t Address;
 };
 
 QVector<VG99_assign_struct> VG99_assigns = {
-  {"ASSIGN 1", 0x60007000},
-  {"ASSIGN 2", 0x6000701C},
-  {"ASSIGN 3", 0x60007038},
-  {"ASSIGN 4", 0x60007054},
-  {"ASSIGN 5", 0x60007100},
-  {"ASSIGN 6", 0x6000711C},
-  {"ASSIGN 7", 0x60007138},
-  {"ASSIGN 8", 0x60007154},
-  {"ASSIGN 9", 0x60007200},
-  {"ASSIGN 10", 0x6000721C},
-  {"ASSIGN 11", 0x60007238},
-  {"ASSIGN 12", 0x60007254},
-  {"ASSIGN 13", 0x60007300},
-  {"ASSIGN 14", 0x6000731C},
-  {"ASSIGN 15", 0x60007338},
-  {"ASSIGN 16", 0x60007354},
-  {"FC300 CTL1", 0x60000600},
-  {"FC300 CTL2", 0x60000614},
-  {"FC300 CTL3", 0x60000628},
-  {"FC300 CTL4", 0x6000063C},
-  {"FC300 CTL5", 0x60000650},
-  {"FC300 CTL6", 0x60000664},
-  {"FC300 CTL7", 0x60000678},
-  {"FC300 CTL8", 0x6000070C},
-  {"FC300 EXP1", 0x60000500},
-  {"FC300 EXP SW1", 0x60000514},
-  {"FC300 EXP2", 0x60000528},
-  {"FC300 EXP SW2", 0x6000053C},
-  {"GK S1/S2", 0x60000114},
-  {"GK VOL", 0x60000100},
-  {"EXP", 0x60000150},
-  {"CTL1", 0x60000128},
-  {"CTL2", 0x6000013C},
-  {"CTL3", 0x60000164},
-  {"CTL4", 0x60000178},
-  {"DBEAM-V", 0x60000300},
-  {"DBEAM-H", 0x60000314},
-  {"RIBBON ACT", 0x60000328},
-  {"RIBBON POS", 0x6000033C}
-};
+    {"FC300 CTL1", "FC 1", 0x60000600},
+    {"FC300 CTL2", "FC 2", 0x60000614},
+    {"FC300 CTL3", "FC 3", 0x60000628},
+    {"FC300 CTL4", "FC 4", 0x6000063C},
+    {"FC300 CTL5", "FC 5", 0x60000650},
+    {"FC300 CTL6", "FC 6", 0x60000664},
+    {"FC300 CTL7", "FC 7", 0x60000678},
+    {"FC300 CTL8", "FC 8", 0x6000070C},
+    {"FC300 EXP1", "EXP1", 0x60000500},
+    {"FC300 EXP SW1", "E S1", 0x60000514},
+    {"FC300 EXP2", "EXP2", 0x60000528},
+    {"FC300 EXP SW2", "E S2", 0x6000053C},
+    {"GK S1/S2", "GK12", 0x60000114},
+    {"GK VOL", "GK V", 0x60000100},
+    {"EXP", "EXP", 0x60000150},
+    {"CTL1", "CTL1", 0x60000128},
+    {"CTL2", "CTL2", 0x6000013C},
+    {"CTL3", "CTL3", 0x60000164},
+    {"CTL4", "CTL4", 0x60000178},
+    {"DBEAM-V", "DB-V", 0x60000300},
+    {"DBEAM-H", "DB-H", 0x60000314},
+    {"RIBBON ACT", "RACT", 0x60000328},
+    {"RIBBON POS", "RPOS", 0x6000033C},
+    {"ASSIGN 1", "ASG1", 0x60007000},
+    {"ASSIGN 2", "ASG2", 0x6000701C},
+    {"ASSIGN 3", "ASG3", 0x60007038},
+    {"ASSIGN 4", "ASG4", 0x60007054},
+    {"ASSIGN 5", "ASG5", 0x60007100},
+    {"ASSIGN 6", "ASG6", 0x6000711C},
+    {"ASSIGN 7", "ASG7", 0x60007138},
+    {"ASSIGN 8", "ASG8", 0x60007154},
+    {"ASSIGN 9", "ASG9", 0x60007200},
+    {"ASSIGN 10", "AS10", 0x6000721C},
+    {"ASSIGN 11", "AS11", 0x60007238},
+    {"ASSIGN 12", "AS12", 0x60007254},
+    {"ASSIGN 13", "AS13", 0x60007300},
+    {"ASSIGN 14", "AS14", 0x6000731C},
+    {"ASSIGN 15", "AS15", 0x60007338},
+    {"ASSIGN 16", "AS16", 0x60007354},
+  };
 
 const uint16_t VG99_NUMBER_OF_ASSIGNS = VG99_assigns.size();
 
@@ -540,8 +537,9 @@ QString VG99_class::read_assign_trigger(uint8_t trigger_no)
 
 uint8_t VG99_class::trigger_follow_assign(uint8_t assign_no)
 {
-      if (assign_no < 16) return assign_no + 21; // Default cc numbers are 20 and up
-      if ((assign_no >= 16) && (assign_no < 28)) return assign_no - 15; // Return the trigger for the FC300 pedals
-      return 0;
+    if (assign_no < 12) return assign_no + 1; // Return the trigger for the FC300 pedals
+    if ((assign_no >= 23) && (assign_no <= 33))  return assign_no - 2; // Default cc assign_nos are 21 - 31
+    if ((assign_no >= 34) && (assign_no <= 65)) return assign_no + 30; // And higher up it is 64 - 95
+    return 0;
 }
 

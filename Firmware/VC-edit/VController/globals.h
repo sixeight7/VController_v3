@@ -40,8 +40,27 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t exp_min[4]; // the minimum values of the expression pedals
   uint8_t FX_LOOPER_colour; // Colour for the looper
   uint8_t MEP_control; // Control options for Master Expression Pedal
+  uint8_t FX_WAH_colour; // Colour for wahs
+  uint8_t FX_DYNAMICS_colour; // Colour for dynamics
 };
 
 extern Setting_struct Setting;
+
+struct MIDI_switch_settings_struct {
+  uint8_t type;
+  uint8_t port;
+  uint8_t channel;
+  uint8_t cc;
+};
+
+#define MIDI_SWITCH_OFF 0
+#define MIDI_SWITCH_CC_MOMENTARY 1 // CC controlled by momentary switch
+#define MIDI_SWITCH_CC_TOGGLE 2 // CC controlled by toggle switch
+#define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
+#define MIDI_SWITCH_PC 4
+
+#define NUMBER_OF_MIDI_SWITCHES 32
+#define NUMBER_OF_VISIBLE_MIDI_SWITCHES 24
+extern MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES];
 
 #endif // GLOBALS_H

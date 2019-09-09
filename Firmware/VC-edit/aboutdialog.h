@@ -4,6 +4,7 @@
 // Popup window for menu Help - About
 
 #include <QDialog>
+#include "VController/config.h"
 
 namespace Ui {
     class About;

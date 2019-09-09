@@ -13,23 +13,18 @@ void GP10_class::init()
     MIDI_channel = GP10_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = PAGE_CURRENT_PATCH_BANK; // Default value
-    my_device_page2 = PAGE_CURRENT_PARAMETER; // Default value
-    my_device_page3 = PAGE_GP10_ASSIGNS; // Default value
-    my_device_page4 = 0; // Default value
+    my_device_page1 = GP10_DEFAULT_PAGE1; // Default value
+    my_device_page2 = GP10_DEFAULT_PAGE2; // Default value
+    my_device_page3 = GP10_DEFAULT_PAGE3; // Default value
+    my_device_page4 = GP10_DEFAULT_PAGE4; // Default value
 }
 
 bool GP10_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
-    case PATCH_SEL:
+    case PATCH:
     case PARAMETER:
     case ASSIGN:
-    case PATCH_BANK:
-    case BANK_UP:
-    case BANK_DOWN:
-    case NEXT_PATCH:
-    case PREV_PATCH:
     case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
@@ -205,6 +200,12 @@ QString GP10_class::read_parameter_state(uint16_t par_no, uint8_t value)
 uint16_t GP10_class::number_of_parameters()
 {
     return GP10_NUMBER_OF_PARAMETERS;
+}
+
+uint8_t GP10_class::number_of_values(uint16_t parameter)
+{
+    if (parameter < GP10_NUMBER_OF_PARAMETERS) return GP10_parameters[parameter].NumVals;
+      else return 0;
 }
 
 uint8_t GP10_class::max_value(uint16_t par_no)

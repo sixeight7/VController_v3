@@ -12,6 +12,7 @@
 #include "devices/helix.h"
 #include "devices/fractal.h"
 #include "devices/katana.h"
+#include "devices/kpa.h"
 
 extern GP10_class My_GP10;
 extern GR55_class My_GR55;

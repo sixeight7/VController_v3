@@ -1,0 +1,170 @@
+#include "vcmidiswitchsettings.h".h"
+
+#include <QDebug>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QProgressBar>
+
+VCmidiSwitches::VCmidiSwitches(QObject *parent) : QObject(parent)
+{
+   setup_devices();
+}
+
+void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
+{
+    QTreeWidgetItem *parent = new QTreeWidgetItem(my_tree);
+    parent->setText(0, "MIDI Switch Settings");
+    my_tree->addTopLevelItem(parent);
+
+    for (int s = 0; s < 32; s++) {
+        QTreeWidgetItem *deviceChild = new QTreeWidgetItem(parent);
+        deviceChild->setText(0, "Switch ");
+        //my_tree->addTopLevelItem(deviceChild);
+        //parent->addChild(deviceChild);
+
+        for (int i = 0; i < NUMBER_OF_MIDI_SWITCH_MENU_ITEMS; i++) {
+            QTreeWidgetItem *child = new QTreeWidgetItem(deviceChild);
+            child->setText(0, VCmidiSwitchMenu[i].name);
+
+            CustomSlider *slider = new CustomSlider(my_tree, 0, i);
+            //QProgressBar *slider = new QProgressBar(my_tree);
+            slider->setRange( VCmidiSwitchMenu[i].min, VCmidiSwitchMenu[i].max);
+            slider->setValue(Device[d]->get_setting(VCmidiSwitchMenu[i].parameter));
+            my_tree->setItemWidget(child, 4, slider);
+            connect(slider, SIGNAL(new_value(int, int, int)), this, SLOT(midiSwitchSettingChanged(int, int, int)));
+
+            if (VCmidiSwitchMenu[i].type == OPTION) {
+                CustomComboBox *comboBox = new CustomComboBox(my_tree, d, VCmidiSwitchMenu[i].parameter);
+                if (VCmidiSwitchMenu[i].sublist > 0) { // Fill combobox with items from the sublist
+                    {
+                        int number_of_items = VCmidiSwitchMenu[i].max - VCmidiSwitchMenu[i].min + 1;
+                        for (int j = 0; j < number_of_items; j++)
+                            comboBox->addItem(menu_sublist.at(j + VCmidiSwitchMenu[i].sublist - 1));
+                        //comboBox->setCurrentIndex(Device[d]->get_setting(VCmidiSwitchMenu[i].parameter));
+                        switch (VCmidiSwitchMenu[i].parameter) {
+                        case 1:
+                            comboBox->setCurrentIndex(MIDI_switch[i].type);
+                            break;
+                        case 2:
+                            comboBox->setCurrentIndex(MIDI_switch[i].port);
+                            break;
+                        case 3:
+                            comboBox->setCurrentIndex(MIDI_switch[i].channel);
+                            break;
+                        case 4:
+                            comboBox->setCurrentIndex(MIDI_switch[i].cc);
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                    my_tree->setItemWidget(child, 2, comboBox);
+                    connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(devicePageSettingChanged(int, int, int)));
+                    connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
+                    connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
+                }               
+            }
+            if (VCmidiSwitchMenu[i].type == VALUE) {
+                child->setText(0, VCmidiSwitchMenu[i].name + " (" + QString::number(VCmidiSwitchMenu[i].min) + " - " + QString::number(VCmidiSwitchMenu[i].max) + ")");
+                CustomSpinBox *spinBox = new CustomSpinBox(my_tree, d, VCmidiSwitchMenu[i].parameter);
+                spinBox->setRange(VCmidiSwitchMenu[i].min, VCmidiSwitchMenu[i].max);
+                //spinBox->setValue(Device[d]->get_setting(VCmidiSwitchMenu[i].parameter));
+                switch (VCmidiSwitchMenu[i].parameter) {
+                case 1:
+                    spinBox->setValue(MIDI_switch[i].type);
+                    break;
+                case 2:
+                    spinBox->setValue(MIDI_switch[i].port);
+                    break;
+                case 3:
+                    spinBox->setValue(MIDI_switch[i].channel);
+                    break;
+                case 4:
+                    spinBox->setValue(MIDI_switch[i].cc);
+                    break;
+                default:
+                    break;
+                }
+                my_tree->setItemWidget(child, 2, spinBox);
+                connect(spinBox, SIGNAL(new_value(int, int, int)), this, SLOT(midiSwitchSettingChanged(int, int, int)));
+                connect(spinBox, SIGNAL(valueChanged(int)), slider, SLOT(setValue(int)));
+                connect(slider, SIGNAL(valueChanged(int)), spinBox, SLOT(setValue(int)));
+            }
+            //deviceChild->addChild(child);
+        }
+    }
+}
+
+void VCmidiSwitches::read(const QJsonObject &json)
+{
+    QJsonObject deviceHeader = json["MIDI Switches"].toObject();
+    for (int d = 0; d < 32; d++) {
+        QJsonObject deviceObject = deviceHeader[Device[d]->device_name].toObject();
+        if (!deviceObject.isEmpty()) {
+            for (int i = 0; i < NUMBER_OF_DEVICE_SETTINGS; i++) {
+                QString settingName = Device[d]->get_setting_name(i);
+                if (!deviceObject[settingName].isNull()) Device[d]->set_setting(i, deviceObject[settingName].toInt());
+            }
+        }
+    }
+}
+
+void VCmidiSwitches::write(QJsonObject &json) const
+{
+    QJsonObject deviceHeader;
+    for (int d = 0; d < NUMBER_OF_DEVICES; d++) {
+        QJsonObject deviceObject;
+        for (int i = 0; i < NUMBER_OF_DEVICE_SETTINGS; i++) {
+            QString settingName = Device[d]->get_setting_name(i);
+            deviceObject[settingName] = Device[d]->get_setting(i);
+            qDebug() << settingName << Device[d]->get_setting(i);
+        }
+        deviceHeader[Device[d]->device_name] = deviceObject;
+    }
+    json["MIDI Switches"] = deviceHeader;
+}
+
+void VCmidiSwitches::readMidi()
+{
+
+}
+
+void VCmidiSwitches::receiveMidiSwitchSettings(uint8_t dev, uint8_t *settings)
+{
+   if (dev >= NUMBER_OF_DEVICES) return;
+
+   for (uint8_t i = 0; i < NUMBER_OF_DEVICE_SETTINGS; i++) {
+       Device[dev]->set_setting(i, settings[i + 1]);
+   }
+   //qDebug() << "Device Settings updated for" << Device[dev]->device_name;
+}
+
+uint8_t VCmidiSwitches::getDeviceSetting(uint8_t dev, uint8_t variable)
+{
+    if (dev < NUMBER_OF_DEVICES) return Device[dev]->get_setting(variable);
+    else return 0;
+}
+
+
+void VCmidiSwitches::midiSwitchSettingChanged(int dev, int index, int value)
+{
+    Device[dev]->set_setting(index, value);
+    qDebug() << "Device:" << dev << ", index" << index << ", value:" << value;
+}
+
+void VCmidiSwitches::devicePageSettingChanged(int dev, int index, int value)
+{
+    VCcommands v;
+    int pageNumber = v.valueFromIndex(TYPE_PAGE, value);
+    Device[dev]->set_setting(index, pageNumber);
+    qDebug() << "Device:" << dev << ", index" << index << ", value:" << value << ", pageNumber" << pageNumber;
+}
+
+
+
+void VCmidiSwitches::setup_devices()
+{
+    for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+      Device[d]->init();
+    }
+}

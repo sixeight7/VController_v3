@@ -26,7 +26,7 @@ public:
     void showData();
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
-    void readMidi();
+    //void readMidi();
 
 public slots:
 
@@ -52,7 +52,7 @@ private:
       { "General Settings", HEADER, 0, 0, 0, 0 },
       { "US20 Emulation", OPTION, 1, 0, 1, &Setting.US20_emulation_active }, // Switch 1
       { "Glob.tempo on PC", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 2
-      { "Main display mode", OPTION, 20, 0, 2, &Setting.Main_display_mode },// Switch 3
+      { "Main display mode", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 3
       { "Master Expression Pedal also controls", OPTION, 35, 0, 2, &Setting.MEP_control }, // Switch 4
       { "Bass mode G2M channel", VALUE, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
       { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 5
@@ -81,6 +81,8 @@ private:
       { "REVERB FX colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_REVERB_colour}, // Switch 8
       { "LOOPER colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_LOOPER_colour }, // Switch 9
       { "DEFAULT colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_default_colour }, // Switch 10
+      { "WAH COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_WAH_colour }, // Switch 11
+      { "DYNAMICS COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_DYNAMICS_colour }, // Switch 12
     };
 
     const uint16_t NUMBER_OF_SETTINGS_MENU_ITEMS = VCsettingMenu.size();
@@ -89,14 +91,14 @@ private:
       // Sublist 1 - 3: Booleans
       "OFF", "ON", "DETECT",
 
-      // Sublist 4 - 19: LED colours
-      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "", "", "", "", "", "",
+      // Sublist 4 - 18: LED colours
+      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "", "", "", "",
 
-      // Sublist 20 - 22: Main display modes
-      "PAGE NAME", "PATCH NAME", "PATCHES COMBINED",
+      // Sublist 19 - 22: Main display modes
+      "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
 
       // Sublist 23 - 30: MIDI ports
-      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "ALL PORTS", "", "", "",
+      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "", "",
 
       // Sublist 31 - 34: Expression pedals
       "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",

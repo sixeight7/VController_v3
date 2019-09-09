@@ -8,11 +8,16 @@
 #include <QDialog>
 #include <QString>
 #include <QProgressBar>
+#include "VController/config.h"
 
 // Midi IDs for sysex messages of the VController
 #define VC_MANUFACTURING_ID 0x7D // Universal for simple midi device
 #define VC_FAMILY_CODE 0x68 // Family code for Sixeight's products
-#define VC_MODEL_NUMBER 0x01  // The first product code used by SixEight :-)
+#ifndef IS_VCMINI
+#define VC_MODEL_NUMBER 0x01     // The product code for the VController
+#else
+#define VC_MODEL_NUMBER 0x02     // The product code for the VC-mini
+#endif
 #define VC_DEVICE_ID 0x01
 
 // Midi commands for VController
@@ -24,10 +29,14 @@
 #define VC_REQUEST_ALL_SETTINGS 6
 #define VC_SET_GENERAL_SETTINGS 7
 #define VC_SET_DEVICE_SETTINGS 8
+#define VC_SET_MIDI_SWITCH_SETTINGS 13
+#define VC_SAVE_SETTINGS 16
 #define VC_REQUEST_COMMANDS_DUMP 9
 #define VC_START_COMMANDS_DUMP 10
 #define VC_SET_COMMAND 11
 #define VC_FINISH_COMMANDS_DUMP 12
+#define VC_REQUEST_KATANA_PATCHES 14
+#define VC_SET_KATANA_PATCH 15
 
 class Midi : public QObject
 {
@@ -46,6 +55,8 @@ public:
     void MIDI_send_data(uint8_t cmd, uint8_t *my_data, uint16_t my_len);
     void MIDI_editor_send_settings();
     void MIDI_editor_send_device_settings(uint8_t dev);
+    void MIDI_editor_send_midi_switch_settings(uint8_t sw);
+    void MIDI_editor_send_save_settings();
     void MIDI_editor_send_finish_commands_dump();
     void MIDI_send_all_commands(QProgressBar *myBar);
     void MIDI_editor_send_start_commands_dump();
@@ -74,6 +85,7 @@ private:
     void MIDI_editor_receive_start_commands_dump();
     void MIDI_editor_receive_finish_commands_dump(std::vector< unsigned char > *message);
     void MIDI_editor_receive_command(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_midi_switch_settings(std::vector< unsigned char > *message);
 };
 
 #endif // MIDI_H

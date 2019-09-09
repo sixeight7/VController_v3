@@ -24,9 +24,9 @@ public:
     void fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd);
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
-    void readMidi();
-    void receiveDeviceSettings(uint8_t dev, uint8_t *settings);
-    uint8_t getDeviceSetting(uint8_t dev, uint8_t setting);
+    //void readMidi();
+    //void receiveDeviceSettings(uint8_t dev, uint8_t *settings);
+    //uint8_t getDeviceSetting(uint8_t dev, uint8_t setting);
 
 
 signals:
@@ -72,13 +72,13 @@ private:
       "OFF", "ON", "DETECT",
 
       // Sublist 4 - 19: LED colours
-      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "", "", "", "", "", "",
+      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "", "", "", "", "",
 
       // Sublist 20 - 22: Main display modes
       "PAGE NAME", "PATCH NAME", "PATCHES COMBINED",
 
       // Sublist 23 - 30: MIDI ports
-      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "ALL PORTS", "", "", "",
+      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "", "",
 
       // Sublist 31 - 34: Expression pedals
       "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",

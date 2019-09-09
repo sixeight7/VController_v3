@@ -13,24 +13,19 @@ void GR55_class::init()
     MIDI_channel = GR55_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = PAGE_GR55_PATCH_BANK; // Default value
-    my_device_page2 = PAGE_CURRENT_PARAMETER; // Default value
-    my_device_page3 = PAGE_GR55_ASSIGNS; // Default value
-    my_device_page4 = 0; // Default value
+    my_device_page1 = GR55_DEFAULT_PAGE1; // Default value
+    my_device_page2 = GR55_DEFAULT_PAGE2; // Default value
+    my_device_page3 = GR55_DEFAULT_PAGE3; // Default value
+    my_device_page4 = GR55_DEFAULT_PAGE4; // Default value
     preset_banks = 40; // Default number of preset banks is 40. When we are in bass mode, there are only 12.
 }
 
 bool GR55_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
-    case PATCH_SEL:
+    case PATCH:
     case PARAMETER:
     case ASSIGN:
-    case PATCH_BANK:
-    case BANK_UP:
-    case BANK_DOWN:
-    case NEXT_PATCH:
-    case PREV_PATCH:
     case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:

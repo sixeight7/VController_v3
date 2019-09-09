@@ -5,6 +5,7 @@
 #include "customcombobox.h"
 #include "customspinbox.h"
 #include "customslider.h"
+#include "vccommands.h"
 
 #include <QDebug>
 #include <QMenu>
@@ -52,32 +53,49 @@ void VCcommands::recreate_indexes()
     create_indexes();
 }
 
-QString VCcommands::create_cmd_string(uint16_t number)
+QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main page in the switch boxes
 {
     Cmd_struct cmd = get_cmd(number);
-    //qDebug() << "cmd-string number" << number << "page" << cmd.Page << "switch" << cmd.Switch;
 
-    QString cmdString = cmdDeviceString(cmd.Device);
+    QString cmdString = cmdSwitchTypeString(cmd.Switch);
+    cmdString.append(cmdDeviceString(cmd.Device));
     cmdString.append("-");
     cmdString.append(cmdTypeString(cmd.Type));
     cmdString.append(" ");
 
+    const QStringList ShortCmdTypes = {"SEL", "NEXT", "PREV", "BANKSEL", "BANK UP", "BANK DOWN", "", "",};
+
     uint16_t patch_no;
     switch (cmd.Type) { // Check extra bytes:
-    case PATCH_SEL:
-        patch_no = (cmd.Data2 * 100) + cmd.Data1;
-        if (cmd.Device < NUMBER_OF_DEVICES)
-            cmdString.append(Device[cmd.Device]->number_format(patch_no));
-        if (cmd.Device == CURRENT) cmdString.append(QString::number(patch_no));
+    case PATCH:
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SELECT) {
+            patch_no = (cmd.Value1 * 100) + cmd.Data2;
+            if (cmd.Device < NUMBER_OF_DEVICES)
+                cmdString.append(Device[cmd.Device]->number_format(patch_no));
+            if (cmd.Device == CURRENT) cmdString.append(QString::number(patch_no));
+        }
+        if (cmd.Data1 == BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }
         break;
-    case PATCH_BANK:
     case PAR_BANK:
         cmdString.append(QString::number(cmd.Data1));
         cmdString.append("/");
         cmdString.append(QString::number(cmd.Data2));
         break;
+    case PAR_BANK_CATEGORY:
+        cmdString = cmdSwitchTypeString(cmd.Switch);
+        cmdString.append(cmdDeviceString(cmd.Device));
+        cmdString.append("-CATEGORY ");
+        cmdString.append(QString::number(cmd.Data1));
+        break;
     case PARAMETER:
-        cmdString = cmdDeviceString(cmd.Device);
+        cmdString = cmdSwitchTypeString(cmd.Switch);
+        cmdString.append(cmdDeviceString(cmd.Device));
         cmdString.append("-PAR:");
         if (cmd.Device < NUMBER_OF_DEVICES)
             cmdString.append(Device[cmd.Device]->read_parameter_name(cmd.Data1));
@@ -86,24 +104,45 @@ QString VCcommands::create_cmd_string(uint16_t number)
         cmdString.append(cmd_sublist.at(cmd.Data2 + 47));
         break;
     case ASSIGN:
-        cmdString.append("(");
-        if (cmd.Device < NUMBER_OF_DEVICES)
-            cmdString.append(Device[cmd.Device]->read_assign_name(cmd.Data1));
-        if (cmd.Device == CURRENT) cmdString.append(QString::number(cmd.Data1));
-        cmdString.append(")");
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SELECT) {
+            cmdString.append("(");
+            if (cmd.Device < NUMBER_OF_DEVICES)
+                cmdString.append(Device[cmd.Device]->read_assign_name(cmd.Data1));
+            if (cmd.Device == CURRENT) cmdString.append(QString::number(cmd.Data1));
+            cmdString.append(")");
+        }
+        if (cmd.Data1 == BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }
         break;
     case SET_TEMPO:
-    case BANK_DOWN:
-    case BANK_UP:
     case PAR_BANK_DOWN:
     case PAR_BANK_UP:
-    case PAR_BANK_CATEGORY:
     case MIDI_PC:
         cmdString.append(QString::number(cmd.Data1));
         break;
-    case OPEN_PAGE:
+    case PAGE:
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append(":");
+            cmdString.append(read_title(cmd.Data2, 0));
+        }
+        if (cmd.Data1 == BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }
+        break;
     case OPEN_PAGE_DEVICE:
-        cmdString = "SEL. PAGE ";
+        cmdString = cmdSwitchTypeString(cmd.Switch);
+        cmdString.append(cmdDeviceString(cmd.Device));
+        cmdString.append("-PAGE:");
         cmdString.append(QString::number(cmd.Data1));
         cmdString.append(":");
         cmdString.append(read_title(cmd.Data1, 0));
@@ -126,6 +165,14 @@ QString VCcommands::create_cmd_string(uint16_t number)
     case MASTER_EXP_PEDAL:
         if (cmd.Data1 < 4) cmdString.append(cmd_sublist[cmd.Data1 + 97]);
         break;
+    case MENU:
+        if (cmd.Data1 == MENU_SELECT) cmdString.append("SELECT");
+        else if (cmd.Data1 == MENU_BACK) cmdString.append("BACK");
+        else if (cmd.Data1 == MENU_SET_VALUE) cmdString.append("SET VALUE");
+        else if (cmd.Data1 == MENU_PREV) cmdString.append("PREV");
+        else if (cmd.Data1 == MENU_NEXT) cmdString.append("NEXT");
+        else cmdString.append(QString::number(cmd.Data1));
+        break;
     }
 
     return cmdString;
@@ -141,9 +188,22 @@ QString VCcommands::cmdTypeString(uint8_t type)
 QString VCcommands::cmdDeviceString(uint8_t dev)
 {
     if (dev < NUMBER_OF_DEVICES) return Device[dev]->device_name;
-    if (dev == CURRENT) return "Current";
-    if (dev == COMMON) return "Common";
+    if (dev == CURRENT) return "CUR";
+    if (dev == COMMON) return "COM";
     return "";
+}
+
+QString VCcommands::cmdSwitchTypeString(uint8_t sw)
+{
+    switch(sw & SWITCH_TYPE_MASK) {
+        case 0: return "P:";
+        case ON_RELEASE: return "R:";
+        case ON_LONG_PRESS: return "LP:";
+        case ON_DUAL_PRESS: return "DP:";
+        case ON_DUAL_PRESS | ON_RELEASE: return "DR:";
+        case ON_DUAL_PRESS | ON_LONG_PRESS: return "DLP:";
+        default: return "?:";
+      }
 }
 
 void VCcommands::fillPageComboBox(QComboBox *cbox)
@@ -152,7 +212,7 @@ void VCcommands::fillPageComboBox(QComboBox *cbox)
 
     for (uint8_t p = 1; p < Number_of_pages; p++) {
         QString pageName = read_title(p, 0).trimmed();
-        if (pageName == "") pageName = "(empty page)";
+        if (pageName == "") pageName = "Page " + QString::number(p); // Use default page name
         cbox->addItem(pageName);
         //cbox->setItemData(cbox->count() - 1, QColor( Qt::white ), Qt::BackgroundRole); // Change colour of last added item
     }
@@ -234,7 +294,7 @@ void VCcommands::fillCommandsListWidget(QObject *parent, customListWidget *cmdLi
     }
 }
 
-void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t sw, uint8_t item)
+void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t sw, int item)
 {
     MyTable = table; // So updateCommandsTableWidget() knows the pointer to the tableWidget
     current_page = pg;
@@ -247,30 +307,33 @@ void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t
     int cmd_no = get_cmd_number(pg, sw, item);
     Cmd_struct sel_cmd = get_cmd(cmd_no);
 
+    cmdbyte[CB_SWITCH_TRIGGER].Type = TYPE_SWITCH_TRIGGER;
+    cmdbyte[CB_SWITCH_TRIGGER].Value = get_switch_trigger_number(sel_cmd.Switch);
+
     if (sel_cmd.Device < NUMBER_OF_DEVICES) {
-        cmdbyte[0].Type = TYPE_DEVICE_SELECT;
-        cmdbyte[0].Value = sel_cmd.Device;
-        cmdbyte[1].Type =  TYPE_DEVICE_COMMANDS;
-        cmdbyte[1].Value = sel_cmd.Type - 100;
+        cmdbyte[CB_DEVICE].Type = TYPE_DEVICE_SELECT;
+        cmdbyte[CB_DEVICE].Value = sel_cmd.Device;
+        cmdbyte[CB_TYPE].Type =  TYPE_DEVICE_COMMANDS;
+        cmdbyte[CB_TYPE].Value = sel_cmd.Type - 100;
     }
     else if (sel_cmd.Device == CURRENT) {
-        cmdbyte[0].Type = TYPE_DEVICE_SELECT; // Set to current
-        cmdbyte[0].Value = NUMBER_OF_DEVICES;
-        cmdbyte[1].Type =  TYPE_DEVICE_COMMANDS;
-        cmdbyte[1].Value = sel_cmd.Type - 100;
+        cmdbyte[CB_DEVICE].Type = TYPE_DEVICE_SELECT;
+        cmdbyte[CB_DEVICE].Value = NUMBER_OF_DEVICES; // Set to current
+        cmdbyte[CB_TYPE].Type =  TYPE_DEVICE_COMMANDS;
+        cmdbyte[CB_TYPE].Value = sel_cmd.Type - 100;
     }
     else { // Common device type
-        cmdbyte[0].Type = TYPE_DEVICE_SELECT;
-        cmdbyte[0].Value = NUMBER_OF_DEVICES + 1; // Set to common
-        cmdbyte[1].Type =  TYPE_COMMON_COMMANDS;
-        cmdbyte[1].Value = sel_cmd.Type;
+        cmdbyte[CB_DEVICE].Type = TYPE_DEVICE_SELECT;
+        cmdbyte[CB_DEVICE].Value = NUMBER_OF_DEVICES + 1; // Set to common
+        cmdbyte[CB_TYPE].Type =  TYPE_COMMON_COMMANDS;
+        cmdbyte[CB_TYPE].Value = sel_cmd.Type;
     }
-    cmdbyte[2].Value = sel_cmd.Data1;
-    cmdbyte[3].Value = sel_cmd.Data2;
-    cmdbyte[4].Value = sel_cmd.Value1;
-    cmdbyte[5].Value = sel_cmd.Value2;
-    cmdbyte[6].Value = sel_cmd.Value3;
-    cmdbyte[7].Value = sel_cmd.Value4;
+    cmdbyte[CB_DATA1].Value = sel_cmd.Data1;
+    cmdbyte[CB_DATA2].Value = sel_cmd.Data2;
+    cmdbyte[CB_VAL1].Value = sel_cmd.Value1;
+    cmdbyte[CB_VAL2].Value = sel_cmd.Value2;
+    cmdbyte[CB_VAL3].Value = sel_cmd.Value3;
+    cmdbyte[CB_VAL4].Value = sel_cmd.Value4;
 
     for (uint8_t i = 0; i < NUMBER_OF_CMD_BYTES; i++) {
         uint8_t cmd_type = cmdbyte[i].Type;
@@ -316,24 +379,25 @@ void VCcommands::saveCommand(uint8_t pg, uint8_t sw, uint8_t cmd)
     int cmd_no = get_cmd_number(pg, sw, cmd);
     Cmd_struct my_cmd = get_cmd(cmd_no);
 
-    if (cmdbyte[0].Value < NUMBER_OF_DEVICES) {
-        my_cmd.Device = cmdbyte[0].Value;
-        my_cmd.Type = cmdbyte[1].Value + 100;
+    my_cmd.Switch = get_switch_trigger_type(cmdbyte[CB_SWITCH_TRIGGER].Value) | sw;
+    if (cmdbyte[CB_DEVICE].Value < NUMBER_OF_DEVICES) {
+        my_cmd.Device = cmdbyte[CB_DEVICE].Value;
+        my_cmd.Type = cmdbyte[CB_TYPE].Value + 100;
     }
-    if (cmdbyte[0].Value == NUMBER_OF_DEVICES) { // Current device
+    if (cmdbyte[CB_DEVICE].Value == NUMBER_OF_DEVICES) { // Current device
         my_cmd.Device = CURRENT;
-        my_cmd.Type = cmdbyte[1].Value + 100;
+        my_cmd.Type = cmdbyte[CB_TYPE].Value + 100;
     }
-    if (cmdbyte[0].Value == NUMBER_OF_DEVICES + 1) {
+    if (cmdbyte[CB_DEVICE].Value == NUMBER_OF_DEVICES + 1) {
         my_cmd.Device = COMMON;
-        my_cmd.Type = cmdbyte[1].Value;
+        my_cmd.Type = cmdbyte[CB_TYPE].Value;
     }
-    my_cmd.Data1 = cmdbyte[2].Value;
-    my_cmd.Data2 = cmdbyte[3].Value;
-    my_cmd.Value1 = cmdbyte[4].Value;
-    my_cmd.Value2 = cmdbyte[5].Value;
-    my_cmd.Value3 = cmdbyte[6].Value;
-    my_cmd.Value4 = cmdbyte[7].Value;
+    my_cmd.Data1 = cmdbyte[CB_DATA1].Value;
+    my_cmd.Data2 = cmdbyte[CB_DATA2].Value;
+    my_cmd.Value1 = cmdbyte[CB_VAL1].Value;
+    my_cmd.Value2 = cmdbyte[CB_VAL2].Value;
+    my_cmd.Value3 = cmdbyte[CB_VAL3].Value;
+    my_cmd.Value4 = cmdbyte[CB_VAL4].Value;
 
     write_cmd(cmd_no, my_cmd);
     //updateCommandsTableWidget();
@@ -413,7 +477,7 @@ int VCcommands::valueFromIndex(uint8_t type, uint16_t index) // Recreate the gap
     }
 }
 
-int VCcommands::indexFromValue(uint8_t type, uint8_t value) // Remove the gap in the pagenumbers
+int VCcommands::indexFromValue(uint8_t type, uint16_t value) // Remove the gap in the pagenumbers
 {
     switch (type) {
     case TYPE_PAGE:
@@ -458,7 +522,7 @@ void VCcommands::copyCommand(customListWidget *sourceWidget, int sourceRow, cust
             Cmd_struct cmd = Commands[cmd_no];
 
             cmd.Page = current_page;
-            cmd.Switch = destSwitch;
+            cmd.Switch = destSwitch | (cmd.Switch & SWITCH_TYPE_MASK);
 
             Commands.append(cmd);
         }
@@ -518,17 +582,17 @@ void VCcommands::swapSwitches(int pg1, int sw1, int pg2, int sw2)
 
     for (int c = 0; c < number_of_cmds; c++) {
         // Swap commands
-        if ((Commands[c].Page == pg1) && (Commands[c].Switch == sw1)) {
+        if ((Commands[c].Page == pg1) && ((Commands[c].Switch & SWITCH_MASK) == sw1)) {
             Commands[c].Page = pg2;
-            Commands[c].Switch = sw2;
+            Commands[c].Switch = sw2 | (Commands[c].Switch & SWITCH_TYPE_MASK);
         }
-        else if ((Commands[c].Page == pg2) && (Commands[c].Switch == sw2)) {
+        else if ((Commands[c].Page == pg2) && ((Commands[c].Switch & SWITCH_MASK) == sw2)) {
             Commands[c].Page = pg1;
-            Commands[c].Switch = sw1;
+            Commands[c].Switch = sw1 | (Commands[c].Switch & SWITCH_TYPE_MASK);
         }
 
         // Swap label
-        if (noSwitchZero) { // Cannot swap labels for switch 0, as its label contains the page name
+        /*if (noSwitchZero) { // Cannot swap labels for switch 0, as its label contains the page name
             if ((Commands[c].Page == pg1) && (Commands[c].Switch == sw1 + LABEL)) {
                 Commands[c].Page = pg2;
                 Commands[c].Switch = sw2 + LABEL;
@@ -537,7 +601,7 @@ void VCcommands::swapSwitches(int pg1, int sw1, int pg2, int sw2)
                 Commands[c].Page = pg1;
                 Commands[c].Switch = sw1 + LABEL;
             }
-        }
+        }*/
     }
     create_indexes();
 }
@@ -582,7 +646,7 @@ void VCcommands::pasteItem(int sw)
     for (int i = 0; i < copyBuffer.size(); i++) {
         Cmd_struct cmd = copyBuffer[i];
         cmd.Page = current_page;
-        cmd.Switch = sw;
+        cmd.Switch = sw | (copyBuffer[i].Switch & SWITCH_TYPE_MASK);
 
         Commands.append(cmd);
     }
@@ -722,12 +786,17 @@ QString VCcommands::getPageName(int pg)
     return read_title(pg, 0);
 }
 
+QString VCcommands::getSwitchName(int sw) const
+{
+    return cmd_sublist[sw + SWITCH_NAME_NUMBER];
+}
+
 
 
 bool VCcommands::switchHasLabel(int pg, int sw)
 {
     if (sw == -1) return false;
-    return (Title_index[pg][sw] != 0);
+    return (Title_index[pg][sw & SWITCH_MASK] != 0);
 }
 
 bool VCcommands::switchShowsDefaultItems(int pg, int sw)
@@ -753,19 +822,19 @@ void VCcommands::create_indexes()
     for (uint16_t c = Commands.size(); c-- > 0; ) { //Run backwards through the EEPROM command array
         cmd = Commands[c];
         if (cmd.Page >= Number_of_pages) Number_of_pages = cmd.Page + 1; //update the number of pages
-        if (cmd.Switch & LABEL) { // Check if it is a name label
-            uint16_t first_title = Title_index[cmd.Page][cmd.Switch - LABEL];
+        if (is_label(cmd.Switch)) { // Check if it is a name label
+            uint16_t first_title = Title_index[cmd.Page][cmd.Switch & SWITCH_MASK];
             if (first_title != 0) {// Title array is already filled!!!
                 Next_cmd_index[c] = first_title; // Move first title to the Next_cmd_index
             }
-            Title_index[cmd.Page][cmd.Switch - LABEL] = c; // Add to the Title index
+            Title_index[cmd.Page][cmd.Switch & SWITCH_MASK] = c; // Add to the Title index
         }
         else { // It is a command
-            uint16_t first_cmd = First_cmd_index[cmd.Page][cmd.Switch];
+            uint16_t first_cmd = First_cmd_index[cmd.Page][cmd.Switch & SWITCH_MASK];
             if (first_cmd != 0) {// First command array is already filled!!!
                 Next_cmd_index[c] = first_cmd; // Move first command to the Next_cmd_index
             }
-            First_cmd_index[cmd.Page][cmd.Switch] = c; // Store the first command
+            First_cmd_index[cmd.Page][cmd.Switch & SWITCH_MASK] = c; // Store the first command
         }
     }
 
@@ -774,24 +843,54 @@ void VCcommands::create_indexes()
         uint8_t pg = Fixed_commands[c].Page;
         uint8_t sw = Fixed_commands[c].Switch;
 
-        if (sw & LABEL) { // Check if it is a name label
-            uint16_t first_title = Title_index[pg][sw - LABEL];
+        if (is_label(sw)) { // Check if it is a name label
+            uint16_t first_title = Title_index[pg][sw & SWITCH_MASK];
             if (first_title != 0) {// Title array is already filled!!!
                 Next_internal_cmd_index[c] = first_title; // Move first title to the Next_internal_cmd_index
             }
-            if (pg >= FIRST_FIXED_CMD_PAGE) Title_index[pg][sw - LABEL] = c | INTERNAL_CMD; // Add to the Title index
+            if (pg >= FIRST_FIXED_CMD_PAGE) Title_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Add to the Title index
         }
         else { // It is a command
-            uint16_t first_cmd = First_cmd_index[pg][sw];
+            uint16_t first_cmd = First_cmd_index[pg][sw & SWITCH_MASK];
             if (first_cmd != 0) {// First command array is already filled!!!
                 Next_internal_cmd_index[c] = first_cmd; // Move first command to the Next_internal_cmd_index
             }
-            if (pg >= FIRST_FIXED_CMD_PAGE) First_cmd_index[pg][sw] = c | INTERNAL_CMD; // Store the first command
+            if (pg >= FIRST_FIXED_CMD_PAGE) First_cmd_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Store the first command
         }
     }
 
     isIndexed = true;
     qDebug() << "Indexes created";
+}
+
+uint8_t VCcommands::get_switch_trigger_number(uint8_t sw)
+{
+    switch(sw & SWITCH_TYPE_MASK) {
+        case 0: return 0;
+        case ON_RELEASE: return 1;
+        case ON_LONG_PRESS: return 2;
+        case ON_DUAL_PRESS: return 3;
+        case ON_DUAL_PRESS | ON_RELEASE: return 4;
+        case ON_DUAL_PRESS | ON_LONG_PRESS: return 5;
+        default: return 0;
+    }
+}
+
+uint8_t VCcommands::get_switch_trigger_type(uint8_t value)
+{
+    switch(value) {
+        case 0: return 0;
+        case 1: return ON_RELEASE;
+        case 2: return ON_LONG_PRESS;
+        case 3: return ON_DUAL_PRESS;
+        case 4: return ON_DUAL_PRESS | ON_RELEASE;
+        case 5: return ON_DUAL_PRESS | ON_LONG_PRESS;
+        default: return 0;
+    }
+}
+
+inline bool VCcommands::is_label(uint8_t sw) {
+  return ((sw & SWITCH_TYPE_MASK) == LABEL);
 }
 
 uint16_t VCcommands::new_command_index()
@@ -829,7 +928,7 @@ void VCcommands::write_cmd(uint16_t number, Cmd_struct &cmd)
 
 uint16_t VCcommands::get_cmd_number(uint8_t pg, uint8_t sw, uint8_t number)
 {
-    uint16_t i = First_cmd_index[pg][sw];
+    uint16_t i = First_cmd_index[pg][sw & SWITCH_MASK];
     uint16_t prev_i = i;
     //if (i == 0) i = First_cmd_index[PAGE_DEFAULT][sw]; // Read from default page if no command is found for this switch
 
@@ -854,12 +953,14 @@ uint16_t VCcommands::get_cmd_number(uint8_t pg, uint8_t sw, uint8_t number)
 
 uint16_t VCcommands::get_cmd_number_check_default(uint8_t pg, uint8_t sw, uint8_t number)
 {
+    sw &= SWITCH_MASK;
     if (First_cmd_index[pg][sw] == 0) return get_cmd_number(0, sw, number);
     else return get_cmd_number(pg, sw, number);
 }
 
 uint16_t VCcommands::count_cmds(uint8_t pg, uint8_t sw)
 {
+    sw &= SWITCH_MASK;
     if ((pg >= Number_of_pages) && (pg < FIRST_FIXED_CMD_PAGE)) return 0; // Just in case we are creating a new page
 
     uint16_t i = First_cmd_index[pg][sw];
@@ -889,7 +990,7 @@ QString VCcommands::read_title(uint8_t pg, uint8_t sw)
 {
     Cmd_struct cmd;
     QString title = "";
-    uint16_t i = Title_index[pg][sw];
+    uint16_t i = Title_index[pg][sw & SWITCH_MASK];
     if (i > 0) {
         cmd = get_cmd(i);
 
@@ -922,7 +1023,7 @@ void VCcommands::write_title(uint8_t pg, uint8_t sw, QString title)
     for (uint8_t i = 0; i < len; i++) cmdbytes[i + 2] = title.at(i).unicode();
     for (uint8_t i = len; i < 8; i++) cmdbytes[i + 2] = 32; // ascii number for space
 
-    uint16_t cmd_index = Title_index[pg][sw];
+    uint16_t cmd_index = Title_index[pg][sw & SWITCH_MASK];
     if (len == 0) { // title is empty
         // Clear cmd bytes if they exist
         if (Next_cmd_index[cmd_index] != 0) delete_cmd(Next_cmd_index[cmd_index]);
@@ -975,261 +1076,386 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
     // Will update the status of the other command fields, according to the device, type, or number of parameters
     // Function is called after a command is loaded or the switch of the command has been pressed:
 
-    uint8_t dev = cmdbyte[0].Value;
+    uint8_t dev = 0;
+    uint8_t my_trigger = 0;
 
-    //cmdbyte[cmd_byte_no].Min = cmdtype[cmd_type].Min;
-    //cmdbyte[cmd_byte_no].Max = cmdtype[cmd_type].Max;
+    // *******************************************
+    // **********     BYTE1 updated     **********
+    // *******************************************
+    if (cmd_byte_no == CB_DEVICE) { // The first byte (device select) has been changed
+      // *****************************************
+      // * BYTE1: Device byte updated            *
+      // *****************************************
+      if (cmdbyte[CB_DEVICE].Value == NUMBER_OF_DEVICES + 1) { // If Device is "Common"
+        // Set command to: COMMON, NONE
+        set_type_and_value(CB_TYPE, TYPE_COMMON_COMMANDS, selected_common_cmd, in_edit_mode);
 
-    // *****************************************
-    // * BYTE1: Device byte updated            *
-    // *****************************************
-    if (cmd_byte_no == 0) { // The first byte (device select) has been changed
-        if (cmdbyte[0].Value == NUMBER_OF_DEVICES + 1) { // If Device is "Common"
-            // Set command to: COMMON, NONE
-            set_type_and_value(1, TYPE_COMMON_COMMANDS, selected_common_cmd, in_edit_mode);
+        build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, false);
 
-            build_command_structure(1, cmdbyte[1].Type, false);
+        //clear_cmd_bytes(CB_DATA1, in_edit_mode); // Clear bytes 2-7
+      }
+      else { // Device is not "common"
+        // Set command to: <selected device>, PATCH, SELECT, <current_patch_number>
+        set_type_and_value(CB_TYPE, TYPE_DEVICE_COMMANDS, selected_device_cmd, in_edit_mode);
 
-            //clear_cmd_bytes(2, in_edit_mode); // Clear bytes 2-7
+        build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, false);
+
+        if (selected_device_cmd == PATCH - 100) {
+          uint8_t dev = cmdbyte[CB_DEVICE].Value;
+          uint16_t patch_no = 0;
+          if (dev < NUMBER_OF_DEVICES) patch_no = Device[dev]->patch_number;
+          set_type_and_value(CB_DATA1, TYPE_CMDTYPE, SELECT, in_edit_mode);
+          set_type_and_value(CB_DATA2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
+          //clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 2-7
         }
-        else { // Device is not "common"
-            // Set command to: <selected device>, PATCH_SEL, <current_patch_number>
-            set_type_and_value(1, TYPE_DEVICE_COMMANDS, selected_device_cmd, in_edit_mode);
+      }
+      //reload_cmd_menus();
+      //update_page = REFRESH_PAGE;
+    }
 
-            build_command_structure(1, cmdbyte[1].Type, false);
+    // *******************************************
+    // **********     BYTE2 updated     **********
+    // *******************************************
 
-            if (selected_device_cmd == PATCH_SEL - 100) {
-                uint16_t patch_no = 0;
-                if (dev < NUMBER_OF_DEVICES) patch_no = Device[dev]->patch_number;
-                set_type_and_value(2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
-                set_type_and_value(3, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
-                //clear_cmd_bytes(4, in_edit_mode); // Clear bytes 2-7
-            }
+    if (cmd_byte_no == CB_TYPE) {
+      // *****************************************
+      // * BYTE2: Common command byte updated    *
+      // *****************************************
+      if (cmd_type == TYPE_COMMON_COMMANDS) { // The common command byte has been changed
+        selected_common_cmd = cmdbyte[cmd_byte_no].Value;
+        switch (selected_common_cmd) {
+          case PAGE:
+            // Command: COMMON, PAGE, 0
+            set_type_and_value(CB_DATA1, TYPE_CMDTYPE, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_PAGE, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            break;
+          case MIDI_PC:
+            // Command: COMMON, MIDI_PC, NUMBER, CHANNEL, PORT
+            set_type_and_value(CB_DATA1, TYPE_PC, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
+            break;
+          case MIDI_CC:
+            // Command: COMMON, CC_number, CC_TOGGLE_TYPE, Value1, Value2, Channel, Port
+            set_type_and_value(CB_DATA1, TYPE_CC_NUMBER, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_CC_TOGGLE, 0, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MAX, 127, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIN, 0, in_edit_mode);
+            set_type_and_value(CB_VAL3, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL4, TYPE_MIDI_PORT, 0, in_edit_mode);
+            break;
+          case MIDI_NOTE:
+            // Command: COMMON, MIDI_NOTE, NUMBER, VELOCITY, CHANNEL, PORT
+            set_type_and_value(CB_DATA1, TYPE_NOTE_NUMBER, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_NOTE_VELOCITY, 100, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 6-7
+            break;
+          case SET_TEMPO:
+            // Command: COMMON, SET_TEMPO, number
+            set_type_and_value(CB_DATA1, TYPE_BPM, Setting.Bpm, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          default:
+            // For all two byte commands
+            clear_cmd_bytes(CB_DATA1, in_edit_mode); // Clear bytes 2-7
+            break;
         }
         //reload_cmd_menus();
         //update_page = REFRESH_PAGE;
-    }
+      }
 
-    if (cmd_byte_no == 1) {
-        // *****************************************
-        // * BYTE2: Common command byte updated    *
-        // *****************************************
-        if (cmd_type == TYPE_COMMON_COMMANDS) { // The common command byte has been changed
-            selected_common_cmd = cmdbyte[cmd_byte_no].Value;
-            switch (selected_common_cmd) {
-            case OPEN_PAGE:
-                // Command: COMMON, OPEN_PAGE, 0
-                set_type_and_value(2, TYPE_PAGE, 0, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            case MIDI_PC:
-                // Command: COMMON, MIDI_PC, NUMBER, CHANNEL, PORT
-                set_type_and_value(2, TYPE_PC, 0, in_edit_mode);
-                set_type_and_value(3, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
-                set_type_and_value(4, TYPE_MIDI_PORT, 0, in_edit_mode);
-                clear_cmd_bytes(5, in_edit_mode); // Clear bytes 4-7
-                break;
-            case MIDI_CC:
-                // Command: COMMON, CC_number, CC_TOGGLE_TYPE, Value1, Value2, Channel, Port
-                set_type_and_value(2, TYPE_CC_NUMBER, 0, in_edit_mode);
-                set_type_and_value(3, TYPE_CC_TOGGLE, 0, in_edit_mode);
-                set_type_and_value(4, TYPE_MAX, 127, in_edit_mode);
-                set_type_and_value(5, TYPE_MIN, 0, in_edit_mode);
-                set_type_and_value(6, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
-                set_type_and_value(7, TYPE_MIDI_PORT, 0, in_edit_mode);
-                break;
-            case MIDI_NOTE:
-                // Command: COMMON, MIDI_NOTE, NUMBER, VELOCITY, CHANNEL, PORT
-                set_type_and_value(2, TYPE_NOTE_NUMBER, 0, in_edit_mode);
-                set_type_and_value(3, TYPE_NOTE_VELOCITY, 100, in_edit_mode);
-                set_type_and_value(4, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
-                set_type_and_value(5, TYPE_MIDI_PORT, 0, in_edit_mode);
-                clear_cmd_bytes(6, in_edit_mode); // Clear bytes 6-7
-                break;
-            case SET_TEMPO:
-                // Command: COMMON, SET_TEMPO, number
-                set_type_and_value(2, TYPE_BPM, Setting.Bpm, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            default:
-                // For all two byte commands
-                clear_cmd_bytes(2, in_edit_mode); // Clear bytes 2-7
-                break;
-            }
-            //reload_cmd_menus();
-            //update_page = REFRESH_PAGE;
-        }
+      // *****************************************
+      // * BYTE2: Device command byte updated    *
+      // *****************************************
 
-        // *****************************************
-        // * BYTE2: Device command byte updated    *
-        // *****************************************
-        if (cmd_type == TYPE_DEVICE_COMMANDS) {
-            uint16_t patch_no = 0;
-            uint8_t my_trigger = 0;
-            selected_device_cmd = cmdbyte[cmd_byte_no].Value;
-            switch (selected_device_cmd + 100) {
-            case PATCH_SEL:
-                // Command: <selected device>, PATCH_SEL, <current_patch_number>
-                if (dev < NUMBER_OF_DEVICES) patch_no = Device[dev]->patch_number;
-                set_type_and_value(2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
-                set_type_and_value(3, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
-                if (dev < NUMBER_OF_DEVICES) {
-                    cmdbyte[2].Max = Device[dev]->patch_max % 100;
-                    cmdbyte[3].Max = Device[dev]->patch_max / 100;
-                    cmdbyte[2].Min = Device[dev]->patch_min % 100;
-                    cmdbyte[3].Min = Device[dev]->patch_min / 100;
-                }
-                clear_cmd_bytes(4, in_edit_mode); // Clear bytes 3-7
-                break;
-            case PATCH_BANK:
-                // Command: <selected device>, PATCH_BANK, NUMBER, BANK_SIZE
-                set_type_and_value(2, TYPE_REL_NUMBER, 1, in_edit_mode);
-                set_type_and_value(3, TYPE_BANK_SIZE, 10, in_edit_mode);
-                clear_cmd_bytes(4, in_edit_mode); // Clear bytes 3-7
-                break;
-            case BANK_UP:
-            case BANK_DOWN:
-                // Command: <selected device>, BANK_UP/DOWN, BANK_SIZE
-                set_type_and_value(2, TYPE_BANK_SIZE, 10, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            case PARAMETER:
-                // Command: <selected device>, PARAMETER, NUMBER, TOGGLE, VALUE 1, VALUE 2
-                set_type_and_value(2, TYPE_PARAMETER, 0, in_edit_mode);
-                if (dev < NUMBER_OF_DEVICES) cmdbyte[2].Max = Device[dev]->number_of_parameters() - 1;
-                set_type_and_value(3, TYPE_TOGGLE, 1, in_edit_mode);
-                set_type_and_value(4, TYPE_PAR_STATE, 1, in_edit_mode);
-                if (dev < NUMBER_OF_DEVICES) {
-                    cmdbyte[4].Max = Device[dev]->max_value(cmdbyte[2].Value);
-                    cmdbyte[4].Min = Device[dev]->min_value(cmdbyte[2].Value);
-                }
-                set_type_and_value(5, TYPE_PAR_STATE, 0, in_edit_mode);
-                if (dev < NUMBER_OF_DEVICES) {
-                    cmdbyte[5].Max = Device[dev]->max_value(cmdbyte[2].Value);
-                    cmdbyte[5].Min = Device[dev]->min_value(cmdbyte[2].Value);
-                }
-                clear_cmd_bytes(6, in_edit_mode); // Clear bytes 6-7
-                break;
-            case ASSIGN:
-                // Command: <selected device>, ASSIGN, NUMBER
-                set_type_and_value(2, TYPE_ASSIGN, 0, in_edit_mode);
-                if (dev < NUMBER_OF_DEVICES) {
-                    if (Device[dev]->get_number_of_assigns() > 0)
-                        cmdbyte[2].Max = Device[dev]->get_number_of_assigns() - 1;
-                    else
-                        cmdbyte[2].Max = 0;
-                    my_trigger = Device[dev]->trigger_follow_assign(cmdbyte[2].Value);
-                }
-                else my_trigger = 0;
-                set_type_and_value(3, TYPE_ASSIGN_TRIGGER, my_trigger, in_edit_mode);
-                clear_cmd_bytes(4, in_edit_mode); // Clear bytes 3-7
-                break;
-            case OPEN_PAGE_DEVICE:
-                // Command: COMMON, OPEN_PAGE, 0
-                set_type_and_value(2, TYPE_PAGE, 0, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            case SNAPSCENE:
-                // Command: COMMON, SNAPSCENE, 0
-                set_type_and_value(2, TYPE_SNAPSCENE, 1, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            case LOOPER:
-                // Command: COMMON, LOOPER, 0
-                set_type_and_value(2, TYPE_LOOPER, 2, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            case MASTER_EXP_PEDAL:
-                // Command: <selected device>, MASTER_EXP_EDAL, 0
-                set_type_and_value(2, TYPE_EXP_PEDAL, 2, in_edit_mode);
-                clear_cmd_bytes(3, in_edit_mode); // Clear bytes 3-7
-                break;
-            default:
-                clear_cmd_bytes(2, in_edit_mode); // Clear bytes 2-7
-                break;
-            }
-            //reload_cmd_menus();
-            //update_page = REFRESH_PAGE;
-        }
-    }
-
-    if (cmd_byte_no == 2) {
-        // *****************************************
-        // * BYTE3: Assign byte updated            *
-        // *****************************************
-        if (cmd_type == TYPE_ASSIGN) {
+      if (cmd_type == TYPE_DEVICE_COMMANDS) {
+        uint16_t patch_no = 0;
+        selected_device_cmd = cmdbyte[cmd_byte_no].Value;
+        dev = cmdbyte[CB_DEVICE].Value;
+        switch (selected_device_cmd + 100) {
+          case PATCH:
+            // Command: <selected device>, PATCH, SELECT, <current_patch_number>
+            if (dev < NUMBER_OF_DEVICES) patch_no = Device[dev]->patch_number;
+            set_type_and_value(CB_DATA1, TYPE_CMDTYPE, SELECT, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
             if (dev < NUMBER_OF_DEVICES) {
-                uint8_t my_trigger = Device[dev]->trigger_follow_assign(cmdbyte[2].Value);
-                if (in_edit_mode) cmdbyte[3].Value = my_trigger;
+                cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
+                cmdbyte[CB_VAL1].Max = Device[dev]->patch_max / 100;
+                cmdbyte[CB_DATA2].Min = Device[dev]->patch_min % 100;
+                cmdbyte[CB_VAL1].Min = Device[dev]->patch_min / 100;
             }
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
+            break;
+          case PARAMETER:
+            // Command: <selected device>, PARAMETER, NUMBER, TOGGLE, VALUE 1, VALUE 2
+            set_type_and_value(CB_DATA1, TYPE_PARAMETER, 0, in_edit_mode);
+            if (dev < NUMBER_OF_DEVICES) {
+                cmdbyte[CB_DATA1].Max = Device[dev]->number_of_parameters() - 1;
+            }
+            set_type_and_value(CB_DATA2, TYPE_TOGGLE, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_PAR_STATE, 1, in_edit_mode);
+            if (dev < NUMBER_OF_DEVICES) {
+                cmdbyte[CB_VAL1].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
+                cmdbyte[CB_VAL1].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
+            }
+            set_type_and_value(CB_VAL2, TYPE_PAR_STATE, 0, in_edit_mode);
+            if (dev < NUMBER_OF_DEVICES) {
+                cmdbyte[CB_VAL2].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
+                cmdbyte[CB_VAL2].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
+            }
+            clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 6-7
+            break;
+          case ASSIGN:
+            // Command: <selected device>, ASSIGN, NUMBER
+            set_type_and_value(CB_DATA1, TYPE_CMDTYPE_ASSIGN, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_ASSIGN, 0, in_edit_mode);
+            if (dev < NUMBER_OF_DEVICES) {
+                if (Device[dev]->get_number_of_assigns() > 0)
+                    cmdbyte[CB_DATA2].Max = Device[dev]->get_number_of_assigns() - 1;
+                else
+                    cmdbyte[CB_DATA2].Max = 0;
+                my_trigger = Device[dev]->trigger_follow_assign(0);
+            }
+            else {
+                my_trigger = 0;
+                cmdbyte[CB_DATA2].Max = 0;
+            }
+            set_type_and_value(CB_VAL1, TYPE_ASSIGN_TRIGGER, my_trigger, in_edit_mode);
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case OPEN_PAGE_DEVICE:
+            // Command: <selected device>, OPEN_PAGE, 0
+            set_type_and_value(CB_DATA1, TYPE_PAGE, 0, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case SNAPSCENE:
+            // Command: <selected device>, SNAPSCENE, 0
+            set_type_and_value(CB_DATA1, TYPE_SNAPSCENE, 1, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_SNAPSCENE, 0, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_SNAPSCENE, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 5-7
+            break;
+          case LOOPER:
+            // Command: <selected device>, LOOPER, 0
+            set_type_and_value(CB_DATA1, TYPE_LOOPER, 2, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case MASTER_EXP_PEDAL:
+            // Command: <selected device>, MASTER_EXP_EDAL, 0
+            set_type_and_value(CB_DATA1, TYPE_EXP_PEDAL, 2, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          default:
+            clear_cmd_bytes(CB_DATA1, in_edit_mode); // Clear bytes 2-7
+            break;
         }
-
-        // *****************************************
-        // * BYTE3: Page byte updated            *
-        // *****************************************
-        //if (cmd_type == TYPE_PAGE) {
-        //  if (cmdbyte[cmd_byte_no].Value == Number_of_pages) cmdbyte[cmd_byte_no].Value = FIRST_FIXED_CMD_PAGE; //Jump over the gap between the external and internal pages
-        //  if (cmdbyte[cmd_byte_no].Value == FIRST_FIXED_CMD_PAGE - 1) cmdbyte[cmd_byte_no].Value = Number_of_pages - 1;
-        //}
+        //reload_cmd_menus();
+        //update_page = REFRESH_PAGE;
+      }
     }
 
-    // *****************************************
-    // * BYTE4: Toggle type byte updated       *
-    // *****************************************
-    if (cmd_type == TYPE_TOGGLE) {
-        uint8_t max = 1;
-        uint8_t min = 0;
-        if (dev < NUMBER_OF_DEVICES) {
-            max = Device[dev]->max_value(cmdbyte[2].Value);
-            min = Device[dev]->min_value(cmdbyte[2].Value);
-        }
+    // *******************************************
+    // **********     BYTE3 updated     **********
+    // *******************************************
+
+    if (cmd_byte_no == CB_DATA1) {
+
+      // *****************************************
+      // * BYTE3: Command type updated           *
+      // *****************************************
+      if ((cmd_type == TYPE_CMDTYPE) || (cmd_type == TYPE_CMDTYPE_ASSIGN)) {
         switch (cmdbyte[cmd_byte_no].Value) {
-        case MOMENTARY:
-        case TOGGLE:
-            cmdbyte[4].Title = "ON-VALUE";
-            cmdbyte[5].Title = "OFF-VALUE";
+          case SELECT:
+            if (current_cmd_function() == PAGE) {
+              set_type_and_value(CB_DATA2, TYPE_PAGE, 0, in_edit_mode);
+              clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            }
+            if (current_cmd_function() == PATCH) {
+              uint8_t dev = cmdbyte[CB_DEVICE].Value;
+              uint16_t patch_no = 0;
+              if (dev < NUMBER_OF_DEVICES) patch_no = Device[dev]->patch_number;
+              set_type_and_value(CB_DATA2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
+              clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
+              if (dev < NUMBER_OF_DEVICES) {
+                  cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
+                  cmdbyte[CB_VAL1].Max = Device[dev]->patch_max / 100;
+                  cmdbyte[CB_DATA2].Min = Device[dev]->patch_min % 100;
+                  cmdbyte[CB_VAL1].Min = Device[dev]->patch_min / 100;
+              }
+            }
+            if (current_cmd_function() == ASSIGN) {
+              set_type_and_value(CB_DATA2, TYPE_ASSIGN, 0, in_edit_mode);
+              dev = cmdbyte[CB_DEVICE].Value;
+              if (dev < NUMBER_OF_DEVICES) {
+                  if (Device[dev]->get_number_of_assigns() > 0)
+                      cmdbyte[CB_DATA2].Max = Device[dev]->get_number_of_assigns() - 1;
+                  else
+                      cmdbyte[CB_DATA2].Max = 0;
+                  my_trigger = Device[dev]->trigger_follow_assign(0);
+              }
+              else {
+                  my_trigger = 0;
+                  cmdbyte[CB_DATA2].Max = 0;
+              }
+              set_type_and_value(CB_VAL1, TYPE_ASSIGN_TRIGGER, my_trigger, in_edit_mode);
+              clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+            }
             break;
-        case TRISTATE:
-            // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-            cmdbyte[6].Max = max;
-            cmdbyte[6].Min = min;
-            set_type_and_value(6, TYPE_PAR_STATE, max, in_edit_mode);
-            clear_cmd_bytes(7, in_edit_mode);
+          case NEXT:
+          case PREV:
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
             break;
-        case FOURSTATE:
-            // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-            cmdbyte[6].Max = max;
-            cmdbyte[6].Min = min;
-            cmdbyte[7].Max = max;
-            cmdbyte[7].Min = min;
-            set_type_and_value(6, TYPE_PAR_STATE, max, in_edit_mode);
-            set_type_and_value(7, TYPE_PAR_STATE, max, in_edit_mode);
+          case BANKSELECT:
+            set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
             break;
-        case STEP:
-            // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-            cmdbyte[4].Title = "MIN VALUE";
-            cmdbyte[5].Title = "MAX VALUE";
-            set_type_and_value(6, TYPE_STEP, 1, in_edit_mode);
-            clear_cmd_bytes(7, in_edit_mode);
+          case BANKUP:
+          case BANKDOWN:
+            set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
             break;
-        case RANGE:
-        case UPDOWN:
-            cmdbyte[4].Title = "MIN VALUE";
-            cmdbyte[5].Title = "MAX VALUE";
-            break;
-
-        default:
-            clear_cmd_bytes(6, in_edit_mode);
         }
+      }
     }
+
+    // *******************************************
+    // **********     BYTE4 updated     **********
+    // *******************************************
+
+    if (cmd_byte_no == CB_DATA1) {
+
+      // *****************************************
+      // * BYTE4: Toggle type byte updated       *
+      // *****************************************
+      if (cmd_type == TYPE_TOGGLE) {
+          uint8_t max = 1;
+                  uint8_t min = 0;
+                  if (dev < NUMBER_OF_DEVICES) {
+                      max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
+                      min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
+                  }
+                  switch (cmdbyte[cmd_byte_no].Value) {
+                  case MOMENTARY:
+                  case TOGGLE:
+                      cmdbyte[CB_VAL1].Title = "ON-VALUE";
+                      cmdbyte[CB_VAL2].Title = "OFF-VALUE";
+                      break;
+                  case TRISTATE:
+                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
+                      cmdbyte[CB_VAL3].Max = max;
+                      cmdbyte[CB_VAL3].Min = min;
+                      set_type_and_value(CB_VAL3, TYPE_PAR_STATE, max, in_edit_mode);
+                      clear_cmd_bytes(CB_VAL4, in_edit_mode);
+                      break;
+                  case FOURSTATE:
+                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
+                      cmdbyte[CB_VAL3].Max = max;
+                      cmdbyte[CB_VAL3].Min = min;
+                      cmdbyte[CB_VAL4].Max = max;
+                      cmdbyte[CB_VAL4].Min = min;
+                      set_type_and_value(CB_VAL3, TYPE_PAR_STATE, max, in_edit_mode);
+                      set_type_and_value(CB_VAL4, TYPE_PAR_STATE, max, in_edit_mode);
+                      break;
+                  case STEP:
+                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
+                      cmdbyte[CB_VAL1].Title = "MIN VALUE";
+                      cmdbyte[CB_VAL2].Title = "MAX VALUE";
+                      set_type_and_value(CB_VAL3, TYPE_STEP, 1, in_edit_mode);
+                      clear_cmd_bytes(CB_VAL4, in_edit_mode);
+                      break;
+                  case RANGE:
+                  case UPDOWN:
+                      cmdbyte[CB_VAL1].Title = "MIN VALUE";
+                      cmdbyte[CB_VAL2].Title = "MAX VALUE";
+                      break;
+
+                  default:
+                      clear_cmd_bytes(CB_VAL3, in_edit_mode);
+                  }
+      }
+    }
+
+    // *******************************************
+    // **********   BYTE4 - 10 updated  **********
+    // *******************************************
+
+    if ((cmd_byte_no >= CB_DATA1) && (cmd_byte_no <= CB_VAL4)) {
+      // *****************************************
+      // * BYTE4+: Parameter value byte updated  *
+      // *****************************************
+      /*if (cmd_type == TYPE_PAR_STATE) {
+        uint8_t dev = cmdbyte[CB_DEVICE].Value;
+        if (dev < NUMBER_OF_DEVICES) {
+          // Check if we have reached the max value
+          if (cmdbyte[cmd_byte_no].Value >= Device[dev]->number_of_values(cmdbyte[CB_DATA1].Value)) cmdbyte[cmd_byte_no].Value = 0;
+        }
+      }*/
+      // *****************************************
+      // * BYTE4+: Page byte updated             *
+      // *****************************************
+      if (cmd_type == TYPE_PAGE) {
+        if (cmdbyte[cmd_byte_no].Value == Number_of_pages) cmdbyte[cmd_byte_no].Value = FIRST_FIXED_CMD_PAGE; // Jump over the gap between the external and internal pages
+        if (cmdbyte[cmd_byte_no].Value == FIRST_FIXED_CMD_PAGE - 1) cmdbyte[cmd_byte_no].Value = Number_of_pages - 1;
+      }
+
+      // *****************************************
+      // * BYTE4+: Type patch 100 byte updated    *
+      // *****************************************
+      if (cmd_type == TYPE_PATCH_100) { // Check if we reached the minimum or maximum value
+        uint16_t patch_no = (cmdbyte[CB_VAL1].Value * 100);
+        uint8_t Dev = cmdbyte[CB_DEVICE].Value;
+        if (Dev < NUMBER_OF_DEVICES) {
+          if (patch_no >= Device[Dev]->patch_max) {
+            cmdbyte[CB_VAL1].Value = Device[Dev]->patch_min / 100;
+          }
+          if (patch_no < Device[Dev]->patch_min) {
+            cmdbyte[CB_VAL1].Value = Device[Dev]->patch_max / 100;
+          }
+        }
+      }
+
+      // *****************************************
+      // * BYTE4+: Assign number byte updated    *
+      // *****************************************
+
+      if (cmd_type == TYPE_ASSIGN) {
+        uint8_t dev = cmdbyte[CB_DEVICE].Value;
+        if (dev < NUMBER_OF_DEVICES) {
+          // Check if we have reached the max value
+          if (cmdbyte[cmd_byte_no].Value >= Device[dev]->get_number_of_assigns()) cmdbyte[cmd_byte_no].Value = 0;
+          // Let the trigger field follow the assign field if neccesary
+          uint8_t my_trigger = Device[dev]->trigger_follow_assign(cmdbyte[cmd_byte_no].Value + 1);
+          cmdbyte[CB_VAL1].Value = my_trigger;
+        }
+      }
+   }
+}
+
+uint8_t VCcommands::current_cmd_function() {
+  if (cmdbyte[CB_DEVICE].Value == NUMBER_OF_DEVICES + 1) { // Common device
+    return cmdbyte[CB_TYPE].Value;
+  }
+  else { // Current device
+    return cmdbyte[CB_TYPE].Value + 100;
+  }
 }
 
 void VCcommands::load_cmd_byte(QTableWidget *table, uint8_t cmd_byte_no)
 {
     uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
-    uint8_t max = cmdbyte[cmd_byte_no].Max;
-    uint8_t min = cmdbyte[cmd_byte_no].Min;
-    uint8_t value = cmdbyte[cmd_byte_no].Value;
+    uint16_t max = cmdbyte[cmd_byte_no].Max;
+    uint16_t min = cmdbyte[cmd_byte_no].Min;
+    uint16_t value = cmdbyte[cmd_byte_no].Value;
+
+    if (max > 255) max = 255; // We only support max values up to 255
 
     if (value > max) {
         value = max;
@@ -1267,16 +1493,16 @@ void VCcommands::load_cmd_byte(QTableWidget *table, uint8_t cmd_byte_no)
     else {
         table->setItem(cmd_byte_no, 0, new QTableWidgetItem(cmdbyte[cmd_byte_no].Title)); // Set the cmd title
         CustomComboBox *comboBox = new CustomComboBox(table, cmd_byte_no, cmd_type);
-        for (int i = indexFromValue(cmd_type, min); i <= indexFromValue(cmd_type, max); i++) {
+        for (uint16_t i = indexFromValue(cmd_type, min); i <= indexFromValue(cmd_type, max); i++) {
             comboBox->addItem(read_cmd_sublist(cmd_byte_no, valueFromIndex(cmd_type, i - min)));
         }
 
         // Disable items for devices that are not supported
-        if ((cmdbyte[0].Value < NUMBER_OF_DEVICES) && (cmd_byte_no == 1)) {
+        if ((cmdbyte[CB_DEVICE].Value < NUMBER_OF_DEVICES) && (cmd_byte_no == 1)) {
             const QStandardItemModel* model = qobject_cast<const QStandardItemModel*>(comboBox->model());
             for (int i = indexFromValue(cmd_type, min); i <= indexFromValue(cmd_type, max); i++) {
               QStandardItem* item = model->item(i - min);
-              item->setEnabled(Device[cmdbyte[0].Value]->check_command_enabled(i + 100));
+              item->setEnabled(Device[cmdbyte[CB_DEVICE].Value]->check_command_enabled(i + 100));
             }
         }
         comboBox->setCurrentIndex(indexFromValue(cmd_type, value - min));
@@ -1294,11 +1520,11 @@ void VCcommands::load_cmd_byte(QTableWidget *table, uint8_t cmd_byte_no)
 
 }
 
-QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint8_t value)
+QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
 {
     QString msg, msg1;
     uint8_t index;
-    uint8_t dev = cmdbyte[0].Value;
+    uint8_t dev = cmdbyte[CB_DEVICE].Value;
     uint8_t page_index;
     //uint8_t sel_switch;
     //uint8_t sel_cmd_no;
@@ -1317,7 +1543,7 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint8_t value)
         break;
     case SUBLIST_PATCH: // Copy the patchname from the device
         msg = "";
-        patch_no = value + (cmdbyte[3].Value * 100);
+        patch_no = value + (cmdbyte[CB_VAL1].Value * 100);
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->number_format(patch_no);
         else msg = QString::number(patch_no);
         break;
@@ -1331,25 +1557,25 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint8_t value)
         else msg = QString::number(bank_low) + " - " + QString::number(bank_high);
         break;
     case SUBLIST_PARAMETER:  // Copy the parameter name from the device
-        dev = cmdbyte[0].Value;
+        dev = cmdbyte[CB_DEVICE].Value;
         msg = "";
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_parameter_name(value);
         else msg = QString::number(value);
         break;
     case SUBLIST_PAR_STATE: // Copy the parameter state from the device
-        dev = cmdbyte[0].Value;
+        dev = cmdbyte[CB_DEVICE].Value;
         msg = "";
-        if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_parameter_state(cmdbyte[2].Value, value);
+        if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_parameter_state(cmdbyte[CB_DATA1].Value, value);
         else msg = QString::number(value);
         break;
     case SUBLIST_ASSIGN:  // Copy the assign name from the device
-        dev = cmdbyte[0].Value;
+        dev = cmdbyte[CB_DEVICE].Value;
         msg = "";
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_assign_name(value);
         else msg = QString::number(value);
         break;
     case SUBLIST_TRIGGER:  // Copy the assign trigger name from the device
-        dev = cmdbyte[0].Value;
+        dev = cmdbyte[CB_DEVICE].Value;
         msg = "";
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_assign_trigger(value);
         else msg = QString::number(value);
