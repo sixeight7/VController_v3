@@ -33,7 +33,7 @@ The V-Controller supports up to 200 user pages, where a total of almost 3000 com
 * An internal or external Raspberry Pi can add four USB host ports to the V-Controller.
 
 # Connectivity of the VC-mini
-* Two 9 pin MIDI connectors with MIDI in/out and power in one connector. MIDI1 has a seperate 9 pin connector with MIDI in/out reversed. The 9 pin connectors are compatible with regular 5 pin midi connectors.
+* Two 7 pin MIDI connectors with MIDI in/out and power in one connector. MIDI1 has a seperate 7 pin connector with MIDI in/out reversed. The 7 pin connectors are compatible with regular 5 pin MIDI connectors.
 * One external expression pedal or two external switches can be connected via a 3.5 mm jack plug (may need an adapter to regular jack.)
 * One USB slave connector (also used for programming the V-Controller)
 * One USB host port
