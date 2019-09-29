@@ -419,6 +419,7 @@ void KTN_rename_done() {
 }
 
 void KTN_exit() {
+  SC_set_enc1_acceleration(true);
   SCO_select_next_page_of_device(Current_device);
   update_page = RELOAD_PAGE;
 }
@@ -442,11 +443,12 @@ void SCO_toggle_menu() { // Will open or close the menu
 }
 
 void menu_open() { // Called when the menu is started the first time
+  SC_set_enc1_acceleration(false);
   if (open_menu_for_Katana_edit) current_menu = KATANA_MENU;
   else {
     current_menu = SELECT_MENU; // Go to top menu
 #ifdef IS_VCMINI
-    //LCD_show_popup_title(" E1:SEL  E2:SET ", MESSAGE_TIMER_LENGTH);
+    LCD_show_popup_title(" E1:SEL  E2:SET ", MESSAGE_TIMER_LENGTH);
     LCD_show_popup_label("PREV  NEXT   SET", MESSAGE_TIMER_LENGTH);
 #endif
   }
@@ -630,7 +632,7 @@ void menu_load(uint8_t Sw) {
 
 #ifdef IS_VCMINI
   // Show data on main display
-  LCD_main_set_title(menu_title);
+  if (!popup_title_showing) LCD_main_set_title(menu_title);
   if (!popup_label_showing) LCD_main_set_label_right(menu_label);
   update_main_lcd = true;
 #else
@@ -823,6 +825,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       menu_select(SELECT_MENU);
       break;
     case EXIT_MENU:
+      SC_set_enc1_acceleration(true);
       if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
       set_current_device(current_device_when_menu_was_opened);
       SCO_select_page(Previous_page);
@@ -1043,16 +1046,14 @@ void menu_select_prev() {
   do { // Skip menu items of type NONE
     if (current_menu_switch <= 1) current_menu_switch = 12;
     else current_menu_switch--;
-  } while (cmd_byte_empty());
-//  } while ((menu[current_menu][current_menu_switch].Type == NONE) || (cmd_byte_empty()));
+  } while (skip_menu_item_for_encoder());
 }
 
 void menu_select_next() {
   do { // Skip menu items of type NONE
     if (current_menu_switch >= 12) current_menu_switch = 1;
     else current_menu_switch++;
-  } while (cmd_byte_empty());
-//  } while ((menu[current_menu][current_menu_switch].Type == NONE) || (cmd_byte_empty()));
+  } while (skip_menu_item_for_encoder());
 }
 
 typedef void(*f_valueHandler)();
@@ -1574,7 +1575,7 @@ void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String &msg) {
   }
 }
 
-bool cmd_byte_empty() {
+bool skip_menu_item_for_encoder() {
   uint8_t type = menu[current_menu][current_menu_switch].Type;
   if (type == NONE) return true;
   if (type == CMD_BACK) return true;

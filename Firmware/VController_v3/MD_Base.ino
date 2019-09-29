@@ -133,7 +133,7 @@ void MD_base_class::connect(uint8_t device_id, uint8_t port) {
   MIDI_port = port; // Set the correct MIDI port for this device
   do_after_connect();
   PAGE_check_first_connect(my_device_number); // Go to the device page of this device if it is the first device that connects
-  LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
+  if (enabled == DEVICE_DETECT) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
   DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ":" + String(port & 0x0F));
 }
 

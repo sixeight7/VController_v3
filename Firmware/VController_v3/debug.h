@@ -12,8 +12,8 @@ void StartFreeTimer();
 //#define DEBUG_MAIN
 
 // Midi debugging
-#define DEBUG_MIDI
-#define DEBUG_SYSEX
+//#define DEBUG_MIDI
+//#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
 
 // Check for free memory - to detect memory leaks

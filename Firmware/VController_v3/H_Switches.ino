@@ -21,6 +21,8 @@
 // The type of external switch is read during startup of the VController.
 // The choice of hardware must be set in hardware.h
 
+// External library used for encoders:
+
 // Create object for power switch
 #ifdef POWER_SWITCH_PIN
 #include <Bounce.h>
@@ -62,21 +64,30 @@ Switchpad switchpad = Switchpad(rowPins, colPins, ROWS, COLS, SWITCH_BOUNCE_TIME
 #endif
 
 #ifdef ENCODER1_A_PIN
-#include <Encoder.h>
-#define ENCODER_USE_INTERRUPTS
-Encoder enc1(ENCODER1_B_PIN, ENCODER1_A_PIN);
+#include <ClickEncoder.h>
+#include <TimerOne.h>
+ClickEncoder enc1 = ClickEncoder(ENCODER1_B_PIN, ENCODER1_A_PIN, -1, 2);
 #endif
 #ifdef ENCODER1_SWITCH_PIN
 #include <Bounce.h>
 Bounce enc1_switch = Bounce(ENCODER1_SWITCH_PIN, SWITCH_BOUNCE_TIME);
 #endif
 #ifdef ENCODER2_A_PIN
-Encoder enc2(ENCODER2_B_PIN, ENCODER2_A_PIN);
+//Encoder enc2(ENCODER2_B_PIN, ENCODER2_A_PIN);
+ClickEncoder enc2 = ClickEncoder(ENCODER2_B_PIN, ENCODER2_A_PIN, -1, 2);
 #endif
 #ifdef ENCODER2_SWITCH_PIN
 Bounce enc2_switch = Bounce(ENCODER2_SWITCH_PIN, SWITCH_BOUNCE_TIME);
 #endif
 
+#ifdef ENCODER1_A_PIN
+void timerIsr() {
+  enc1.service();
+#ifdef ENCODER2_A_PIN
+  enc2.service();
+#endif
+}
+#endif
 
 // Create objects for external switches (max 8) if defined in hardware.h
 #ifdef JACK1_PINS
@@ -204,14 +215,16 @@ void setup_switch_check() {
 
   // Initialize encoders
 #ifdef ENCODER1_A_PIN
-  enc1.write(0);
+  enc1.setAccelerationEnabled(true);
+  Timer1.initialize(1000);
+  Timer1.attachInterrupt(timerIsr);
 #endif
 #ifdef ENCODER1_SWITCH_PIN
   pinMode(ENCODER1_SWITCH_PIN, INPUT_PULLUP);
   enc1_switch.update();
 #endif
 #ifdef ENCODER2_A_PIN
-  enc2.write(0);
+  enc2.setAccelerationEnabled(true);
 #endif
 #ifdef ENCODER2_SWITCH_PIN
   pinMode(ENCODER2_SWITCH_PIN, INPUT_PULLUP);
@@ -261,11 +274,10 @@ void main_switch_check() {
   // Check encoders
   Enc_value = 0;
 #ifdef ENCODER1_A_PIN
-  uint8_t new_reading = enc1.read() / 2;
-  if (new_reading != Enc1_value) {
+  int16_t new_reading = enc1.getValue();
+  if (new_reading != 0) {
+    Enc_value = new_reading;
     switch_pressed = NUMBER_OF_SWITCHES + 1;
-    Enc_value = new_reading - Enc1_value;
-    Enc1_value = new_reading;
     switch_type = SW_TYPE_ENCODER;
   }
 #endif
@@ -281,11 +293,10 @@ void main_switch_check() {
   }
 #endif
 #ifdef ENCODER2_A_PIN
-  new_reading = enc2.read() / 2;
-  if (new_reading != Enc2_value) {
+  new_reading = enc2.getValue();
+  if (new_reading != 0) {
+    Enc_value = new_reading;
     switch_pressed = NUMBER_OF_SWITCHES + 3;
-    Enc_value = new_reading - Enc2_value;
-    Enc2_value = new_reading;
     switch_type = SW_TYPE_ENCODER;
   }
 #endif
@@ -632,4 +643,10 @@ bool SC_check_valid_switch(uint8_t sw) {
 void SC_skip_release_and_hold_until_next_press() { // Called from SCO_select_page() and global tuner press. Make sure no switch_release, long_press, etc is triggered until we press a switch again..
   skip_release_and_hold_until_next_press = true;
   //multi_switch_booleans = 0;
+}
+
+void SC_set_enc1_acceleration(bool state) {
+#ifdef ENCODER1_A_PIN
+  enc1.setAccelerationEnabled(state);
+#endif
 }

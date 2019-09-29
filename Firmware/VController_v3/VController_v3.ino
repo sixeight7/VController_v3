@@ -32,11 +32,11 @@
 // Current version of Arduino: 1.8.9 and TeensyDuino: 1.46
 
 // Hardware of production model 
-#include "hardware.h" 
+//#include "hardware.h" 
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Faster, Programmer: AVRISP mkII 
 
 // Hardware of VC-mini rev. B 
-//#include "hardware_VCmini_b.h" 
+#include "hardware_VCmini_b.h" 
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
 
 // Hardware of VController V1 model of sixeight 
@@ -54,7 +54,7 @@
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
 #define VCONTROLLER_FIRMWARE_VERSION_MINOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
 
 void setup() {
   SCO_switch_power_on();
@@ -244,4 +244,6 @@ void loop() {
   13-07-2019 Fixed looper bar error for longer loops
   16-07-2019 Helix PC/CC forwarding now stores and checks the current setlist. This ensures no faulty messages are sent when changing setlist on the Helix. Fixed wrong label shown on large VController for looper bar
   23-07-2019 Changed format of PAGE, PATCH and ASSIGN commands - also updated the onboard editing and fixed a bug in making new commands.
+  09-09-2019 Uploaded V3.3.0 firmware to Github.
+  29-09-2019 Implemented new library for encoders that is more stable and supports encoder acceleration - when the encoder is rotated faster, the encoders value will increment faster.
 */
