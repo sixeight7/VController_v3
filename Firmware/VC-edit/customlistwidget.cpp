@@ -5,7 +5,7 @@
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
 
-customListWidget::customListWidget(QWidget *parent)
+customListWidget::customListWidget(QWidget *parent) : QListWidget(parent)
 {
     Q_UNUSED(parent);
 

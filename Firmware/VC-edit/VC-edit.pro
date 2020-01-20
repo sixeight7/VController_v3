@@ -63,7 +63,9 @@ SOURCES += main.cpp\
     customslider.cpp \
     devices/kpa.cpp \
     vcmidiswitchsettings.cpp \
-    vcdevices.cpp
+    vcdevices.cpp \
+    devices/svl.cpp \
+    custompatchlistwidget.cpp
 
 HEADERS  += RtMidi.h \
     mainwindow.h \
@@ -94,15 +96,17 @@ HEADERS  += RtMidi.h \
     customslider.h \
     devices/kpa.h \
     vcmidiswitchsettings.h \
-    vcdevices.h
+    vcdevices.h \
+    devices/svl.h \
+    custompatchlistwidget.h
 
 FORMS += \
     vceditsettingsdialog.ui \
     commandeditdialog.ui \
     mainwindow_VC-full.ui \
-    mainwindow_VC-mini.ui \
     aboutdialog_VC-full.ui \
-    aboutdialog_VC-mini.ui
+    aboutdialog_VC-mini.ui \
+    mainwindow_VC-mini.ui
 
 RESOURCES += \
     myresources.qrc

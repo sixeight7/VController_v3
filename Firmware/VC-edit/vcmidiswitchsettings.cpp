@@ -16,7 +16,7 @@ void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
     parent->setText(0, "MIDI Switch Settings");
     my_tree->addTopLevelItem(parent);
 
-    for (int s = 0; s < NUMBER_OF_VISIBLE_MIDI_SWITCHES; s++) {
+    for (int s = 0; s < NUMBER_OF_MIDI_SWITCHES; s++) {
         QTreeWidgetItem *deviceChild = new QTreeWidgetItem(parent);
         deviceChild->setText(0, getSwitchNameForTree(s));
         //my_tree->addTopLevelItem(deviceChild);

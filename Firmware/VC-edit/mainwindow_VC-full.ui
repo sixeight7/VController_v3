@@ -36,9 +36,9 @@ QLabel { color : white; background-color: rgb(0 ,0 ,100)}
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>2</number>
+       <number>4</number>
       </property>
-      <widget class="QWidget" name="tab">
+      <widget class="QWidget" name="tab_PageCommands">
        <attribute name="title">
         <string>Page commands</string>
        </attribute>
@@ -607,7 +607,7 @@ border-radius: 10px;</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_2">
+      <widget class="QWidget" name="tab_ExternalSwitchCommands">
        <attribute name="title">
         <string>External switch commands</string>
        </attribute>
@@ -1046,7 +1046,80 @@ border-radius: 10px;</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_3">
+      <widget class="QWidget" name="tab_KatanaPatches">
+       <attribute name="title">
+        <string>Katana patches</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_21">
+        <item>
+         <widget class="customListWidget" name="patchListWidget"/>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_16">
+          <item>
+           <widget class="QPushButton" name="readPatchButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 grey);
+border-style: solid;
+border-color: black;
+border-width: 2px;
+border-radius: 10px;</string>
+            </property>
+            <property name="text">
+             <string>Read patches from VController</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="writePatchButton">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 grey);
+border-style: solid;
+border-color: black;
+border-width: 2px;
+border-radius: 10px;</string>
+            </property>
+            <property name="text">
+             <string>Write patches to VController</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_Settings">
        <attribute name="title">
         <string>Settings</string>
        </attribute>
@@ -2415,9 +2488,9 @@ border-radius: 10px;</string>
     <addaction name="actionNextPage"/>
     <addaction name="actionPreviousPage"/>
    </widget>
-   <widget class="QMenu" name="menuEdit">
+   <widget class="QMenu" name="menuCommand">
     <property name="title">
-     <string>Edit</string>
+     <string>Command</string>
     </property>
     <addaction name="actionCopyCommand"/>
     <addaction name="actionCutCommand"/>
@@ -2433,9 +2506,20 @@ border-radius: 10px;</string>
     <addaction name="actionWebsite"/>
     <addaction name="actionDonate"/>
    </widget>
+   <widget class="QMenu" name="menuPatch">
+    <property name="title">
+     <string>Patch</string>
+    </property>
+    <addaction name="actionCopyPatch"/>
+    <addaction name="actionPastePatch"/>
+    <addaction name="actionRename"/>
+    <addaction name="actionImport"/>
+    <addaction name="actionExport"/>
+   </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuEdit"/>
    <addaction name="menuPage"/>
+   <addaction name="menuCommand"/>
+   <addaction name="menuPatch"/>
    <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
@@ -2575,6 +2659,46 @@ border-radius: 10px;</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Left</string>
+   </property>
+  </action>
+  <action name="actionCopyPatch">
+   <property name="text">
+    <string>Copy patch</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+C</string>
+   </property>
+  </action>
+  <action name="actionPastePatch">
+   <property name="text">
+    <string>Paste patch</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+V</string>
+   </property>
+  </action>
+  <action name="actionRename">
+   <property name="text">
+    <string>Rename</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+R</string>
+   </property>
+  </action>
+  <action name="actionImport">
+   <property name="text">
+    <string>Import</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+I</string>
+   </property>
+  </action>
+  <action name="actionExport">
+   <property name="text">
+    <string>Export</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+E</string>
    </property>
   </action>
  </widget>

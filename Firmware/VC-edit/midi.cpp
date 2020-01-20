@@ -2,6 +2,7 @@
 #include "VController/config.h"
 #include "VController/globals.h"
 #include "VController/globaldevices.h"
+#include "devices/katana.h"
 #include <QDebug>
 #include <QThread>
 
@@ -128,7 +129,7 @@ void Midi::sendSysexCommand(int size, ...) {
 void Midi::staticMidiCallback(double, std::vector<unsigned char> *message, void *userData) // Static member!
 {
     Midi* midiInstance = (Midi*) userData; // We have set userData as a pointer to the instance of the class
-    if (message->size() > 0 && (midiInstance != NULL))
+    if ((message->size() > 0) && (midiInstance != NULL))
     { midiInstance->checkMidiIn(message); }; // Here we are redirected back to the correct instance of this Class
 }
 
@@ -141,6 +142,14 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
     //MIDI_debug_data(message, true);
 
     if (message->size() < 7) return;
+
+    // Check if it is a universal response message from the VController
+    // VC-mini will send F0 7E 01 06 02 7D 00 68 00 02 (03 03 05) 00 F7 - version number between brackets
+    if ((message->at(0) == 0xF0) && (message->at(1) == 0x7E) && (message->at(2) == VC_DEVICE_ID) && (message->at(3) == 0x06)
+            && (message->at(4) == 0x02) && (message->at(5) == VC_MANUFACTURING_ID) && (message->at(7) == VC_FAMILY_CODE)) {
+        emit VControllerDetected(message->at(9), message->at(10), message->at(11), message->at(12));
+        qDebug() << "VController detected";
+    }
 
     // Check if sysexmessage is from the VController
     if ((message->at(0) == 0xF0) && (message->at(1) == VC_MANUFACTURING_ID) && (message->at(2) == VC_FAMILY_CODE) &&
@@ -180,6 +189,12 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
         case VC_SET_COMMAND:
             MIDI_editor_receive_command(message);
             break;
+        case VC_SET_KATANA_PATCH:
+            MIDI_editor_receive_KTN_patch(message);
+            break;
+        case VC_FINISH_KATANA_PATCH_DUMP:
+            MIDI_editor_receive_finish_KTN_patch_dump(message);
+            break;
         }
     }
 
@@ -194,6 +209,11 @@ void Midi::MIDI_editor_request_all_commands()
 {
     //Commands.clear();
     sendSysexCommand(1, VC_REQUEST_COMMANDS_DUMP);
+}
+
+void Midi::MIDI_editor_request_all_KTN_patches()
+{
+    sendSysexCommand(1, VC_REQUEST_KATANA_PATCHES);
 }
 
 
@@ -258,19 +278,6 @@ void Midi::MIDI_editor_send_finish_commands_dump()
     MIDI_debug_data(&message, false);
 }
 
-void Midi::MIDI_send_all_commands(QProgressBar *myBar)
-{
-    MIDI_editor_send_start_commands_dump();
-    myBar->setMinimum(0);
-    myBar->setMaximum(Commands.size());
-    for (uint16_t c = 0; c < Commands.size(); c++) {
-        MIDI_editor_send_command(c);
-        myBar->setValue(c);
-        myBar->repaint();
-    }
-    MIDI_editor_send_finish_commands_dump();
-}
-
 void Midi::MIDI_editor_send_start_commands_dump()
 {
     sendSysexCommand(3, VC_START_COMMANDS_DUMP, (uint8_t)((Commands.size() >> 7) & 0x7F), (uint8_t)(Commands.size() & 0x7F));
@@ -281,6 +288,52 @@ void Midi::MIDI_editor_send_command(uint16_t cmd_no)
     Cmd_struct cmd = Commands[cmd_no];
     uint8_t* cmdbytes = (uint8_t*)&cmd;
     MIDI_send_data(VC_SET_COMMAND, cmdbytes, sizeof(cmd));
+}
+
+void Midi::MIDI_send_KTN_patch(uint8_t patch_no)
+{
+    if (_midiOut && !_midiOut->isPortOpen()) return; // Exit if port is not open.
+
+    std::vector<unsigned char> message;
+    message.clear();
+    message.push_back( 0xF0 );
+    message.push_back( VC_MANUFACTURING_ID );
+    message.push_back( VC_FAMILY_CODE );
+    message.push_back( VC_MODEL_NUMBER );
+    message.push_back( VC_DEVICE_ID );
+    message.push_back( VC_SET_KATANA_PATCH);
+    message.push_back( patch_no );
+    QByteArray patch = My_KTN.ReadPatch(patch_no);
+    for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
+        message.push_back(patch[i] & 0x7F);
+    }
+    message.push_back( 0xF7 );
+    _midiOut->sendMessage(&message);
+    MIDI_debug_data(&message, false);
+    QThread::msleep(10);
+}
+
+void Midi::MIDI_editor_send_finish_KTN_patch_dump()
+{
+    uint8_t dummy[1] = {0};
+    MIDI_send_data(VC_FINISH_KATANA_PATCH_DUMP, dummy, 1);
+}
+
+void Midi::send_universal_identity_request()
+{
+    // Format: 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7
+
+    std::vector<unsigned char> message;
+    message.clear();
+    message.push_back( 0xF0 );
+    message.push_back( 0x7E );
+    message.push_back( 0x7F );
+    message.push_back( 0x06 );
+    message.push_back( 0x01 );
+    message.push_back( 0xF7 );
+    _midiOut->sendMessage(&message);
+
+    qDebug() << "Sent Universal Identity Request";
 }
 
 QString Midi::addChar(unsigned char c) {
@@ -408,6 +461,30 @@ void Midi::MIDI_editor_receive_midi_switch_settings(std::vector<unsigned char> *
         emit updateProgressBar(sw + NUMBER_OF_DEVICES);
         if (sw >= NUMBER_OF_MIDI_SWITCHES - 1) emit closeProgressBar("Settings download succesful");
     }
+}
+
+void Midi::MIDI_editor_receive_KTN_patch(std::vector<unsigned char> *message)
+{
+    if (message->size() != KTN_PATCH_SIZE + 8) {
+        MIDI_show_error();
+        return;
+    }
+    QByteArray patch;
+    int patch_no = message->at(6);
+    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
+        int pos = i + 7;
+        patch.append(message->at(pos));
+    }
+    My_KTN.WritePatch(patch_no, patch);
+    if (patch_no == 0) emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving Katana patches");
+    emit updateProgressBar(patch_no);
+    emit updatePatchListBox();
+}
+
+void Midi::MIDI_editor_receive_finish_KTN_patch_dump(std::vector<unsigned char> *message)
+{
+    emit closeProgressBar("Patch download succesful");
+    emit updatePatchListBox();
 }
 
 void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)

@@ -10,5 +10,6 @@ HLX_class My_HLX = HLX_class(HLX);
 AXEFX_class My_AXEFX = AXEFX_class(AXEFX);
 KTN_class My_KTN = KTN_class(KTN);
 KPA_class My_KPA = KPA_class(KPA);
+SVL_class My_SVL = SVL_class(SVL);
 
-Device_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA};
+Device_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL};

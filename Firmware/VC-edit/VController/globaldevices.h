@@ -13,6 +13,7 @@
 #include "devices/fractal.h"
 #include "devices/katana.h"
 #include "devices/kpa.h"
+#include "devices/svl.h"
 
 extern GP10_class My_GP10;
 extern GR55_class My_GR55;
@@ -23,6 +24,7 @@ extern M13_class My_M13;
 extern HLX_class My_HLX;
 extern AXEFX_class My_AXEFX;
 extern KTN_class My_KTN;
+extern SVL_class My_SVL;
 
 extern Device_class * Device[NUMBER_OF_DEVICES];
 

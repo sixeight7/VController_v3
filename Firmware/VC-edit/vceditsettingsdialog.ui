@@ -14,13 +14,6 @@
    <string>VC-edit settings</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Midi in Port</string>
-     </property>
-    </widget>
-   </item>
    <item row="0" column="1">
     <widget class="QComboBox" name="MidiInComboBox">
      <property name="sizePolicy">
@@ -28,6 +21,13 @@
        <horstretch>0</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>Midi in Port</string>
      </property>
     </widget>
    </item>
@@ -48,13 +48,20 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="0" colspan="2">
+   <item row="3" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
      <property name="standardButtons">
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QCheckBox" name="hideKatanaTabCheckBox">
+     <property name="text">
+      <string>Hide Katana Tab</string>
      </property>
     </widget>
    </item>

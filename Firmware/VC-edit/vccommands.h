@@ -91,6 +91,7 @@ private:
     void set_type_and_value(uint8_t number, uint8_t type, uint8_t value, bool in_edit_mode);
     void clear_cmd_bytes(uint8_t start_byte, bool in_edit_mode);
     void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit_mode);
+    void set_default_parameter_values(bool in_edit_mode);
     uint8_t current_cmd_function();
     uint8_t get_switch_trigger_number(uint8_t sw);
     uint8_t get_switch_trigger_type(uint8_t value);
@@ -149,7 +150,7 @@ private:
     #define TYPE_PATCH_NUMBER 16
     #define TYPE_PATCH_100 17
     #define TYPE_PARAMETER 18
-    #define TYPE_PAR_STATE 19
+    #define TYPE_PAR_VALUE 19
     #define TYPE_ASSIGN 20
     #define TYPE_ASSIGN_TRIGGER 21
     #define TYPE_TOGGLE 22
@@ -169,7 +170,7 @@ private:
     // Here we define these sublists
     #define SUBLIST_PATCH 255 // To show the patchnumber
     #define SUBLIST_PARAMETER 254 // To show the parameter name
-    #define SUBLIST_PAR_STATE 253 // To show the parameter state
+    #define SUBLIST_PAR_VALUE 253 // To show the parameter state
     #define SUBLIST_ASSIGN 252 // To show the assign name
     #define SUBLIST_TRIGGER 251 // To show the assign trigger
     #define SUBLIST_PAGE 250 // To show the page name
@@ -205,7 +206,7 @@ private:
         { "PATCH NUMBER", SUBLIST_PATCH, 0, 99 }, // TYPE_PATCH_NUMBER 16
         { "PATCH BANK (100)", SUBLIST_PATCH_BANK, 0, 255 }, // TYPE_PATCH_100 17
         { "PARAMETER", SUBLIST_PARAMETER, 0, 255 }, // TYPE_PARAMETER 18
-        { "VALUE", SUBLIST_PAR_STATE, 0, 255 }, // TYPE_PAR_STATE 19
+        { "VALUE", SUBLIST_PAR_VALUE, 0, 255 }, // TYPE_PAR_VALUE 19
         { "ASSIGN", SUBLIST_ASSIGN, 0, 255 }, // TYPE_ASSIGN 20
         { "TRIGGER", SUBLIST_TRIGGER, 1, 127 }, // TYPE_ASSIGN 21
         { "TOGGLE TYPE", 48, 0, 6 }, // TYPE_TOGGLE 22
@@ -228,7 +229,7 @@ private:
         "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "MENU", "", "", "", "", "", "", "",
 
         // Sublist 18 - 39: Device Command Types
-        "PATCH", "PARAMETER", "ASSIGN", "SNAPSHOT/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "TOGGL MASTER EXP", "MASTER EXP PEDAL",
+        "PATCH", "PARAMETER", "ASSIGN", "SNAPSHOT/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "MASTER EXP PEDAL", "TOGGL MASTER EXP",
         "DIR.SELECT", "PAR BANK", "PAR BANK UP", "PAR BANK DOWN", "PARBANK_CATEGORY", "SAVE PATCH", "", "", "", "", "", "",
 
         // Sublist 40 - 47: MIDI ports

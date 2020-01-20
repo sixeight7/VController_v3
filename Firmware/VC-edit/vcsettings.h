@@ -58,17 +58,21 @@ private:
       { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 5
       { "Bass mode CC number", VALUE, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
       { "Bass mode min velocity", VALUE, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
+      { "Read MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 9
+      { "Send MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 10
 
       { "LED Settings", HEADER, 0, 0, 0, 0 }, // Menu title
-      { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 2
-      { "Backlight Bright", VALUE, 0, 0, 255, &Setting.Backlight_brightness }, // Switch 3
-      { "Virtual LEDs", OPTION, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 4
-      { "FX off is dimmed", OPTION, 1, 0, 1, &Setting.LED_FX_off_is_dimmed }, // Switch 5
-      { "Global colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_global_colour }, // Switch 6
-      { "BPM colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 7
-      { "MIDI PC colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 8
-      { "MIDI CC colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_CC_colour }, // Switch 9
-      { "MIDI note colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 10
+      { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 1
+      { "Backlight Bright", VALUE, 0, 0, 255, &Setting.Backlight_brightness }, // Switch 2
+      { "Virtual LEDs", OPTION, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 3
+      { "FX off is dimmed", OPTION, 1, 0, 1, &Setting.LED_FX_off_is_dimmed }, // Switch 4
+      { "Global colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_global_colour }, // Switch 5
+      { "MIDI PC colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 6
+      { "MIDI CC colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_CC_colour }, // Switch 7
+      { "MIDI note colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 8
+      { "BPM colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 9
+      { "BPM synced colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 10
+      { "RGB display colour scheme", OPTION, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 11
 
       { "LED FX colours", HEADER, 0, 0, 0, 0 }, // Menu title
       { "GTR/COSM colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_GTR_colour }, // Switch 1
@@ -98,13 +102,19 @@ private:
       "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
 
       // Sublist 23 - 30: MIDI ports
-      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "", "",
+      "OFF", "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "",
 
       // Sublist 31 - 34: Expression pedals
       "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-        // Sublist 35 - 37: MEP control options
-        "NONE", "UP/DOWN buttons", "UP/DN + STEP buttons",
+      // Sublist 35 - 37: MEP control options
+      "NONE", "UP/DOWN buttons", "UP/DN + STEP buttons",
+
+      // Sublist 38 - 45: MIDI switch types
+      "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
+
+      // Sublist 46 - 47: RGB Display colour schemes
+      "ADAFRUIT", "BUYDISPLAY",
     };
 };
 

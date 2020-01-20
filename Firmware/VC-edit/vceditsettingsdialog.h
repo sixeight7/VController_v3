@@ -24,6 +24,8 @@ signals:
 private slots:
     void on_buttonBox_accepted();
 
+    void on_hideKatanaTabCheckBox_stateChanged(int arg1);
+
 private:
     Ui::vcEditSettingsDialog *ui;
     void loadSettings();

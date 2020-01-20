@@ -3,8 +3,10 @@
 // Load the proper ui
 #ifdef IS_VCMINI
 #include "ui_mainwindow_VC-mini.h"
+#define DEVICENAME VC-mini
 #else
 #include "ui_mainwindow_VC-full.h"
+#define DEVICENAME VController
 #endif
 
 #include "vceditsettingsdialog.h"
@@ -28,6 +30,7 @@
 #include <QProgressBar>
 #include <QStyleFactory>
 #include <QDesktopServices>
+#include <QThread>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -47,8 +50,13 @@ MainWindow::MainWindow(QWidget *parent) :
     statusLabel = new QLabel();
     ui->statusbar->addPermanentWidget(statusLabel);
 
+    editorStateLabel = new QLabel();
+    ui->statusbar->addPermanentWidget(editorStateLabel);
+    ui->tabWidget->setStyleSheet("QTabWidget::tab:disabled { width: 0; height: 0; margin: 0; padding: 0; border: none; }");
+
     // Setup MIDI
     MyMidi = new Midi();
+    connect(MyMidi, SIGNAL(VControllerDetected(int,int,int,int)), this, SLOT(VControllerDetected(int,int,int,int)));
     connect(MyMidi, SIGNAL(updateLcdDisplay(int, QString, QString)),
                            this, SLOT(updateLcdDisplay(int, QString, QString)));
     connect(MyMidi, SIGNAL(updateLED(int,int)),
@@ -60,6 +68,11 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(MyMidi, SIGNAL(startProgressBar(int, QString)), this, SLOT(startProgressBar(int, QString)));
     connect(MyMidi, SIGNAL(updateProgressBar(int)), this, SLOT(updateProgressBar(int)));
     connect(MyMidi, SIGNAL(closeProgressBar(QString)), this, SLOT(closeProgressBar(QString)));
+    connect(MyMidi, SIGNAL(updatePatchListBox()), this, SLOT(updatePatchListBox()));
+
+    QTimer *timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(runEverySecond()));
+    timer->start(1000);
 
     selectWidget(ui->switch1ListWidget);
     loadAppSettings();
@@ -73,12 +86,17 @@ MainWindow::MainWindow(QWidget *parent) :
     // Fill objects on screen
     updateCommandScreens(true);
     fillTreeWidget(ui->treeWidget);
-    //connect(MyVCcommands, SIGNAL(openEditWindow(int, int)), this, SLOT(openEditWindow(int, int)));
+    fillPatchListBox(ui->patchListWidget);
+    ui->patchListWidget->setDefaultDropAction(Qt::MoveAction);
+    connect(ui->patchListWidget, SIGNAL(moveCommand(customListWidget*,int,int)), this, SLOT(movePatch(customListWidget*,int,int)));
+    connect(ui->patchListWidget, SIGNAL(customDoubleClicked()), this, SLOT(on_actionRename_triggered()));
 
     ui->currentPageComboBox->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->currentPageComboBox, SIGNAL(customContextMenuRequested(const QPoint)), this, SLOT(ShowPageContextMenu(QPoint)));
     ui->currentPageComboBox2->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->currentPageComboBox2, SIGNAL(customContextMenuRequested(const QPoint)), this, SLOT(ShowPageContextMenu(QPoint)));
+    ui->patchListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->patchListWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(ShowPatchContextMenu(QPoint)));
     setupLcdDisplays();
     setupButtons();
     on_tabWidget_currentChanged(ui->tabWidget->currentIndex());
@@ -89,6 +107,13 @@ MainWindow::~MainWindow()
     saveAppSettings();
     if (RemoteControlActive) MyMidi->sendSysexCommand(2, VC_REMOTE_CONTROL_ENABLE, 0);
     delete ui;
+}
+
+void MainWindow::runEverySecond()
+{
+    if (VControllerConnected) return;
+    try_reconnect_MIDI();
+    MyMidi->send_universal_identity_request();
 }
 
 void MainWindow::updateSettings()
@@ -117,10 +142,18 @@ void MainWindow::loadAppSettings() {
     resize(appSettings.value("size", QSize(400, 400)).toSize());
     move(appSettings.value("pos", QPoint(200, 200)).toPoint());
     ui->tabWidget->setCurrentIndex(appSettings.value("currentTab", 0).toInt());
+    if (appSettings.value("hideKatanaTab").toBool()) {
+        ui->tabWidget->setTabEnabled(2, false);
+    }
+    else {
+        ui->tabWidget->setTabEnabled(2, true);
+    }
     MyFullBackupFile = appSettings.value("fullBackupFile").toString();
     if (MyFullBackupFile == "") MyFullBackupFile = QDir::homePath();
     MySavePageFile = appSettings.value("savePageFile").toString();
     if (MySavePageFile == "") MySavePageFile = QDir::homePath();
+    MySavePatchFile = appSettings.value("savePatchFile").toString();
+    if (MySavePatchFile == "") MySavePatchFile = QDir::homePath();
     currentPage = appSettings.value("currentPage").toInt();
     previousPage = currentPage;
     previousSwitchPage = currentPage;
@@ -131,6 +164,7 @@ void MainWindow::loadAppSettings() {
     MyMidi->openMidiIn(MyMidiInPort);
     MyMidiOutPort = appSettings.value("midiOutPort").toString();
     MyMidi->openMidiOut(MyMidiOutPort);
+    MyMidi->send_universal_identity_request(); //See if we can connect
     appSettings.endGroup();
 }
 
@@ -142,6 +176,7 @@ void MainWindow::saveAppSettings() {
     appSettings.setValue("currentTab", ui->tabWidget->currentIndex());
     appSettings.setValue("fullBackupFile", MyFullBackupFile);
     appSettings.setValue("savePageFile", MySavePageFile);
+    appSettings.setValue("savePatchFile", MySavePatchFile);
     appSettings.setValue("currentPage", currentPage);
     appSettings.endGroup();
 }
@@ -232,6 +267,12 @@ void MainWindow::treeWidgetActivated(QModelIndex)
     QApplication::processEvents();
 }
 
+void MainWindow::movePatch(customListWidget *widget, int sourceRow, int destRow)
+{
+    My_KTN.movePatch(sourceRow, destRow);
+    fillPatchListBox(ui->patchListWidget);
+}
+
 
 void MainWindow::fillPageComboBox(QComboBox *my_combobox)
 {
@@ -283,12 +324,27 @@ void MainWindow::fillListBoxes(bool first_time)
     updateStatusLabel();
 }
 
+void MainWindow::fillPatchListBox(QListWidget *my_patchList)
+{
+    my_patchList->clear();
+    for (int p = 0; p < KTN_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
+        my_patchList->addItem(My_KTN.ReadPatchStringForListWidget(p));
+    }
+}
+
 void MainWindow::updateStatusLabel()
 {
     uint8_t percentage = Commands.size() * 100 / MAX_NUMBER_OF_INTERNAL_COMMANDS;
     statusLabel->setText("Cmd memory: " + QString::number(percentage) + "%");
     if (percentage >= 95) statusLabel->setStyleSheet("background-color: orange");
     if (percentage >= 100) statusLabel->setStyleSheet("background-color: red");
+
+    if (VControllerConnected) {
+        editorStateLabel->setText("Online");
+    }
+    else {
+        editorStateLabel->setText("Offline");
+    }
 }
 
 void MainWindow::updateCommandScreens(bool first_time)
@@ -474,6 +530,11 @@ void MainWindow::selectWidget(customListWidget *widget)
     checkMenuItems();
 }
 
+void MainWindow::updatePatchListBox()
+{
+    fillPatchListBox(ui->patchListWidget);
+}
+
 // Menu items
 
 void MainWindow::on_actionOpen_triggered()
@@ -489,6 +550,7 @@ void MainWindow::on_actionOpen_triggered()
 
     QByteArray saveData = loadFile.readAll();
     QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
+    fileLoaded = true;
 
     QString jsonType = readHeader(loadDoc.object());
     if (jsonType == "") {
@@ -505,8 +567,10 @@ void MainWindow::on_actionOpen_triggered()
         MyVCmidiSwitches->read(loadDoc.object());
         MyVCdevices->read(loadDoc.object());
         MyVCcommands->readAll(loadDoc.object());
+        My_KTN.readAll(loadDoc.object());
         fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
         updateCommandScreens(false);
+        fillPatchListBox(ui->patchListWidget);
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
     }
 
@@ -545,6 +609,7 @@ void MainWindow::on_actionSave_triggered()
     MyVCmidiSwitches->write(saveObject);
     MyVCdevices->write(saveObject);
     MyVCcommands->writeAll(saveObject);
+    My_KTN.writeAll(saveObject);
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
     ui->statusbar->showMessage(MyFullBackupFile + " saved", STATUS_BAR_MESSAGE_TIME);
@@ -555,7 +620,7 @@ void MainWindow::writeHeader(QJsonObject &json, QString type)
 {
     QJsonObject headerObject;
     headerObject["Source"] = "VC-edit";
-    headerObject["Version"] = APP_VERSION;
+    headerObject["Version"] = QString::number(VCMINI_FIRMWARE_VERSION_MAJOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_MINOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_BUILD);
     headerObject["Type"] = type;
     json["Header"] = headerObject;
 }
@@ -570,8 +635,8 @@ QString MainWindow::readHeader(const QJsonObject &json)
 
 void MainWindow::try_reconnect_MIDI()
 {
-    //MyMidi->openMidiIn(MyMidiInPort);
-    //MyMidi->openMidiOut(MyMidiOutPort);
+    MyMidi->openMidiIn(MyMidiInPort);
+    MyMidi->openMidiOut(MyMidiOutPort);
 }
 
 QString MainWindow::addNonBreakingSpaces(QString text)
@@ -773,8 +838,7 @@ void MainWindow::on_switch_16_released()
 
 void MainWindow::on_tabWidget_currentChanged(int index)
 {
-    int lastTab = ui->tabWidget->count() - 1;
-    if (index == lastTab) {
+    if (ui->tabWidget->tabText(index) == "Remote control") {
         RemoteControlActive = true;
         MyMidi->sendSysexCommand(2, VC_REMOTE_CONTROL_ENABLE, 1);
         qDebug() << "Remote control enabled";
@@ -783,6 +847,22 @@ void MainWindow::on_tabWidget_currentChanged(int index)
         RemoteControlActive = false;
         MyMidi->sendSysexCommand(2, VC_REMOTE_CONTROL_ENABLE, 0);
         qDebug() << "Remote control disabled";
+    }
+
+    if ((ui->tabWidget->tabText(index) == "Page commands") || (ui->tabWidget->tabText(index) == "External switch commands")) {
+        ui->menuPage->menuAction()->setVisible(true);
+        ui->menuCommand->menuAction()->setVisible(true);
+    }
+    else {
+        ui->menuPage->menuAction()->setVisible(false);
+        ui->menuCommand->menuAction()->setVisible(false);
+    }
+
+    if (ui->tabWidget->tabText(index) == "Katana patches") {
+        ui->menuPatch->menuAction()->setVisible(true);
+    }
+    else {
+        ui->menuPatch->menuAction()->setVisible(false);
     }
 }
 
@@ -906,7 +986,7 @@ void MainWindow::on_actionSavePage_triggered()
     MyVCcommands->writePage(currentPage, saveObject);
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
-    ui->statusbar->showMessage(MySavePageFile + " opened", STATUS_BAR_MESSAGE_TIME);;
+    ui->statusbar->showMessage(MySavePageFile + " opened", STATUS_BAR_MESSAGE_TIME);
 }
 
 void MainWindow::on_actionEditSwitch_triggered()
@@ -941,6 +1021,20 @@ void MainWindow::ShowListWidgetContextMenu(const QPoint &pos)
         MyVCcommands->swapSwitches(currentPage, currentSwitch, previousSwitchPage, previousSwitch);
         updateCommandScreens(false);
     }
+}
+
+void MainWindow::ShowPatchContextMenu(const QPoint &pos)
+{
+    customListWidget *widget = (customListWidget *)sender();
+    QPoint myPos = widget->mapToGlobal(pos);
+
+    QMenu submenu;
+    submenu.addAction(ui->actionCopyPatch);
+    submenu.addAction(ui->actionPastePatch);
+    submenu.addAction(ui->actionRename);
+    submenu.addAction(ui->actionImport);
+    submenu.addAction(ui->actionExport);
+    QAction* rightClickItem = submenu.exec(myPos);
 }
 
 void MainWindow::on_actionDuplicatePage_triggered()
@@ -1002,6 +1096,7 @@ void MainWindow::on_actionDeleteCommand_triggered()
 void MainWindow::startProgressBar(int size, QString message)
 {
     statusLabel->hide();
+    editorStateLabel->hide();
     statusBar = new QProgressBar(this);
     statusBar->setRange(0, size);
     statusBar->setTextVisible(true);
@@ -1022,6 +1117,7 @@ void MainWindow::closeProgressBar(QString message)
     ui->statusbar->removeWidget(statusBar);
     statusBar->close();
     statusLabel->show();
+    editorStateLabel->show();
     updateStatusLabel();
 }
 
@@ -1033,6 +1129,36 @@ bool MainWindow::checkSpaceForNewPageOK()
         return false;
     }
     return true;
+}
+
+void MainWindow::VControllerDetected(int type, int versionMajor, int versionMinor, int versionBuild)
+{
+    if (type != VC_MODEL_NUMBER) {
+#ifdef IS_VCMINI
+      ui->statusbar->showMessage("VController detected. This version of VC-edit is for the VC-mini", STATUS_BAR_MESSAGE_TIME);
+#else
+      ui->statusbar->showMessage("VC-mini detected. This version of VC-edit is for the VController", STATUS_BAR_MESSAGE_TIME);
+#endif
+        return;
+    }
+
+#ifdef IS_VCMINI
+    ui->statusbar->showMessage("VC-midi connected", STATUS_BAR_MESSAGE_TIME);
+#else
+    ui->statusbar->showMessage("VController connected", STATUS_BAR_MESSAGE_TIME);
+#endif
+
+    if ((versionMajor != VCMINI_FIRMWARE_VERSION_MAJOR) || (versionMinor != VCMINI_FIRMWARE_VERSION_MINOR)) {
+        ui->statusbar->showMessage("VController version (" + QString::number(versionMajor) + "." + QString::number(versionMinor) + ") does not match version of VC-edit ("
+                                   + QString::number(VCMINI_FIRMWARE_VERSION_MAJOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_MINOR) + ")", STATUS_BAR_MESSAGE_TIME);
+    }
+    else if ((!VControllerConnected) && (!dataEdited) && (!fileLoaded)) {
+        MyMidi->MIDI_editor_request_settings();
+        MyMidi->MIDI_editor_request_all_commands();
+        MyMidi->MIDI_editor_request_all_KTN_patches();
+    }
+    VControllerConnected = true;
+    updateStatusLabel();
 }
 
 void MainWindow::on_actionCutCommand_triggered()
@@ -1064,7 +1190,7 @@ void MainWindow::on_toolButtonPageUp2_clicked()
 
 void MainWindow::on_actionAbout_triggered()
 {
-    AboutDialog s(this, APP_VERSION);
+    AboutDialog s(this, QString::number(VCMINI_FIRMWARE_VERSION_MAJOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_MINOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_BUILD));
     s.setModal(true);
     s.exec();
 }
@@ -1098,4 +1224,133 @@ void MainWindow::on_actionPreviousPage_triggered()
 void MainWindow::on_refreshSettingsTreeButton_clicked()
 {
     fillTreeWidget(ui->treeWidget);
+}
+
+void MainWindow::on_readPatchButton_clicked()
+{
+    try_reconnect_MIDI();
+    MyMidi->MIDI_editor_request_all_KTN_patches();
+}
+
+void MainWindow::on_writePatchButton_clicked()
+{
+    try_reconnect_MIDI();
+    startProgressBar(KTN_MAX_NUMBER_OF_KATANA_PRESETS, "Uploading Katana patches...");
+    for (uint16_t p = 0; p < Commands.size(); p++) {
+        MyMidi->MIDI_send_KTN_patch(p);
+        updateProgressBar(p);
+    }
+    MyMidi->MIDI_editor_send_finish_KTN_patch_dump();
+    closeProgressBar("Katana patch upload complete");
+}
+
+void MainWindow::on_actionRename_triggered()
+{
+    // Rename Katana patch
+    bool ok;
+    int patch = ui->patchListWidget->currentRow();
+
+    if (patch == -1) {
+        return;
+    }
+
+    QString text = QInputDialog::getText(this, tr("QInputDialog::getText()"),
+                                         tr("New patch name:"), QLineEdit::Normal,
+                                         My_KTN.ReadPatchName(patch).trimmed(), &ok);
+
+    if (ok && !text.isEmpty()) {
+        My_KTN.WritePatchName(patch, text);
+        fillPatchListBox(ui->patchListWidget);
+        dataEdited = true;
+    }
+}
+
+void MainWindow::on_actionExport_triggered()
+{
+    // Export Katana patch
+    int patch = ui->patchListWidget->currentRow();
+
+    if (patch == -1) {
+        return;
+    }
+
+    // File Save
+    QFileInfo fileInfo(MySavePatchFile);
+    qDebug() << MySavePatchFile << fileInfo.absoluteFilePath();
+    MySavePatchFile = fileInfo.absoluteFilePath() + "/" + My_KTN.ReadPatchName(patch) + ".vcp";
+    MySavePatchFile = QFileDialog::getSaveFileName(this, "Save Katana patch:", MySavePatchFile, tr("VC-edit data (*.vcp)"));
+    QFile saveFile(MySavePatchFile);
+
+    if (!saveFile.open(QIODevice::WriteOnly)) {
+        qWarning("Couldn't open json settings file.");
+        return;
+    }
+
+    QJsonObject saveObject;
+    writeHeader(saveObject, "KatanaPatch");
+    My_KTN.writePatchData(patch, saveObject);
+    QJsonDocument saveDoc(saveObject);
+    saveFile.write(saveDoc.toJson());
+    ui->statusbar->showMessage(MySavePatchFile + " saved", STATUS_BAR_MESSAGE_TIME);
+}
+
+void MainWindow::on_actionImport_triggered()
+{
+    // Import Katana patch
+    int patch = ui->patchListWidget->currentRow();
+
+    if (patch == -1) {
+        return;
+    }
+
+    // File Open
+    QString MyFile = QFileDialog::getOpenFileName(this, "Open VC-edit Katana patch file", QFileInfo(MySavePatchFile).filePath(), tr("VC-edit data (*.vcp)"));
+    QFile loadFile(MyFile);
+
+    if (!loadFile.open(QIODevice::ReadOnly)) {
+        ui->statusbar->showMessage("Couldn't open selected file.", STATUS_BAR_MESSAGE_TIME);
+        return;
+    }
+
+    QByteArray saveData = loadFile.readAll();
+    QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
+    fileLoaded = true;
+
+    QString jsonType = readHeader(loadDoc.object());
+    if (jsonType != "KatanaPatch") {
+        ui->statusbar->showMessage("Couldn't read selected. No VC-edit Katana patch file", STATUS_BAR_MESSAGE_TIME);
+        return;
+    }
+    else {
+        My_KTN.readPatchData(patch, loadDoc.object());
+        fillPatchListBox(ui->patchListWidget);
+        ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
+    }
+}
+
+void MainWindow::on_actionCopyPatch_triggered()
+{
+    // Copy Katana patch
+    int patch = ui->patchListWidget->currentRow();
+
+    if (patch == -1) {
+        return;
+    }
+
+    My_KTN.copyPatch(patch);
+}
+
+void MainWindow::on_actionPastePatch_triggered()
+{
+    // Paste Katana patch
+    int patch = ui->patchListWidget->currentRow();
+
+    if (patch == -1) {
+        return;
+    }
+
+    My_KTN.pastePatch(patch);
+
+    fillPatchListBox(ui->patchListWidget);
+    dataEdited = true;
 }

@@ -7,6 +7,7 @@
 #include <QMainWindow>
 #include <QString>
 #include <QLabel>
+#include <QTimer>
 #include "midi.h"
 #include "vcsettings.h"
 #include "vcmidiswitchsettings.h"
@@ -15,7 +16,10 @@
 #include "customlistwidget.h"
 
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
-#define APP_VERSION "1.2.0"
+// Version should be the same as the version shown on the VController of VC-mini
+#define VCMINI_FIRMWARE_VERSION_MAJOR 3
+#define VCMINI_FIRMWARE_VERSION_MINOR 4
+#define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
 
@@ -40,6 +44,7 @@ public:
     Midi midi_port;
 
 public slots:
+    void runEverySecond();
     void updateSettings();
     void updateCommands(int, int);
     void updateCommandScreens(bool);
@@ -47,23 +52,18 @@ public slots:
     void setButtonColour(int, int);
     void listWidgetClicked();
     void selectWidget(customListWidget *widget);
+    void updatePatchListBox();
 
     // Menu actions - also appear in submenus
     void checkMenuItems();
     void ShowPageContextMenu(const QPoint &pos); // For right-click on page comboBox
     void ShowListWidgetContextMenu(const QPoint &pos); // For right click on the listWidgets
+    void ShowPatchContextMenu(const QPoint &pos);
 
     // Menu File
     void on_actionOpen_triggered();
     void on_actionSave_triggered();
     void on_actionPreferences_triggered();
-
-    // Menu Edit
-    void on_actionEditSwitch_triggered();
-    void on_actionCopyCommand_triggered();
-    void on_actionCutCommand_triggered();
-    void on_actionPasteCommand_triggered();
-    void on_actionDeleteCommand_triggered();
 
     // menu Page
     void on_actionNewPage_triggered();
@@ -73,6 +73,20 @@ public slots:
     void on_actionDuplicatePage_triggered();
     void on_actionNextPage_triggered();
     void on_actionPreviousPage_triggered();
+
+    // Menu Command
+    void on_actionEditSwitch_triggered();
+    void on_actionCopyCommand_triggered();
+    void on_actionCutCommand_triggered();
+    void on_actionPasteCommand_triggered();
+    void on_actionDeleteCommand_triggered();
+
+    // Menu Patch
+    void on_actionCopyPatch_triggered();
+    void on_actionPastePatch_triggered();
+    void on_actionRename_triggered();
+    void on_actionExport_triggered();
+    void on_actionImport_triggered();
 
     // Menu Help
     void on_actionAbout_triggered();
@@ -85,6 +99,7 @@ public slots:
     bool checkSpaceForNewPageOK();
 
 private slots:
+    void VControllerDetected(int type, int versionMajor, int versionMinor, int versionBuild);
     void loadAppSettings();
     void saveAppSettings();
     void openEditWindow(int sw, int item);
@@ -96,6 +111,7 @@ private slots:
     void on_currentPageComboBox2_activated(int index);
     void on_tabWidget_currentChanged(int index);
     void treeWidgetActivated(QModelIndex);
+    void movePatch(customListWidget *widget, int sourceRow, int destRow);
 
     // Pressing buttons
     void on_readSysexButton_clicked();
@@ -147,6 +163,10 @@ private slots:
 
     void on_refreshSettingsTreeButton_clicked();
 
+    void on_readPatchButton_clicked();
+
+    void on_writePatchButton_clicked();
+
 private:
     void setupLcdDisplays();
     void setupButtons();
@@ -154,6 +174,7 @@ private:
     void fillTreeWidget(QTreeWidget *my_tree);
     void fillPageComboBox(QComboBox *my_combobox);
     void fillListBoxes(bool first_time);
+    void fillPatchListBox(QListWidget *my_patchList);
     void updateStatusLabel();
 
     // Loading and saving files
@@ -166,8 +187,10 @@ private:
     Ui::MainWindow *ui;
     QString MyFullBackupFile;
     QString MySavePageFile;
+    QString MySavePatchFile;
     QString MyMidiInPort, MyMidiOutPort;
     Midi *MyMidi;
+    QTimer *timer;
     VCsettings *MyVCsettings;
     VCmidiSwitches *MyVCmidiSwitches;
     VCdevices *MyVCdevices;
@@ -183,7 +206,10 @@ private:
     bool copyBufferFilled = false;
     QProgressBar *statusBar;
     QLabel *statusLabel;
+    QLabel *editorStateLabel;
     bool dataEdited = false;
+    bool fileLoaded = false;
+    bool VControllerConnected = false;
 };
 
 #endif // MAINWINDOW_H

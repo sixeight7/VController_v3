@@ -37,6 +37,8 @@
 #define VC_FINISH_COMMANDS_DUMP 12
 #define VC_REQUEST_KATANA_PATCHES 14
 #define VC_SET_KATANA_PATCH 15
+#define VC_SAVE_SETTINGS 16
+#define VC_FINISH_KATANA_PATCH_DUMP 17
 
 class Midi : public QObject
 {
@@ -52,15 +54,18 @@ public:
     void checkMidiIn(std::vector<unsigned char> *message);
     void MIDI_editor_request_settings();
     void MIDI_editor_request_all_commands();
+    void MIDI_editor_request_all_KTN_patches();
     void MIDI_send_data(uint8_t cmd, uint8_t *my_data, uint16_t my_len);
     void MIDI_editor_send_settings();
     void MIDI_editor_send_device_settings(uint8_t dev);
     void MIDI_editor_send_midi_switch_settings(uint8_t sw);
     void MIDI_editor_send_save_settings();
     void MIDI_editor_send_finish_commands_dump();
-    void MIDI_send_all_commands(QProgressBar *myBar);
     void MIDI_editor_send_start_commands_dump();
     void MIDI_editor_send_command(uint16_t cmd_no);
+    void MIDI_send_KTN_patch(uint8_t patch_no);
+    void MIDI_editor_send_finish_KTN_patch_dump();
+    void send_universal_identity_request();
 
 signals:
     void updateSettings();
@@ -70,6 +75,8 @@ signals:
     void startProgressBar(int, QString);
     void updateProgressBar(int);
     void closeProgressBar(QString);
+    void VControllerDetected(int type, int versionMajor, int versionMinor, int versionBuild);
+    void updatePatchListBox();
 
 private:
     static void staticMidiCallback(double, std::vector< unsigned char > *message, void *userData);
@@ -86,6 +93,8 @@ private:
     void MIDI_editor_receive_finish_commands_dump(std::vector< unsigned char > *message);
     void MIDI_editor_receive_command(std::vector< unsigned char > *message);
     void MIDI_editor_receive_midi_switch_settings(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_KTN_patch(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_finish_KTN_patch_dump(std::vector< unsigned char > *message);
 };
 
 #endif // MIDI_H

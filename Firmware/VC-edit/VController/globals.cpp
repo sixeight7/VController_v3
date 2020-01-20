@@ -1,6 +1,11 @@
 #include "globals.h"
 
 // Copied data from globals.h (VController Teensy Code)
+#ifdef IS_VCMINI
+#define DEFAULT_MAIN_DISPLAY_MODE 3
+#else
+#define DEFAULT_MAIN_DISPLAY_MODE 1
+#endif
 
 Setting_struct Setting = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
@@ -29,13 +34,17 @@ Setting_struct Setting = {  // Default values for global settings
   0,     // Bass_mode_device
   15,    // Bass_mode_cc_number
   100,   // Bass_mode_min_verlocity
-  1,     // Main display mode
+  DEFAULT_MAIN_DISPLAY_MODE,     // Main display mode
   {0, 0, 0, 0}, // The maximum values of the expression pedals (0 = auto calibrate)
   {0, 0, 0, 0}, // The minumum values of the expression pedals (0 = auto calibrate)
   6,     // FX_LOOPER_colour (white)
   0,     // MEP_control - basic control
   5,     // FX_WAH_colour (Purple)
   7,     // FX_DYNAMICS_colour (Yellow)
+  0,     // Read MIDI clock data port
+  0,     // Send MIDI clock data port
+  3,     // Colour of the tempo LED when tempo is synced with MIDI clock (Blue)
+  0,     // The colour scheme of the backlight - Adafruit
 };
 
 MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings
@@ -63,12 +72,4 @@ MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default 
   { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 21
   { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 22
   { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 23
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 24
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 25
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 26
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 27
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 28
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 29
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 30
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 31
 };

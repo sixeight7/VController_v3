@@ -42,6 +42,10 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t MEP_control; // Control options for Master Expression Pedal
   uint8_t FX_WAH_colour; // Colour for wahs
   uint8_t FX_DYNAMICS_colour; // Colour for dynamics
+  uint8_t Read_MIDI_clock_port; // Read MIDI clock data port
+  uint8_t Send_MIDI_clock_port; // SendMIDI clock data port
+  uint8_t LED_bpm_synced_colour; // Colour of the tempo LED when tempo is synced with MIDI clock
+  uint8_t RGB_Backlight_scheme; // The colour scheme of the backlight
 };
 
 extern Setting_struct Setting;
@@ -59,8 +63,8 @@ struct MIDI_switch_settings_struct {
 #define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
 #define MIDI_SWITCH_PC 4
 
-#define NUMBER_OF_MIDI_SWITCHES 32
-#define NUMBER_OF_VISIBLE_MIDI_SWITCHES 24
+#define NUMBER_OF_MIDI_SWITCHES 24
+
 extern MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES];
 
 #endif // GLOBALS_H

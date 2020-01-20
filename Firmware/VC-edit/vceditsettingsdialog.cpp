@@ -37,6 +37,10 @@ void vcEditSettingsDialog::loadSettings()
     ui->MidiInComboBox->setCurrentText(appSettings.value("midiInPort").toString());
     ui->MidiOutComboBox->setCurrentText(appSettings.value("midiOutPort").toString());
     appSettings.endGroup();
+
+    appSettings.beginGroup("MainWindow");
+    ui->hideKatanaTabCheckBox->setChecked(appSettings.value("hideKatanaTab").toBool());
+    appSettings.endGroup();
 }
 
 void vcEditSettingsDialog::saveSettings()
@@ -60,5 +64,14 @@ void vcEditSettingsDialog::on_buttonBox_accepted()
     if (outPort != "") appSettings.setValue("midiOutPort", outPort);
     appSettings.endGroup();
     qDebug() << "Midi settings saved:" << inPort << outPort;
+    emit appSettingsChanged();
+}
+
+void vcEditSettingsDialog::on_hideKatanaTabCheckBox_stateChanged(int arg1)
+{
+    QSettings appSettings;
+    appSettings.beginGroup("MainWindow");
+    appSettings.setValue("hideKatanaTab", ui->hideKatanaTabCheckBox->isChecked());
+    appSettings.endGroup();
     emit appSettingsChanged();
 }

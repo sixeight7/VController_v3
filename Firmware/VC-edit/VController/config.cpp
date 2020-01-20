@@ -428,14 +428,14 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_KTN_FX, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
     {PAGE_KTN_FX, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', ' '},
     {PAGE_KTN_FX, 1, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
-    {PAGE_KTN_FX, 2, PARAMETER, KTN, 15, TOGGLE, 1, 0}, // ** Switch 02 **
-    {PAGE_KTN_FX, 3, PARAMETER, KTN, 73, TOGGLE, 1, 0}, // ** Switch 03 **
-    {PAGE_KTN_FX, 4, PARAMETER, KTN, 109, TOGGLE, 1, 0}, // ** Switch 04 **
-    {PAGE_KTN_FX, 5, PARAMETER, KTN, 64, TOGGLE, 1, 0}, // ** Switch 05 **
-    {PAGE_KTN_FX, 6, PARAMETER, KTN, 90, TOGGLE, 1, 0}, // ** Switch 06 **
-    {PAGE_KTN_FX, 7, PARAMETER, KTN, 99, TOGGLE, 1, 0}, // ** Switch 07 **
-    {PAGE_KTN_FX, 8, PARAMETER, KTN, 40, TOGGLE, 1, 0}, // ** Switch 08 **
-    {PAGE_KTN_FX, 9, PARAMETER, KTN, 124, TOGGLE, 1, 0}, // ** Switch 09 **
+    {PAGE_KTN_FX, 2, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX, 3, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN_FX, 4, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 04 **
+    {PAGE_KTN_FX, 5, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 05 **
+    {PAGE_KTN_FX, 6, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 06 **
+    {PAGE_KTN_FX, 7, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 07 **
+    {PAGE_KTN_FX, 8, PARAMETER, KTN, 48, TOGGLE, 1, 0}, // ** Switch 08 **
+    {PAGE_KTN_FX, 9, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 09 **
     {PAGE_KTN_FX, 10, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_EDIT}, // ** Switch 10 **
     //{PAGE_KTN_FX, 11, PAR_BANK_CATEGORY, KTN, 11 }, // ** Switch 11 **
     //{PAGE_KTN_FX, 12, PAR_BANK_CATEGORY, KTN, 12}, // ** Switch 12 **
@@ -443,6 +443,7 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_KTN_FX, 14, PATCH, KTN, NEXT}, // ** Switch 11 **
     //{PAGE_KTN_FX, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 12 **
     {PAGE_KTN_FX, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 12 **
+
 
     // ******************************* PAGE 215: KPA Rig select *************************************************
     {PAGE_KPA_RIG_SELECT, LABEL, 'K', 'P', 'A', ' ', 'R', 'I', 'G', ' ' },
@@ -756,10 +757,10 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_KTN_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
     {PAGE_KTN_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
     {PAGE_KTN_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX3}, // ** Switch 01 + 02 **
-    {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 15, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
     {PAGE_KTN_FX1, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
     {PAGE_KTN_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 02 +| 03 **
-    {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 73, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
     {PAGE_KTN_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
     {PAGE_KTN_FX1, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
     {PAGE_KTN_FX1, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
@@ -768,10 +769,10 @@ const QVector<Cmd_struct> Fixed_commands = {
     // ******************************* PAGE 213: KATANA FX CTRL #2  *************************************************
     {PAGE_KTN_FX2, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
     {PAGE_KTN_FX2, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '2'},
-    {PAGE_KTN_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 64, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 01 **
     {PAGE_KTN_FX2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
     {PAGE_KTN_FX2, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX1}, // ** Switch 01 + 02 **
-    {PAGE_KTN_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 90, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 02 **
     {PAGE_KTN_FX2, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
     {PAGE_KTN_FX2, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX3}, // ** Switch 02 +| 03 **
     {PAGE_KTN_FX2, 3, TAP_TEMPO, COMMON}, // ** Switch 03 **
@@ -783,17 +784,63 @@ const QVector<Cmd_struct> Fixed_commands = {
     // ******************************* PAGE 214: KATANA FX CTRL #3  *************************************************
     {PAGE_KTN_FX3, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
     {PAGE_KTN_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
-    {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 99, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 01 **
     {PAGE_KTN_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
     {PAGE_KTN_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 01 + 02 **
-    {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 40, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 02 **
     {PAGE_KTN_FX3, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
     {PAGE_KTN_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX1}, // ** Switch 02 +| 03 **
-    {PAGE_KTN_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 109, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 03 **
     {PAGE_KTN_FX3, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
     {PAGE_KTN_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
     {PAGE_KTN_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
     {PAGE_KTN_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+
+    // ******************************* PAGE 215: KATANA4 FX CTRL #1  *************************************************
+    {PAGE_KTN4_FX1, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+    {PAGE_KTN4_FX1, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '1'},
+    {PAGE_KTN4_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN4_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_KTN4_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX3}, // ** Switch 01 + 02 **
+    {PAGE_KTN4_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN4_FX1, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+    {PAGE_KTN4_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX2}, // ** Switch 02 +| 03 **
+    {PAGE_KTN4_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN4_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_KTN4_FX1, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_KTN4_FX1, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_KTN4_FX1, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+    // ******************************* PAGE 216: KATANA4 FX CTRL #2  *************************************************
+    {PAGE_KTN4_FX2, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+    {PAGE_KTN4_FX2, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '2'},
+    {PAGE_KTN4_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN4_FX2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_KTN4_FX2, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX1}, // ** Switch 01 + 02 **
+    {PAGE_KTN4_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN4_FX2, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+    {PAGE_KTN4_FX2, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX3}, // ** Switch 02 +| 03 **
+    {PAGE_KTN4_FX2, 3, TAP_TEMPO, COMMON}, // ** Switch 03 **
+    {PAGE_KTN4_FX2, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_KTN4_FX2, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_KTN4_FX2, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_KTN4_FX2, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+    // ******************************* PAGE 217: KATANA4 FX CTRL #3  *************************************************
+    {PAGE_KTN4_FX3, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+    {PAGE_KTN4_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
+    {PAGE_KTN4_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN4_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_KTN4_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX2}, // ** Switch 01 + 02 **
+    {PAGE_KTN4_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN4_FX3, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+    {PAGE_KTN4_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX1}, // ** Switch 02 +| 03 **
+    {PAGE_KTN4_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN4_FX3, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_KTN4_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_KTN4_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_KTN4_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = Fixed_commands.size();

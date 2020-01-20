@@ -30,6 +30,7 @@ bool M13_class::check_command_enabled(uint8_t cmd)
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
     case TOGGLE_EXP_PEDAL:
+    case MASTER_EXP_PEDAL:
     //case SNAPSCENE:
     case LOOPER:
         return true;

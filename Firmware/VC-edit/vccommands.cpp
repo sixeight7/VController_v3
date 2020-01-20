@@ -63,7 +63,7 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
     cmdString.append(cmdTypeString(cmd.Type));
     cmdString.append(" ");
 
-    const QStringList ShortCmdTypes = {"SEL", "NEXT", "PREV", "BANKSEL", "BANK UP", "BANK DOWN", "", "",};
+    const QStringList ShortCmdTypes = {"SEL", "BANKSEL", "BANK UP", "BANK DOWN", "NEXT", "PREV", "", "",};
 
     uint16_t patch_no;
     switch (cmd.Type) { // Check extra bytes:
@@ -262,7 +262,7 @@ void VCcommands::fillCommandsListWidget(QObject *parent, customListWidget *cmdLi
     }
 
     QString customLabel = "";
-    if (sw > 0) customLabel = read_title(pg, sw); // The label for page 0 is the page name. We don't want to see that here.
+    if (sw > 0) customLabel = read_title(pg, sw); // The label for switch 0 is the page name. We don't want to see that here.
     commandListBoxContainsLabel = (customLabel != "");
 
     if (commandListBoxContainsLabel) {
@@ -358,6 +358,7 @@ void VCcommands::updateCommandsTableWidget()
             load_cmd_byte(MyTable, i);
         }
     }
+    uint8_t item = current_item;
     saveCommand(current_page, current_switch, current_item);
     emit updateEditCommandScreen();
     qDebug() << "Command TableWidget updated";
@@ -376,6 +377,8 @@ void VCcommands::setCommandTabWidget(QTabWidget *tabWidget, uint8_t pg, uint8_t 
 
 void VCcommands::saveCommand(uint8_t pg, uint8_t sw, uint8_t cmd)
 {
+    if ((switchHasLabel(current_page, current_switch)) && (cmd > 0)) cmd--;
+
     int cmd_no = get_cmd_number(pg, sw, cmd);
     Cmd_struct my_cmd = get_cmd(cmd_no);
 
@@ -408,10 +411,7 @@ void VCcommands::checkSaved(uint8_t pg, uint8_t sw, uint8_t cmd)
 {
     if (!command_edited) return;
 
-    //if (QMessageBox::Yes == QMessageBox(QMessageBox::Information, "Data not saved..", "Command has been edited. Do you want to save it?",
-    //                                    QMessageBox::Yes|QMessageBox::No).exec()) {
     saveCommand(pg, sw, cmd);
-    //}
 }
 
 int VCcommands::createNewCommand(uint8_t pg, uint8_t sw)
@@ -571,7 +571,6 @@ void VCcommands::cmdByteDataChanged(int cmd_byte_no, int cmd_type, int index)
         cmdbyte[cmd_byte_no].Value = valueFromIndex(cmd_type, index + cmdbyte[cmd_byte_no].Min);
     else cmdbyte[cmd_byte_no].Value = index;
     build_command_structure(cmd_byte_no, cmd_type, true);
-    //for (int i = cmd_byte_no + 1; i < NUMBER_OF_CMD_BYTES; i++) build_command_structure(i, cmd_type, false);
     updateCommandsTableWidget();
 }
 
@@ -909,7 +908,8 @@ void VCcommands::delete_cmd(uint16_t number)
 Cmd_struct VCcommands::get_cmd(uint16_t number)
 {
     if (number & INTERNAL_CMD) return Fixed_commands[number - INTERNAL_CMD];
-    else return Commands[number];
+    else if (number < Commands.size()) return Commands[number];
+    else return {0,0,0,0,0,0,0,0,0,0}; // This fixed a weird crash on reading patches at startup on the regular VController
 }
 
 void VCcommands::write_cmd(uint16_t number, Cmd_struct &cmd)
@@ -1064,7 +1064,7 @@ void VCcommands::set_type_and_value(uint8_t number, uint8_t type, uint8_t index,
 
 void VCcommands::clear_cmd_bytes(uint8_t start_byte, bool in_edit_mode)
 {
-    for (uint8_t b = start_byte; b < 8; b++) {
+    for (uint8_t b = start_byte; b < NUMBER_OF_CMD_BYTES; b++) {
         set_type_and_value(b, TYPE_OFF, 0, in_edit_mode);
         cmdbyte[b].Max = 0;
         cmdbyte[b].Min = 0;
@@ -1197,19 +1197,21 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
             set_type_and_value(CB_DATA1, TYPE_PARAMETER, 0, in_edit_mode);
             if (dev < NUMBER_OF_DEVICES) {
                 cmdbyte[CB_DATA1].Max = Device[dev]->number_of_parameters() - 1;
+                cmdbyte[CB_DATA1].Min = 0;
             }
             set_type_and_value(CB_DATA2, TYPE_TOGGLE, 1, in_edit_mode);
-            set_type_and_value(CB_VAL1, TYPE_PAR_STATE, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_PAR_VALUE, Device[dev]->min_value(cmdbyte[CB_DATA1].Value), in_edit_mode);
             if (dev < NUMBER_OF_DEVICES) {
                 cmdbyte[CB_VAL1].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
                 cmdbyte[CB_VAL1].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
             }
-            set_type_and_value(CB_VAL2, TYPE_PAR_STATE, 0, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_PAR_VALUE, Device[dev]->max_value(cmdbyte[CB_DATA1].Value), in_edit_mode);
             if (dev < NUMBER_OF_DEVICES) {
                 cmdbyte[CB_VAL2].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
                 cmdbyte[CB_VAL2].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
             }
             clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 6-7
+            set_default_parameter_values(in_edit_mode);
             break;
           case ASSIGN:
             // Command: <selected device>, ASSIGN, NUMBER
@@ -1326,43 +1328,56 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
       }
     }
 
+    // *****************************************
+    // * BYTE3: Parameter byte updated            *
+    // *****************************************
+    if (cmd_type == TYPE_PARAMETER) {
+      uint8_t dev = cmdbyte[CB_DEVICE].Value;
+      if (dev < NUMBER_OF_DEVICES) {
+          set_default_parameter_values(in_edit_mode);
+      }
+    }
+
     // *******************************************
     // **********     BYTE4 updated     **********
     // *******************************************
 
-    if (cmd_byte_no == CB_DATA1) {
+    if (cmd_byte_no == CB_DATA2) {
 
       // *****************************************
       // * BYTE4: Toggle type byte updated       *
       // *****************************************
       if (cmd_type == TYPE_TOGGLE) {
-          uint8_t max = 1;
+          uint8_t max = 0;
                   uint8_t min = 0;
                   if (dev < NUMBER_OF_DEVICES) {
                       max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
                       min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
                   }
-                  switch (cmdbyte[cmd_byte_no].Value) {
+
+                  switch (cmdbyte[CB_DATA2].Value) {
                   case MOMENTARY:
                   case TOGGLE:
                       cmdbyte[CB_VAL1].Title = "ON-VALUE";
                       cmdbyte[CB_VAL2].Title = "OFF-VALUE";
+                      clear_cmd_bytes(CB_VAL3, in_edit_mode);
                       break;
                   case TRISTATE:
-                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-                      cmdbyte[CB_VAL3].Max = max;
-                      cmdbyte[CB_VAL3].Min = min;
-                      set_type_and_value(CB_VAL3, TYPE_PAR_STATE, max, in_edit_mode);
+                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE 3
+                      set_type_and_value(CB_VAL3, TYPE_PAR_VALUE, max, in_edit_mode);
                       clear_cmd_bytes(CB_VAL4, in_edit_mode);
+                      cmdbyte[CB_VAL1].Title = "VALUE 1";
+                      cmdbyte[CB_VAL2].Title = "VALUE 2";
+                      cmdbyte[CB_VAL3].Title = "VALUE 3";
                       break;
                   case FOURSTATE:
-                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-                      cmdbyte[CB_VAL3].Max = max;
-                      cmdbyte[CB_VAL3].Min = min;
-                      cmdbyte[CB_VAL4].Max = max;
-                      cmdbyte[CB_VAL4].Min = min;
-                      set_type_and_value(CB_VAL3, TYPE_PAR_STATE, max, in_edit_mode);
-                      set_type_and_value(CB_VAL4, TYPE_PAR_STATE, max, in_edit_mode);
+                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE 3, VALUE 4
+                      set_type_and_value(CB_VAL3, TYPE_PAR_VALUE, max, in_edit_mode);
+                      set_type_and_value(CB_VAL4, TYPE_PAR_VALUE, max, in_edit_mode);
+                      cmdbyte[CB_VAL1].Title = "VALUE 1";
+                      cmdbyte[CB_VAL2].Title = "VALUE 2";
+                      cmdbyte[CB_VAL3].Title = "VALUE 3";
+                      cmdbyte[CB_VAL4].Title = "VALUE 4";
                       break;
                   case STEP:
                       // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
@@ -1375,11 +1390,14 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
                   case UPDOWN:
                       cmdbyte[CB_VAL1].Title = "MIN VALUE";
                       cmdbyte[CB_VAL2].Title = "MAX VALUE";
+                      clear_cmd_bytes(CB_VAL3, in_edit_mode);
                       break;
 
                   default:
                       clear_cmd_bytes(CB_VAL3, in_edit_mode);
+                      break;
                   }
+                  set_default_parameter_values(in_edit_mode);
       }
     }
 
@@ -1436,7 +1454,54 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
           cmdbyte[CB_VAL1].Value = my_trigger;
         }
       }
-   }
+    }
+}
+
+void VCcommands::set_default_parameter_values(bool in_edit_mode)
+{
+    uint8_t dev = cmdbyte[CB_DEVICE].Value;
+      if (dev >= NUMBER_OF_DEVICES) return;
+      uint8_t max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
+      uint8_t min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
+      cmdbyte[CB_VAL1].Max = max;
+      cmdbyte[CB_VAL1].Min = min;
+      cmdbyte[CB_VAL2].Max = max;
+      cmdbyte[CB_VAL2].Min = min;
+      switch (cmdbyte[CB_DATA2].Value) {
+        case TRISTATE:
+          if (in_edit_mode) {
+            cmdbyte[CB_VAL1].Value = 0;
+            cmdbyte[CB_VAL2].Value = max / 2;
+            cmdbyte[CB_VAL3].Value = max;
+          }
+          cmdbyte[CB_VAL3].Max = max;
+          cmdbyte[CB_VAL3].Min = min;
+          break;
+        case FOURSTATE:
+          if (in_edit_mode) {
+            cmdbyte[CB_VAL1].Value = 0;
+            cmdbyte[CB_VAL2].Value = max / 3;
+            cmdbyte[CB_VAL3].Value = (max * 2) / 3;
+            cmdbyte[CB_VAL4].Value = max;
+          }
+          cmdbyte[CB_VAL3].Max = max;
+          cmdbyte[CB_VAL3].Min = min;
+          cmdbyte[CB_VAL4].Max = max;
+          cmdbyte[CB_VAL4].Min = min;
+          break;
+      case TOGGLE:
+      case MOMENTARY:
+          if (in_edit_mode) {
+            cmdbyte[CB_VAL1].Value = max;
+            cmdbyte[CB_VAL2].Value = 0;
+          }
+          break;
+      default:
+          if (in_edit_mode) {
+            cmdbyte[CB_VAL1].Value = 0;
+            cmdbyte[CB_VAL2].Value = max;
+          }
+      }
 }
 
 uint8_t VCcommands::current_cmd_function() {
@@ -1498,7 +1563,7 @@ void VCcommands::load_cmd_byte(QTableWidget *table, uint8_t cmd_byte_no)
         }
 
         // Disable items for devices that are not supported
-        if ((cmdbyte[CB_DEVICE].Value < NUMBER_OF_DEVICES) && (cmd_byte_no == 1)) {
+        if ((cmdbyte[CB_DEVICE].Value < NUMBER_OF_DEVICES) && (cmd_byte_no == CB_TYPE)) {
             const QStandardItemModel* model = qobject_cast<const QStandardItemModel*>(comboBox->model());
             for (int i = indexFromValue(cmd_type, min); i <= indexFromValue(cmd_type, max); i++) {
               QStandardItem* item = model->item(i - min);
@@ -1562,7 +1627,7 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_parameter_name(value);
         else msg = QString::number(value);
         break;
-    case SUBLIST_PAR_STATE: // Copy the parameter state from the device
+    case SUBLIST_PAR_VALUE: // Copy the parameter state from the device
         dev = cmdbyte[CB_DEVICE].Value;
         msg = "";
         if (dev < NUMBER_OF_DEVICES) msg = Device[dev]->read_parameter_state(cmdbyte[CB_DATA1].Value, value);
