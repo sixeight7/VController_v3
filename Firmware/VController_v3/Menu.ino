@@ -46,7 +46,7 @@ uint8_t Text_previous_switch = 255; // The number of the switch that was pressed
 uint8_t Text_switch_char_index = 0; // The index of the characters of the switch that is being pressed
 bool keyboard_timer_running = false;
 uint32_t keyboard_timer = 0;
-#define KEYBOARD_TIME 800 // Wait time before forwarding the cursor to the next position
+#define KEYBOARD_TIMER_LENGTH 800 // Wait time before forwarding the cursor to the next position
 bool no_hold; // Holding switches too long may trigger hold when we don't want it
 bool KTN_name_edited = false;
 uint8_t Current_MIDI_switch = 1;
@@ -79,6 +79,8 @@ struct menu_struct {
 #define KTN_NUMBER_SUBLIST 253
 #define SWITCH_SUBLIST 252
 
+// The table below has an edited copy in VC-eit/Headers/vcsettings.h
+
 const PROGMEM menu_struct menu[][15] = {
   { // Menu 0 - Select menu
     { "SELECT MENU     ", NONE }, // Menu title
@@ -108,8 +110,8 @@ const PROGMEM menu_struct menu[][15] = {
     { "Bass mode device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 5
     { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
     { "Bass mode min vl", SET, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
-    { "", NONE }, // Switch 9
-    { "", NONE }, // Switch 10
+    { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 9
+    { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
     { "", NONE }, // Switch 13 (LEFT)
@@ -121,7 +123,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "Select device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Current_device }, // Switch 1
     { "Enabled", DEVICE_SET, 1, 0, 2, (void*) 10 }, // Switch 2
     { "Midi channel", DEVICE_SET, 0, 1, 16, (void*) 1 }, // Switch 3
-    { "Midi port", DEVICE_SET, 23, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 4
+    { "Midi port", DEVICE_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 4
     { "Page #1", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 6 },// Switch 5
     { "Page #2", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 7 }, // Switch 6
     { "Page #3", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 8 }, // Switch 7
@@ -141,11 +143,11 @@ const PROGMEM menu_struct menu[][15] = {
     { "Virtual LEDs", SET, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 3
     { "FX off is dimmed", SET, 1, 0, 1, &Setting.LED_FX_off_is_dimmed }, // Switch 4
     { "Global colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_global_colour }, // Switch 5
-    { "BPM colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 6
-    { "MIDI PC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 7
-    { "MIDI CC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_CC_colour }, // Switch 8
-    { "MIDI note colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 9
-    { "", NONE }, // Switch 10
+    { "MIDI PC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 6
+    { "MIDI CC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_CC_colour }, // Switch 7
+    { "MIDI note colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 8
+    { "BPM colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 9
+    { "BPM sync colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
     { "", NONE }, // Switch 13 (LEFT)
@@ -273,7 +275,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 8
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
-    { "", NONE }, // Switch 11
+    { "RGB DISPLAY CLR ", SET, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 11
     { "EXIT",  OPEN_MENU, SELECT_MENU }, // Switch 12
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
@@ -320,7 +322,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "MIDI SWITCH MENU", NONE }, // Menu title
     { "Select switch", SET, SWITCH_SUBLIST, 1, 24, &Current_MIDI_switch }, // Switch 1
     { "Type",  MIDI_SWITCH_SET, 38, 0, 4, (void*) 1 }, // Switch 2
-    { "Midi port", MIDI_SWITCH_SET, 23, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
+    { "Midi port", MIDI_SWITCH_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
     { "Midi channel", MIDI_SWITCH_SET, 0, 1, 16, (void*) 3 }, // Switch 4
     { "CC",  MIDI_SWITCH_SET, 0, 0, 127, (void*) 4 }, // Switch 5
     { "", NONE }, // Switch 6
@@ -333,7 +335,6 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
-
 };
 
 const uint16_t NUMBER_OF_MENUS = sizeof(menu) / sizeof(menu[0]);
@@ -349,7 +350,7 @@ const PROGMEM char menu_sublist[][17] = {
   "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
 
   // Sublist 23 - 30: MIDI ports
-  "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB HOST PORT", "ALL PORTS", "", "",
+  "OFF", "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB HOST PORT", "ALL PORTS", "",
 
   // Sublist 31 - 34: Expression pedals
   "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
@@ -358,8 +359,13 @@ const PROGMEM char menu_sublist[][17] = {
   "NONE", "UP/DOWN", "UP/DN + STEP",
 
   // Sublist 38 - 45: MIDI switch types
-  "OFF", "CC MOMENTARY", "CC TOGGLE", "CC RANGE", "PC", "", "", "",
+  "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
+
+  // Sublist 46 - 47: RGB Display colour schemes
+  "ADAFRUIT", "BUYDISPLAY",
 };
+
+#define SUBLIST_COLOUR 4
 
 // ********************************* Section 2: Functions called from menu ********************************************
 void initialize_settings() {
@@ -420,7 +426,8 @@ void KTN_rename_done() {
 
 void KTN_exit() {
   SC_set_enc1_acceleration(true);
-  SCO_select_next_page_of_device(Current_device);
+  //SCO_select_next_page_of_device(Current_device);
+  SCO_select_page(Previous_page);
   update_page = RELOAD_PAGE;
 }
 
@@ -486,6 +493,7 @@ void menu_load(uint8_t Sw) {
   uint8_t value;
   uint8_t index;
   String msg;
+  uint8_t colour;
 
   //uint8_t dest;
   if (Sw != MENU_BACK) SP[Sw].Colour = Setting.LED_global_colour; // Set default colour
@@ -541,11 +549,13 @@ void menu_load(uint8_t Sw) {
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
       if (Sw != MENU_BACK) {
-        if (menu[current_menu][number].Sublist == 3) { // When we set colours, let LED and backlight change
-          if (*val == 0) SP[Sw].Colour = Setting.LED_global_colour; // We need a real color for LED off - otherwise the backlight will be off
-          else SP[Sw].Colour = *val;
+        if (menu[current_menu][number].Sublist == SUBLIST_COLOUR) { // When we set colours, let LED and backlight change
+          if (*val == 0) colour = Setting.LED_global_colour; // We need a real color for LED off - otherwise the backlight will be off
+          else colour = *val;
         }
-        else SP[Sw].Colour = Setting.LED_global_colour;
+        else colour = Setting.LED_global_colour;
+        SP[Sw].Colour = colour;
+        Main_backlight_show_colour(colour);
       }
       break;
     case MIDI_SWITCH_SET:
@@ -583,14 +593,6 @@ void menu_load(uint8_t Sw) {
         //LCD_set_SP_label(Sw, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
-
-      if (Sw != MENU_BACK) {
-        if (menu[current_menu][number].Sublist == 3) { // When we set colours, let LED and backlight change
-          if (value == 0) SP[Sw].Colour = Setting.LED_global_colour; // We need a real color for LED off - otherwise the backlight will be off
-          else SP[Sw].Colour = value;
-        }
-        else SP[Sw].Colour = Setting.LED_global_colour;
-      }
       break;
     case DEVICE_SET:
       strcpy(menu_title, menu[current_menu][number].Label);
@@ -618,11 +620,13 @@ void menu_load(uint8_t Sw) {
       }
 
       if (Sw != MENU_BACK) {
-        if (menu[current_menu][number].Sublist == 3) { // When we set colours, let LED and backlight change
-          if (value == 0) SP[Sw].Colour = Setting.LED_global_colour; // We need a real color for LED off - otherwise the backlight will be off
-          else SP[Sw].Colour = value;
+        if (menu[current_menu][number].Sublist == SUBLIST_COLOUR) { // When we set colours, let LED and backlight change
+          if (value == 0) colour = Setting.LED_global_colour; // We need a real color for LED off - otherwise the backlight will be off
+          else colour = value;
         }
-        else SP[Sw].Colour = Setting.LED_global_colour;
+        else colour = Setting.LED_global_colour;
+        Main_backlight_show_colour(colour);
+        SP[Sw].Colour = colour;
       }
       break;
     default:
@@ -1142,7 +1146,7 @@ struct cmdtype_struct {
 #define TYPE_PATCH_NUMBER 16
 #define TYPE_PATCH_100 17
 #define TYPE_PARAMETER 18
-#define TYPE_PAR_STATE 19
+#define TYPE_PAR_VALUE 19
 #define TYPE_ASSIGN 20
 #define TYPE_ASSIGN_TRIGGER 21
 #define TYPE_TOGGLE 22
@@ -1162,7 +1166,7 @@ struct cmdtype_struct {
 // Here we define these sublists
 #define SUBLIST_PATCH 255 // To show the patchnumber
 #define SUBLIST_PARAMETER 254 // To show the parameter name
-#define SUBLIST_PAR_STATE 253 // To show the parameter state
+#define SUBLIST_PAR_VALUE 253 // To show the parameter state
 #define SUBLIST_ASSIGN 252 // To show the assign name
 #define SUBLIST_TRIGGER 251 // To show the assign trigger
 #define SUBLIST_PAGE 250 // To show the page name
@@ -1190,7 +1194,7 @@ const PROGMEM cmdtype_struct cmdtype[] = {
   { "PATCH NUMBER", SUBLIST_PATCH, 0, 99 }, // TYPE_PATCH_NUMBER 16
   { "PATCH BANK (100)", SUBLIST_PATCH_BANK, 0, 255 }, // TYPE_PATCH_100 17
   { "PARAMETER", SUBLIST_PARAMETER, 0, 255 }, // TYPE_PARAMETER 18
-  { "VALUE", SUBLIST_PAR_STATE, 0, 255 }, // TYPE_PAR_STATE 19
+  { "VALUE", SUBLIST_PAR_VALUE, 0, 255 }, // TYPE_PAR_VALUE 19
   { "ASSIGN", SUBLIST_ASSIGN, 0, 255 }, // TYPE_ASSIGN 20
   { "TRIGGER", SUBLIST_TRIGGER, 1, 127 }, // TYPE_ASSIGN 21
   { "TOGGLE TYPE", 48, 0, 6 }, // TYPE_TOGGLE 22
@@ -1213,7 +1217,7 @@ const PROGMEM char cmd_sublist[][17] = {
   "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "MENU", "", "", "", "", "", "", "",
 
   // Sublist 18 - 39: Device Command Types
-  "PATCH", "PARAMETER", "ASSIGN", "SNAPSHOT/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "TOGGL MASTER EXP", "MASTER EXP PEDAL",
+  "PATCH", "PARAMETER", "ASSIGN", "SNAPSHOT/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "MASTER EXP PEDAL", "TOGGL MASTER EXP",
   "DIR.SELECT", "PAR BANK", "PAR BANK UP", "PAR BANK DOWN", "PARBANK_CATEGORY", "SAVE PATCH", "", "", "", "", "", "",
 
   // Sublist 40 - 47: MIDI ports
@@ -1505,7 +1509,7 @@ void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String &msg) {
       if (dev < NUMBER_OF_DEVICES) Device[dev]->read_parameter_name(value, msg);
       else msg = String(value);
       break;
-    case SUBLIST_PAR_STATE: // Copy the parameter state from the device
+    case SUBLIST_PAR_VALUE: // Copy the parameter state from the device
       dev = cmdbyte[CB_DEVICE].Value;
       msg = "";
       if (dev < NUMBER_OF_DEVICES) Device[dev]->read_parameter_value_name(cmdbyte[CB_DATA1].Value, value, msg);
@@ -1603,7 +1607,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
       // Set command to: COMMON, NONE
       set_type_and_value(CB_TYPE, TYPE_COMMON_COMMANDS, selected_common_cmd, in_edit_mode);
 
-      build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, false);
+      build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, in_edit_mode);
 
       //clear_cmd_bytes(CB_DATA1, in_edit_mode); // Clear bytes 2-7
     }
@@ -1611,7 +1615,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
       // Set command to: <selected device>, PATCH, SELECT, <current_patch_number>
       set_type_and_value(CB_TYPE, TYPE_DEVICE_COMMANDS, selected_device_cmd, in_edit_mode);
 
-      build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, false);
+      build_command_structure(CB_TYPE, cmdbyte[CB_TYPE].Type, in_edit_mode);
 
       if (selected_device_cmd == PATCH - 100) {
         uint8_t dev = cmdbyte[CB_DEVICE].Value;
@@ -1704,9 +1708,10 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
           // Command: <selected device>, PARAMETER, NUMBER, TOGGLE, VALUE 1, VALUE 2
           set_type_and_value(CB_DATA1, TYPE_PARAMETER, 0, in_edit_mode);
           set_type_and_value(CB_DATA2, TYPE_TOGGLE, 1, in_edit_mode);
-          set_type_and_value(CB_VAL1, TYPE_PAR_STATE, 0, in_edit_mode);
-          set_type_and_value(CB_VAL2, TYPE_PAR_STATE, 1, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_PAR_VALUE, 0, in_edit_mode);
+          set_type_and_value(CB_VAL2, TYPE_PAR_VALUE, 1, in_edit_mode);
           clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 6-7
+          set_default_parameter_values(in_edit_mode);
           break;
         case ASSIGN:
           // Command: <selected device>, ASSIGN, NUMBER
@@ -1780,6 +1785,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
       if (dev < NUMBER_OF_DEVICES) {
         // Check if we have reached the max value
         if (cmdbyte[cmd_byte_no].Value >= Device[dev]->number_of_parameters()) cmdbyte[cmd_byte_no].Value = 0;
+        set_default_parameter_values(in_edit_mode);
       }
     }
 
@@ -1833,7 +1839,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
   // **********     BYTE4 updated     **********
   // *******************************************
 
-  if (cmd_byte_no == CB_DATA1) {
+  if (cmd_byte_no == CB_DATA2) {
 
     // *****************************************
     // * BYTE4: Toggle type byte updated       *
@@ -1842,12 +1848,12 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
       switch (cmdbyte[cmd_byte_no].Value) {
         case TRISTATE:
           // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-          set_type_and_value(CB_VAL3, TYPE_PAR_STATE, 1, in_edit_mode);
+          set_type_and_value(CB_VAL3, TYPE_PAR_VALUE, 1, in_edit_mode);
           clear_cmd_bytes(CB_VAL4, in_edit_mode);
           break;
         case FOURSTATE:
           // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
-          set_type_and_value(CB_VAL4, TYPE_PAR_STATE, 1, in_edit_mode);
+          set_type_and_value(CB_VAL4, TYPE_PAR_VALUE, 1, in_edit_mode);
           break;
         case STEP:
           // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
@@ -1857,6 +1863,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
         default:
           clear_cmd_bytes(CB_VAL3, in_edit_mode);
       }
+      set_default_parameter_values(in_edit_mode);
     }
   }
 
@@ -1868,7 +1875,7 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
     // *****************************************
     // * BYTE4+: Parameter value byte updated  *
     // *****************************************
-    if (cmd_type == TYPE_PAR_STATE) {
+    if (cmd_type == TYPE_PAR_VALUE) {
       uint8_t dev = cmdbyte[CB_DEVICE].Value;
       if (dev < NUMBER_OF_DEVICES) {
         // Check if we have reached the max value
@@ -1976,6 +1983,35 @@ void clear_cmd_bytes(uint8_t start_byte, bool in_edit_mode) { // Will clear the 
 void set_type_and_value(uint8_t number, uint8_t type, uint8_t value, bool in_edit_mode) {
   cmdbyte[number].Type = type;
   if (in_edit_mode) cmdbyte[number].Value = value;
+}
+
+void set_default_parameter_values(bool in_edit_mode) {
+  if (!in_edit_mode) return;
+  uint8_t dev = cmdbyte[CB_DEVICE].Value;
+  if (dev >= NUMBER_OF_DEVICES) return;
+  uint8_t max = Device[dev]->number_of_values(cmdbyte[CB_DATA1].Value);
+  if (max > 0) max--;
+  switch (cmdbyte[CB_DATA2].Value) {
+    case TRISTATE:
+      cmdbyte[CB_VAL1].Value = 0;
+      cmdbyte[CB_VAL2].Value = max / 2;
+      cmdbyte[CB_VAL3].Value = max;
+      break;
+    case FOURSTATE:
+      cmdbyte[CB_VAL1].Value = 0;
+      cmdbyte[CB_VAL2].Value = max / 3;
+      cmdbyte[CB_VAL3].Value = (max * 2) / 3;
+      cmdbyte[CB_VAL4].Value = max;
+      break;
+    case TOGGLE:
+    case MOMENTARY:
+      cmdbyte[CB_VAL1].Value = max;
+      cmdbyte[CB_VAL2].Value = 0;
+      break;
+    default:
+      cmdbyte[CB_VAL1].Value = 0;
+      cmdbyte[CB_VAL2].Value = max;
+  }
 }
 
 void cmdbyte_increase(uint8_t cmd_byte_no) { // Will increase the value of a command byte
@@ -2196,7 +2232,7 @@ void key_jump_category() {
 
 void check_keyboard_press_expired() { // Will advance the cursor to the right when the timer expires
   if (keyboard_timer_running) { // First check if keyboard input is active
-    if (millis() > KEYBOARD_TIME + keyboard_timer) { // Check timer
+    if (millis() > KEYBOARD_TIMER_LENGTH + keyboard_timer) { // Check timer
       cursor_right_page_name(); // Advance cursor
     }
   }

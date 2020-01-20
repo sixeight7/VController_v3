@@ -260,12 +260,7 @@ void MD_GP10_class::do_after_patch_selection() {
   request_guitar_switch_states();
   request_current_patch_name();
   //EEPROM.write(EEPROM_GP10_PATCH_NUMBER, patch_number);
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
 }
 
 bool MD_GP10_class::request_patch_name(uint8_t sw, uint16_t number) {
@@ -362,19 +357,19 @@ struct GP10_parameter_struct { // Combines all the data we need for controlling 
 #define SHOW_PAN 31765 // Special number for showing the pan- set in sublist
 
 const PROGMEM GP10_parameter_struct GP10_parameters[] = {
-  {0xFFF, 0x20000800, 101, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_DEFAULT_TYPE}, // 00
-  {0x0F1, 0x20005800, 2, "FX", 1 | SUBLIST_FROM_BYTE2, GP10_FX_COLOUR},
+  {0x166, 0x20016000, 2, "WAH SW", 180 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE}, // 00
+  {0x0F1, 0x20005800, 2, "FX SW", 1 | SUBLIST_FROM_BYTE2, GP10_FX_COLOUR},
+  {0x16D, 0x20016800, 2, "Chorus SW", 17 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE},
+  {0x176, 0x20017000, 2, "DLY SW", 20 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE},
+  {0x188, 0x20017800, 2, "RVB SW", 30 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE},
+  {0x192, 0x20020000, 2, "EQ SW", 0, FX_FILTER_TYPE},
   {0x0F2, 0x20005801, 16, "FX Type", 1, GP10_FX_TYPE_COLOUR},
-  {0x166, 0x20016000, 2, "WAH SW", 180 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE},
   {0x167, 0x20016001, 6, "WAH TP", 180, FX_WAH_TYPE},
   {0x168, 0x20016002, 101, "WAH POS", SHOW_NUMBER, FX_WAH_TYPE},
-  {0x16D, 0x20016800, 2, "Chorus", 17 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE},
   {0x161, 0x20016801, 3, "CHS Type", 17, FX_MODULATE_TYPE},
-  {0x176, 0x20017000, 2, "DLY", 20 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE},
-  {0x177, 0x20017001, 10, "DLY TYPE", 20, FX_DELAY_TYPE},
-  {0x188, 0x20017800, 2, "RVB", 30 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE}, // 10
+  {0x177, 0x20017001, 10, "DLY TYPE", 20, FX_DELAY_TYPE}, // 10
   {0x189, 0x20017801, 7, "RVB TYPE", 30, FX_REVERB_TYPE},
-  {0x192, 0x20020000, 2, "EQ SW", 0, FX_FILTER_TYPE},
+  {0xFFF, 0x20000800, 101, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_DEFAULT_TYPE},
   {0x000, 0x20001000, 2, "COSM GUITAR", 0, FX_GTR_TYPE},
   {0x001, 0x20001001, 4, "COSM Type", 115, FX_GTR_TYPE},
   {0x0A5, 0x20000804, 2, "NORMAL PU", 0, FX_GTR_TYPE},
@@ -534,7 +529,8 @@ void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number
     String msg = "";
     if (SP[Sw].Type != ASSIGN) {
       msg = GP10_parameters[number].Name;
-      msg += ":";
+      if ((GP10_parameters[number].Sublist & SUBLIST_FROM_BYTE2) || (GP10_parameters[number].Sublist == 0)) msg += " ";
+      else msg += ":";
     }
     msg += SP[Sw].Label;
     LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);

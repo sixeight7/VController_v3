@@ -54,7 +54,7 @@
 
 // The VG99 sends a PC message back to the VController. This message arrives after a new patch change has been made on rapid selection of patches
 // Therefore PC messages will be ignored for 1 second after the patch has been changed on the VController
-#define VG99_PC_IGNORE_TIME 1000 // 1000ms = 1 sec
+#define VG99_PC_IGNORE_TIMER_LENGTH 1000 // 1000ms = 1 sec
 
 // Initialize device variables
 // Called at startup of VController
@@ -99,7 +99,7 @@ void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
 
     // Check if it is the patch number
     if ((address == 0x71000100) && (checksum_ok)) {
-      if (patch_number != sxdata[12]) { //Right after a patch change the patch number is sent again. So here we catch that message.
+      if (patch_number != sxdata[12]) { // Right after a patch change the patch number is sent again. So here we catch that message.
         patch_number = sxdata[11] * 128 + sxdata[12];
         //page_check();
         do_after_patch_selection();
@@ -184,13 +184,12 @@ void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // VG99 sends a program change
-    uint16_t new_patch = (CC01 * 100) + program;
-    if ((patch_number != new_patch) && (millis() - PC_ignore_timer > VG99_PC_IGNORE_TIME)) {
+    uint16_t new_patch = (CC00 * 100) + program;
+    if ((patch_number != new_patch) && (millis() - PC_ignore_timer > VG99_PC_IGNORE_TIMER_LENGTH)) {
       patch_number = new_patch;
+      select_patch(new_patch); // Trick to fool the VG-99 to supress messages that freeze the user interface of the VG-99
       request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
-      //page_check();
       do_after_patch_selection();
-      update_page = REFRESH_PAGE;
     }
   }
 }
@@ -206,8 +205,7 @@ void MD_VG99_class::identity_check(const unsigned char* sxdata, short unsigned i
 }
 
 void MD_VG99_class::do_after_connect() {
-  //write_sysex(VG99_EDITOR_MODE_ON); // Put the VG-99 into editor mode - saves lots of messages on the VG99 display, but may hangs the VController
-  //editor_mode = true;
+  write_sysex(VG99_EDITOR_MODE_OFF); // Put the VG-99 out of editor mode - saves lots of messages on the VG99 display, but may hang the VController
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NUMBER);
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
   do_after_patch_selection();
@@ -216,7 +214,6 @@ void MD_VG99_class::do_after_connect() {
 }
 
 // ********************************* Section 3: VG99 common MIDI out functions ********************************************
-
 void MD_VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
@@ -302,13 +299,7 @@ void MD_VG99_class::do_after_patch_selection() {
   update_main_lcd = true;
   request_guitar_switch_states();
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
-
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
 }
 
 bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {

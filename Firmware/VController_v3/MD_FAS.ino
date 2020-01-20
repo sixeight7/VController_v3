@@ -252,7 +252,7 @@ void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
-    uint16_t new_patch = (CC01 * 128) + program;
+    uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
       patch_number = new_patch;
       write_sysex(FAS_GET_PRESET_NAME); // So the main display always show the correct patch

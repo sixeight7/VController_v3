@@ -20,14 +20,14 @@ void StartFreeTimer();
 //#define DEBUG_FREE
 
 // Setup debug procedures.
-#define SERIAL_STARTUP_TIME 3000 // Will wait max three seconds max before serial starts
+#define SERIAL_STARTUP_TIMER_LENGTH 3000 // Will wait max three seconds max before serial starts
 uint32_t serial_timer;
 
 void setup_debug() {
 #if defined(DEBUG_NORMAL) || defined(DEBUG_MAIN) || defined(DEBUG_MIDI) || defined(DEBUG_SYSEX)
   Serial.begin(115200);
   serial_timer = millis();
-  while ((!Serial) && (serial_timer - millis() < SERIAL_STARTUP_TIME)) {}; // Wait while the serial communication is not ready or while the SERIAL_START_UP time has not elapsed.
+  while ((!Serial) && (serial_timer - millis() < SERIAL_STARTUP_TIMER_LENGTH)) {}; // Wait while the serial communication is not ready or while the SERIAL_START_UP time has not elapsed.
   Serial.println("VController v2 debugging started...");
   Serial.println("Arduino version: " + String(ARDUINO));
   StartFreeTimer();
@@ -57,7 +57,7 @@ void setup_debug() {
 #define MIDI2_PORT 0x20
 #define MIDI3_PORT 0x30
 #define USBHMIDI_PORT 0x40
-#define ALL_PORTS 0xF0
+#define ALL_MIDI_PORTS 0xF0
 
 //Debug sysex messages by sending them to the serial monitor
 void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port, bool is_out) {

@@ -12,7 +12,7 @@
 
 bool global_tuner_active = false;
 
-// States and variable for updaing page
+// States and variable for updating page
 #define OFF 0
 #define REFRESH_FX_ONLY 1
 #define REFRESH_PAGE 2
@@ -65,10 +65,11 @@ MD_HLX_class My_HLX = MD_HLX_class(HLX);
 MD_FAS_class My_AXEFX = MD_FAS_class(AXEFX);
 MD_KTN_class My_KTN = MD_KTN_class(KTN);
 MD_KPA_class My_KPA = MD_KPA_class(KPA);
+MD_SVL_class My_SVL = MD_SVL_class(SVL);
 
 // Here we create an array for the devices, so we can access them by pointer reference
 //MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13};
-MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA};
+MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL};
 
 void setup_devices() { // Trigger the initialization of  the devices
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {

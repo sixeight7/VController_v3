@@ -450,7 +450,7 @@ void LCD_load_short_message(uint8_t sw, String &msg) {
   if (EEPROM_check4label(Current_page, sw)) {
     //String lbl;
     EEPROM_read_title(Current_page, sw, msg); // Override the label if a custom label exists
-    //LCD_set_SP_label(sw, lbl);
+    LCD_set_SP_label(sw, msg); // So full label will popup on switch activation
     return;
   }
 
@@ -867,7 +867,18 @@ void LCD_update(uint8_t sw, bool do_show) {
       case SNAPSCENE:
         LCD_add_vled(3);
         Display_number_string = "";
+        if (SP[sw].Value2 == 0) {
         Device[Dev]->set_snapscene_title(SP[sw].PP_number, Display_number_string);
+        }
+        else if (SP[sw].Value3 == 0) { // Two snapshots in view
+          LCD_add_snapshot_number(SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+        }
+        else { // Three snapshots in view
+          LCD_add_snapshot_number(SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(SP[sw].Value3, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+        }
         LCD_add_title(Display_number_string);
         LCD_add_label(SP[sw].Label);
         //LCD_print_lcd_txt(sw);
@@ -1007,6 +1018,16 @@ void LCD_parameter_label_short(uint8_t sw, uint8_t Dev, String & msg) { // Will 
         break;
     }
   }
+}
+
+void LCD_add_snapshot_number(uint8_t number, uint8_t current_number, uint8_t current_snap, String &msg) {
+  if (number == current_snap) msg += "[";
+  else if (number == current_number) msg += "<";
+  msg += "S";
+  msg += String(number);
+  if (number == current_snap) msg += "]";
+  else if (number == current_number) msg += ">";
+  msg += " ";
 }
 
 void LCD_parameter_title(uint8_t sw, uint8_t Dev, String & msg) { // Will print the right parameter message depending on the TOGGLE state

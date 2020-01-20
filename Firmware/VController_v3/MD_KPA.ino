@@ -463,7 +463,7 @@ void MD_KPA_class::do_after_patch_selection() {
   Current_patch_number = patch_number;
   update_LEDS = true;
   update_main_lcd = true;
-  update_page = REFRESH_PAGE;
+  MD_base_class::do_after_patch_selection();
 }
 
 void MD_KPA_class::request_current_patch_name() {

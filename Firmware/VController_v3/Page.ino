@@ -332,7 +332,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             {
               uint16_t par_num = (Device[Dev]->parameter_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position - 1;
               uint16_t par_id = Device[Dev]->get_parbank_parameter_id(par_num); // If the device supports parameter categories, this will point to the parameter within the selected category
-              //DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
+              DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
               if (par_num < Device[Dev]->number_of_parbank_parameters()) {
 
                 // Determine if the pedal type: TOGGLE, STEP or UPDOWN
@@ -475,6 +475,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             }
             else {
               page = SP[Current_switch].PP_number;
+              if (page == 0) page = Previous_page;
             }
             if (SCO_valid_page(page)) {
               EEPROM_read_title(page, 0, page_label);

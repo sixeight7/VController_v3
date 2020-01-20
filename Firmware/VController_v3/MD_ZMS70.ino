@@ -13,7 +13,7 @@
 #define ZMS70_MIDI_CHANNEL 1
 #define ZMS70_PATCH_MIN 0
 #define ZMS70_PATCH_MAX 49
-#define ZMS70_MIDI_TIME 100 // Minimal time inbetween requests for patch data from MS70
+#define ZMS70_MIDI_TIMER_LENGTH 100 // Minimal time inbetween requests for patch data from MS70
 
 // Documentation of Zoom sysex has been moved to http://www.vguitarforums.com/smf/index.php?topic=4329.msg131444#msg131444 (The ZOOM MS70-CDR v2 MIDI specification)
 // The relevant messages are repeated here
@@ -67,7 +67,7 @@ void MD_ZMS70_class::update() {
     MIDI_send_PC(patch_number, MIDI_channel, MIDI_port);
     DEBUGMSG("out(" + String(device_name) + ") PC" + String(patch_number)); //Debug
     do_after_patch_selection();
-    midi_timer = millis() + ZMS70_MIDI_TIME;
+    midi_timer = millis() + ZMS70_MIDI_TIMER_LENGTH;
     send_patch_change = false;
   }
 }
@@ -263,6 +263,7 @@ void MD_ZMS70_class::do_after_patch_selection() {
   CP_MEM_current = false;
   write_sysex(ZMS70_REQUEST_CURRENT_PATCH); // Request current patch, so the FX buttons will be updated
   MIDI_disable_device_check();
+  MD_base_class::do_after_patch_selection();
 }
 
 bool MD_ZMS70_class::request_patch_name(uint8_t sw, uint16_t number) {
@@ -427,6 +428,75 @@ const PROGMEM ZMS70_FX_type_struct ZMS70_FX_types[] = { // Table with the name a
   {4, 97,   "SEQ Filter", FX_FILTER_TYPE},
   {4, 129,  "Random Filter", FX_FILTER_TYPE},
   {4, 161,  "FCycle", FX_FILTER_TYPE},
+  // Unique effects from MS-50G
+  {8, 16,   "FD Combo", FX_AMP_TYPE},
+  {8, 32,   "Deluxe-R", FX_AMP_TYPE},
+  {8, 64,   "FD Vibro", FX_AMP_TYPE},
+  {8, 96,   "US Blues", FX_AMP_TYPE},
+  {8, 128,  "VX Combo", FX_AMP_TYPE},
+  {8, 160,  "VX Jimi", FX_AMP_TYPE},
+  {8, 192,  "BG Crunch", FX_AMP_TYPE},
+  {8, 224,  "Match30", FX_AMP_TYPE},
+  {8, 1,    "Car Drive", FX_AMP_TYPE},
+  {8, 33,   "TW Rock", FX_AMP_TYPE},
+  {8, 65,   "Tone City", FX_AMP_TYPE},
+  {8, 97,   "HW Stack", FX_AMP_TYPE},
+  {8, 129,  "Tangerine", FX_AMP_TYPE},
+  {8, 161,  "B-Breaker", FX_AMP_TYPE},
+  {8, 193,  "MS Crunch", FX_AMP_TYPE},
+  {8, 225,  "MS 1959", FX_AMP_TYPE},
+  {8, 2,    "MS Drive", FX_AMP_TYPE},
+  {8, 34,   "BGN DRV", FX_AMP_TYPE},
+  {8, 66,   "BG Drive", FX_AMP_TYPE},
+  {8, 98,   "DZ Drive", FX_AMP_TYPE},
+  {8, 130,  "Alien", FX_AMP_TYPE},
+  {8, 162,  "Revo T", FX_AMP_TYPE},
+  {6, 16,   "Booster", FX_DIST_TYPE},
+  {6, 32,   "Overdrive", FX_DIST_TYPE},
+  {6, 64,   "T Scream", FX_DIST_TYPE},
+  {6, 96,   "Governor", FX_DIST_TYPE},
+  {6, 128,  "Dist +", FX_DIST_TYPE},
+  {6, 160,  "Dist 1", FX_DIST_TYPE},
+  {6, 192,  "Squeak", FX_DIST_TYPE},
+  {6, 224,  "Fuzz Smile", FX_DIST_TYPE},
+  {6, 1,    "Great Muff", FX_DIST_TYPE},
+  {6, 65,   "HotBox", FX_DIST_TYPE},
+  {6, 97,   "Z Clean", FX_DIST_TYPE},
+  {6, 129,  "Z MP1", FX_DIST_TYPE},
+  {6, 161,  "Z Bottom", FX_DIST_TYPE},
+  {6, 193,  "Z Dream", FX_DIST_TYPE},
+  {6, 225,  "Z Scream", FX_DIST_TYPE},
+  {6, 2,    "Z Neos", FX_DIST_TYPE},
+  {6, 34,   "Z Wild", FX_DIST_TYPE},
+  {6, 66,   "Zoom 9002 Lead", FX_DIST_TYPE},
+  {6, 98,   "Extreme Dist", FX_DIST_TYPE},
+  {6, 130,  "Acoustic", FX_DIST_TYPE},
+  {6, 162,  "CentaGold", FX_DIST_TYPE},
+  {6, 194,  "NYC Muff", FX_DIST_TYPE},
+  {6, 226,  "TS Drive", FX_DIST_TYPE},
+  {6, 3,    "BG Throttle", FX_DIST_TYPE},
+  {6, 35,   "Oct Fuzz", FX_DIST_TYPE},
+  {6, 67,   "BG Grid", FX_DIST_TYPE},
+  {6, 99,   "Red Crunch", FX_DIST_TYPE},
+  {6, 131,  "TB MK 1.5", FX_DIST_TYPE},
+  {6, 163,  "Sweet Drive", FX_DIST_TYPE},
+  {6, 227,  "RC Boost", FX_DIST_TYPE},
+  {6, 36,   "Dynamic Drive", FX_DIST_TYPE},
+  // Unique effects from MS-60B that do not crash the MS70-cdr
+  {24, 65,  "T Scream", FX_DIST_TYPE},
+  {10, 128, "SMR", FX_AMP_TYPE},
+  {10, 160, "Flip Top", FX_AMP_TYPE},
+  {10, 1,   "Monotone", FX_AMP_TYPE},
+  {10, 33,  "Super B", FX_AMP_TYPE},
+  {10, 65,  "G-Krueger", FX_AMP_TYPE},
+  {10, 97,  "The Heaven", FX_AMP_TYPE},
+  {14, 112, "Bass Synth", FX_FILTER_TYPE},
+  {14, 224, "Std Syn", FX_FILTER_TYPE},
+  {14, 1,   "Syn Tlk", FX_FILTER_TYPE},
+  {14, 65,  "Defret", FX_FILTER_TYPE},
+  {14, 129, "V-Syn", FX_FILTER_TYPE},
+  {14, 161, "4VoiceSyn", FX_FILTER_TYPE},
+  {2, 48,   "D Comp", FX_DYNAMICS_TYPE},
 };
 
 const uint8_t ZMS70_NUMBER_OF_FX = sizeof(ZMS70_FX_types) / sizeof(ZMS70_FX_types[0]);

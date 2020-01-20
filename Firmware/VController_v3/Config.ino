@@ -10,7 +10,7 @@
 // ********************************* Section 1: VController commands ********************************************
 
 // Here we define the supported devices
-#define NUMBER_OF_DEVICES 10
+#define NUMBER_OF_DEVICES 11
 #define GP10 0
 #define GR55 1
 #define VG99 2
@@ -21,6 +21,7 @@
 #define AXEFX 7
 #define KTN 8
 #define KPA 9
+#define SVL 10
 
 #define CURRENT 254 // To select the current device
 #define COMMON 255 // Not really a device, but used for common procedures, that are not device specific or for all devices.
@@ -132,7 +133,7 @@
 #define MIDI2_PORT 0x20
 #define MIDI3_PORT 0x30
 #define USBHMIDI_PORT 0x40
-#define ALL_PORTS 0xF0
+#define ALL_MIDI_PORTS 0xF0
 
 // VG99 commands
 #define FC300_CTL1 ASSIGN, VG99, SELECT, 0, 1
@@ -239,6 +240,11 @@
 #define ZMS70_DEFAULT_PAGE2 0
 #define ZMS70_DEFAULT_PAGE3 0
 #define ZMS70_DEFAULT_PAGE4 0
+
+#define SVL_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define SVL_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SVL_DEFAULT_PAGE3 0
+#define SVL_DEFAULT_PAGE4 0
 
 const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 201: MENU *************************************************
@@ -652,8 +658,8 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_KTN_EDIT, 8, PAR_BANK_CATEGORY, KTN, 8}, // ** Switch 08 **
   {PAGE_KTN_EDIT, 9, PAR_BANK_CATEGORY, KTN, 9}, // ** Switch 09 **
   {PAGE_KTN_EDIT, 10, PAR_BANK_CATEGORY, KTN, 10}, // ** Switch 10 **
-  {PAGE_KTN_EDIT, 11, SAVE_PATCH, KTN }, // ** Switch 11 **
-  //{PAGE_KTN_EDIT, 12, PAR_BANK_CATEGORY, KTN, 12}, // ** Switch 12 **
+  {PAGE_KTN_EDIT, 11, PAR_BANK_CATEGORY, KTN, 11 }, // ** Switch 11 **
+  {PAGE_KTN_EDIT, 12, SAVE_PATCH, KTN }, // ** Switch 11 **
   {PAGE_KTN_EDIT, 13, PATCH, KTN, PREV}, // ** Switch 10 **
   {PAGE_KTN_EDIT, 14, PATCH, KTN, NEXT}, // ** Switch 11 **
   //{PAGE_KTN_EDIT, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 12 **
@@ -663,14 +669,14 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_KTN_FX, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
   {PAGE_KTN_FX, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', ' '},
   {PAGE_KTN_FX, 1, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
-  {PAGE_KTN_FX, 2, PARAMETER, KTN, 15, TOGGLE, 1, 0}, // ** Switch 02 **
-  {PAGE_KTN_FX, 3, PARAMETER, KTN, 73, TOGGLE, 1, 0}, // ** Switch 03 **
-  {PAGE_KTN_FX, 4, PARAMETER, KTN, 109, TOGGLE, 1, 0}, // ** Switch 04 **
-  {PAGE_KTN_FX, 5, PARAMETER, KTN, 64, TOGGLE, 1, 0}, // ** Switch 05 **
-  {PAGE_KTN_FX, 6, PARAMETER, KTN, 90, TOGGLE, 1, 0}, // ** Switch 06 **
-  {PAGE_KTN_FX, 7, PARAMETER, KTN, 99, TOGGLE, 1, 0}, // ** Switch 07 **
-  {PAGE_KTN_FX, 8, PARAMETER, KTN, 40, TOGGLE, 1, 0}, // ** Switch 08 **
-  {PAGE_KTN_FX, 9, PARAMETER, KTN, 124, TOGGLE, 1, 0}, // ** Switch 09 **
+  {PAGE_KTN_FX, 2, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN_FX, 3, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_KTN_FX, 4, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 04 **
+  {PAGE_KTN_FX, 5, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 05 **
+  {PAGE_KTN_FX, 6, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 06 **
+  {PAGE_KTN_FX, 7, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 07 **
+  {PAGE_KTN_FX, 8, PARAMETER, KTN, 48, TOGGLE, 1, 0}, // ** Switch 08 **
+  {PAGE_KTN_FX, 9, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 09 **
   {PAGE_KTN_FX, 10, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_EDIT}, // ** Switch 10 **
   //{PAGE_KTN_FX, 11, PAR_BANK_CATEGORY, KTN, 11 }, // ** Switch 11 **
   //{PAGE_KTN_FX, 12, PAR_BANK_CATEGORY, KTN, 12}, // ** Switch 12 **
@@ -852,24 +858,24 @@ const PROGMEM Cmd_struct Default_commands[] = {
   // ******************************* PAGE 04: GM TEST *************************************************
   {PAGE_GM_TEST, LABEL, 'G', 'E', 'N', '.', 'M', 'I', 'D', 'I' },
   {PAGE_GM_TEST, LABEL, ' ', 'T', 'E', 'S', 'T', ' ', ' ', ' ' },
-  {PAGE_GM_TEST, 1, MIDI_PC, COMMON, 1, 1, ALL_PORTS}, // ** Switch 01 **
-  {PAGE_GM_TEST, 2, MIDI_PC, COMMON, 2, 1, ALL_PORTS}, // ** Switch 02 **
-  {PAGE_GM_TEST, 3, MIDI_PC, COMMON, 3, 1, ALL_PORTS}, // ** Switch 03 **
+  {PAGE_GM_TEST, 1, MIDI_PC, COMMON, 1, 1, ALL_MIDI_PORTS}, // ** Switch 01 **
+  {PAGE_GM_TEST, 2, MIDI_PC, COMMON, 2, 1, ALL_MIDI_PORTS}, // ** Switch 02 **
+  {PAGE_GM_TEST, 3, MIDI_PC, COMMON, 3, 1, ALL_MIDI_PORTS}, // ** Switch 03 **
   {PAGE_GM_TEST, 3 | LABEL, 'C', 'U', 'S', 'T', 'O', 'M', ' ', 'L'}, // ** Switch 03 **
   {PAGE_GM_TEST, 3 | LABEL, 'A', 'B', 'E', 'L', ' ', 'P', 'C', '3'}, // ** Switch 03 **
-  {PAGE_GM_TEST, 4, MIDI_NOTE, COMMON, 52, 100, 1, ALL_PORTS}, // ** Switch 04 **
-  {PAGE_GM_TEST, 5, MIDI_CC, COMMON, 30, CC_ONE_SHOT, 127, 0, 1, ALL_PORTS}, // ** Switch 05 **
+  {PAGE_GM_TEST, 4, MIDI_NOTE, COMMON, 52, 100, 1, ALL_MIDI_PORTS}, // ** Switch 04 **
+  {PAGE_GM_TEST, 5, MIDI_CC, COMMON, 30, CC_ONE_SHOT, 127, 0, 1, ALL_MIDI_PORTS}, // ** Switch 05 **
   {PAGE_GM_TEST, 5 | LABEL, 'O', 'N', 'E', ' ', 'S', 'H', 'O', 'T'}, // ** Switch 05 **
-  {PAGE_GM_TEST, 6, MIDI_CC, COMMON, 31, CC_MOMENTARY, 127, 0, 1, ALL_PORTS}, // ** Switch 06 **
+  {PAGE_GM_TEST, 6, MIDI_CC, COMMON, 31, CC_MOMENTARY, 127, 0, 1, ALL_MIDI_PORTS}, // ** Switch 06 **
   {PAGE_GM_TEST, 6 | LABEL, 'M', 'O', 'M', 'E', 'N', 'T', 'A', 'R'}, // ** Switch 06 **
   {PAGE_GM_TEST, 6 | LABEL, 'Y', ' ', ' ', ' ', ' ', ' ', ' ', ' '}, // ** Switch 06 **
-  {PAGE_GM_TEST, 7, MIDI_CC, COMMON, 30, CC_TOGGLE, 127, 0, 1, ALL_PORTS}, // ** Switch 07 **
+  {PAGE_GM_TEST, 7, MIDI_CC, COMMON, 30, CC_TOGGLE, 127, 0, 1, ALL_MIDI_PORTS}, // ** Switch 07 **
   {PAGE_GM_TEST, 7 | LABEL, 'T', 'O', 'G', 'G', 'L', 'E', ' ', ' '}, // ** Switch 07 **
-  {PAGE_GM_TEST, 8, MIDI_CC, COMMON, 31, CC_TOGGLE_ON, 127, 0, 1, ALL_PORTS}, // ** Switch 08 **
+  {PAGE_GM_TEST, 8, MIDI_CC, COMMON, 31, CC_TOGGLE_ON, 127, 0, 1, ALL_MIDI_PORTS}, // ** Switch 08 **
   {PAGE_GM_TEST, 8 | LABEL, 'T', 'O', 'G', 'G', 'L', 'E', ' ', 'O'}, // ** Switch 08 **
   {PAGE_GM_TEST, 8 | LABEL, 'N', ' ', ' ', ' ', ' ', ' ', ' ', ' '}, // ** Switch 08 **
-  {PAGE_GM_TEST, 9, MIDI_CC, COMMON, 32, CC_UPDOWN, 127, 0, 1, ALL_PORTS}, // ** Switch 09 **
-  {PAGE_GM_TEST, 10, MIDI_CC, COMMON, 33, CC_STEP, 3, 0, 1, ALL_PORTS}, // ** Switch 10 **
+  {PAGE_GM_TEST, 9, MIDI_CC, COMMON, 32, CC_UPDOWN, 127, 0, 1, ALL_MIDI_PORTS}, // ** Switch 09 **
+  {PAGE_GM_TEST, 10, MIDI_CC, COMMON, 33, CC_STEP, 3, 0, 1, ALL_MIDI_PORTS}, // ** Switch 10 **
   {PAGE_GM_TEST, 11, SET_TEMPO, COMMON, 120}, // ** Switch 11 **
   //{PAGE_GM_TEST, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
   //{PAGE_GM_TEST, 13, PATCH, CURRENT, BANKDOWN, 4}, // ** Switch 13 **
@@ -901,7 +907,10 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define PAGE_KTN_FX1 212
 #define PAGE_KTN_FX2 213
 #define PAGE_KTN_FX3 214
-#define LAST_FIXED_CMD_PAGE 214
+#define PAGE_KTN4_FX1 215
+#define PAGE_KTN4_FX2 216
+#define PAGE_KTN4_FX3 217
+#define LAST_FIXED_CMD_PAGE 217
 
 #define DEFAULT_PAGE PAGE_CURRENT_PATCH_BANK // The page that gets selected when a valid page number is unknown
 
@@ -932,7 +941,7 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define KPA_DEFAULT_PAGE4 0
 
 #define KTN_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
-#define KTN_DEFAULT_PAGE2 PAGE_KTN_FX1
+#define KTN_DEFAULT_PAGE2 PAGE_KTN4_FX1
 #define KTN_DEFAULT_PAGE3 0
 #define KTN_DEFAULT_PAGE4 0
 
@@ -955,6 +964,11 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define ZMS70_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
 #define ZMS70_DEFAULT_PAGE3 0
 #define ZMS70_DEFAULT_PAGE4 0
+
+#define SVL_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define SVL_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SVL_DEFAULT_PAGE3 0
+#define SVL_DEFAULT_PAGE4 0
 
 const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 201: MENU *************************************************
@@ -1073,13 +1087,13 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 212: KATANA FX CTRL #1  *************************************************
   {PAGE_KTN_FX1, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
   {PAGE_KTN_FX1, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '1'},
-  {PAGE_KTN_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 01 **
   {PAGE_KTN_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
   {PAGE_KTN_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX3}, // ** Switch 01 + 02 **
-  {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 15, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 02 **
   {PAGE_KTN_FX1, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
   {PAGE_KTN_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 02 +| 03 **
-  {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 73, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 03 **
   {PAGE_KTN_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
   {PAGE_KTN_FX1, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
   {PAGE_KTN_FX1, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
@@ -1088,10 +1102,10 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 213: KATANA FX CTRL #2  *************************************************
   {PAGE_KTN_FX2, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
   {PAGE_KTN_FX2, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '2'},
-  {PAGE_KTN_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 64, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 01 **
   {PAGE_KTN_FX2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
   {PAGE_KTN_FX2, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX1}, // ** Switch 01 + 02 **
-  {PAGE_KTN_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 90, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 02 **
   {PAGE_KTN_FX2, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
   {PAGE_KTN_FX2, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX3}, // ** Switch 02 +| 03 **
   {PAGE_KTN_FX2, 3, TAP_TEMPO, COMMON}, // ** Switch 03 **
@@ -1103,18 +1117,62 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 214: KATANA FX CTRL #3  *************************************************
   {PAGE_KTN_FX3, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
   {PAGE_KTN_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
-  {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 99, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 01 **
   {PAGE_KTN_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
   {PAGE_KTN_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 01 + 02 **
-  {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 40, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 48, TOGGLE, 1, 0}, // ** Switch 02 **
   {PAGE_KTN_FX3, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
   {PAGE_KTN_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX1}, // ** Switch 02 +| 03 **
-  {PAGE_KTN_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 109, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_KTN_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 03 **
   {PAGE_KTN_FX3, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
   {PAGE_KTN_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
   {PAGE_KTN_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
   {PAGE_KTN_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
 
+  // ******************************* PAGE 215: KATANA4 FX CTRL #1  *************************************************
+  {PAGE_KTN4_FX1, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+  {PAGE_KTN4_FX1, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '1'},
+  {PAGE_KTN4_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN4_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+  {PAGE_KTN4_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX3}, // ** Switch 01 + 02 **
+  {PAGE_KTN4_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN4_FX1, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+  {PAGE_KTN4_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX2}, // ** Switch 02 +| 03 **
+  {PAGE_KTN4_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_KTN4_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+  {PAGE_KTN4_FX1, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+  {PAGE_KTN4_FX1, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+  {PAGE_KTN4_FX1, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+  // ******************************* PAGE 216: KATANA4 FX CTRL #2  *************************************************
+  {PAGE_KTN4_FX2, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+  {PAGE_KTN4_FX2, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '2'},
+  {PAGE_KTN4_FX2, 1 | ON_RELEASE, PARAMETER, KTN, 61, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN4_FX2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+  {PAGE_KTN4_FX2, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX1}, // ** Switch 01 + 02 **
+  {PAGE_KTN4_FX2, 2 | ON_RELEASE, PARAMETER, KTN, 87, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN4_FX2, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+  {PAGE_KTN4_FX2, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX3}, // ** Switch 02 +| 03 **
+  {PAGE_KTN4_FX2, 3, TAP_TEMPO, COMMON}, // ** Switch 03 **
+  {PAGE_KTN4_FX2, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+  {PAGE_KTN4_FX2, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+  {PAGE_KTN4_FX2, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+  {PAGE_KTN4_FX2, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+  // ******************************* PAGE 217: KATANA4 FX CTRL #3  *************************************************
+  {PAGE_KTN4_FX3, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
+  {PAGE_KTN4_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
+  {PAGE_KTN4_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 01 **
+  {PAGE_KTN4_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+  {PAGE_KTN4_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX2}, // ** Switch 01 + 02 **
+  {PAGE_KTN4_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 02 **
+  {PAGE_KTN4_FX3, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
+  {PAGE_KTN4_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN4_FX1}, // ** Switch 02 +| 03 **
+  {PAGE_KTN4_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_KTN4_FX3, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+  {PAGE_KTN4_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
+  {PAGE_KTN4_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
+  {PAGE_KTN4_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = sizeof(Fixed_commands) / sizeof(Fixed_commands[0]);
@@ -1164,10 +1222,10 @@ const PROGMEM Cmd_struct Default_commands[] = {
   // ******************************* PAGE 01: GM TEST *************************************************
   {PAGE_GM_TEST, LABEL, 'G', 'E', 'N', '.', 'M', 'I', 'D', 'I' },
   {PAGE_GM_TEST, LABEL, ' ', 'T', 'E', 'S', 'T', ' ', ' ', ' ' },
-  {PAGE_GM_TEST, 1, MIDI_PC, COMMON, 1, 1, ALL_PORTS}, // ** Switch 01 **
+  {PAGE_GM_TEST, 1, MIDI_PC, COMMON, 1, 1, ALL_MIDI_PORTS}, // ** Switch 01 **
   {PAGE_GM_TEST, 1 | ON_LONG_PRESS, PAGE, COMMON, PREV },
-  {PAGE_GM_TEST, 2, MIDI_PC, COMMON, 2, 1, ALL_PORTS}, // ** Switch 02 **
-  {PAGE_GM_TEST, 3, MIDI_NOTE, COMMON, 52, 100, 1, ALL_PORTS}, // ** Switch 03 **
+  {PAGE_GM_TEST, 2, MIDI_PC, COMMON, 2, 1, ALL_MIDI_PORTS}, // ** Switch 02 **
+  {PAGE_GM_TEST, 3, MIDI_NOTE, COMMON, 52, 100, 1, ALL_MIDI_PORTS}, // ** Switch 03 **
   {PAGE_GM_TEST, 3 | ON_LONG_PRESS, PAGE, COMMON, NEXT }, // Switch 03
 
   {PAGE_COMBO1, LABEL, 'G', 'P', 'V', 'G', 'G', 'R', ' ', ' ' },

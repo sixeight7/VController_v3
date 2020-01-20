@@ -326,13 +326,7 @@ void MD_M13_class::do_after_patch_selection() {
   Current_patch_number = patch_number;
   update_LEDS = true;
   update_main_lcd = true;
-
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
 }
 
 bool MD_M13_class::request_patch_name(uint8_t sw, uint16_t number) {

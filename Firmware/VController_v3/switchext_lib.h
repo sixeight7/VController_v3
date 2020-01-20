@@ -15,7 +15,7 @@
 #define SWITCH_NORMALLY_CLOSED 2
 #define EXPRESSION_PEDAL 3
 
-#define DEFAULT_UPDATE_TIME 25 // Time between two updates of the expression pedal.
+#define DEFAULT_EXP_PEDAL_UPDATE_TIME 25 // Time between two updates of the expression pedal.
 #define NUMBER_OF_UNIQUE_READINGS 3 // Number of values remembered. To avoid jitter of the expression pedal, a new value must be unique.
 
 class SwitchExt
@@ -83,7 +83,7 @@ SwitchExt::SwitchExt(uint8_t dpin_tip, uint8_t dpin_ring, uint8_t apin_tip, uint
   this->debounceTime = debounceTime;
   this->switch_type = switch_type;
   this->pull_up = pull_up;
-  this->updateTime = DEFAULT_UPDATE_TIME;
+  this->updateTime = DEFAULT_EXP_PEDAL_UPDATE_TIME;
   this->expr_ped_max = 0;
   this->expr_ped_min = 1023;
   read_index = 0;

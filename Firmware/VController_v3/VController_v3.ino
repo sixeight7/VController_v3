@@ -53,8 +53,8 @@
 #include "debug.h"
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 4
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
   SCO_switch_power_on();
@@ -85,6 +85,7 @@ void loop() {
   main_MIDI_common(); //Read MIDI ports
   main_page(); // Check update of current page
   main_devices();
+  main_eeprom();
   //MIDI_check_USBHMIDI();
 }
 
@@ -246,4 +247,18 @@ void loop() {
   23-07-2019 Changed format of PAGE, PATCH and ASSIGN commands - also updated the onboard editing and fixed a bug in making new commands.
   09-09-2019 Uploaded V3.3.0 firmware to Github.
   29-09-2019 Implemented new library for encoders that is more stable and supports encoder acceleration - when the encoder is rotated faster, the encoders value will increment faster.
+  05-10-2019 Memory versions of external memory are stored on the external EEPROM instead of internal. This is easier when swapping memory chips.
+  30-10-2019 v.3.3.3 Solved an issue with changing devices from an external MIDI foot controller. Some MIDI messages were not received, because writing i2c is blocking midi data reception. Writing the current page and device is now delayed. 
+  02-11-2019 v.3.3.4 Added high string priority. Also added basic support for the Strymon Volante.
+  18-11-2019 v.3.3.5 Added custom effect types of the MS-50G and th MS-60B to the MS70-cdr. Thanks to Dr. Michael Cvachovec for supplying the custom firmware packages for this.
+  30-12-2019 Added Katana patch dump from and to editor
+  03-12-2019 Added MIDI clock receive.
+  27-12-2019 Added MIDI clock transmit. Also the tap tempo LED turns blue whenever it is synced through MIDI clock. The tap tempo LED is now updated from the MIDI clock timer.
+  03-01-2020 Found a workaround for the VG-99 displaying sysex receive messages that freeze the user interface. Solved by sending back a PC MIDI message for the current patch. That supresses the messages
+  03-01-2020 Fixed UPDOWN function for the VC-mini.
+  11-01-2020 Added support for Buydisplay RGB backlight colour scheme.
+  11-01-2020 Changed read/write of Katana patches to allow storage of pedal block parameters. EQ and GEQ parameters are now stored in same location to find the space.
+  12-01-2020 Added EQ/GEQ and PEDAL block parameters to the edit page of the VController.
+  18-01-2020 Fixed the menu on VController and in VC-edit to work with the new parameters. Fixed some bugs in showing the proper parameter values in VC-edit.
+  20-01-2020 v.3.4.0 release version. Is backwards compatible with older versions of the Katana. Version is detected at startup.
 */

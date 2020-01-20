@@ -5,6 +5,8 @@
 
 // Need to compile the type in a seperate .h file, otherwise these types can not be used in functions headers
 
+// Table below has a copy in VC-edit/Headers/VController/globals.cpp
+
 struct Setting_struct { // All the global settings in one place.
   bool Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
   bool US20_emulation_active; // Switch software emulation of US20 on and off
@@ -39,6 +41,10 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t MEP_control; // Control options for Master Expression Pedal
   uint8_t FX_WAH_colour; // Colour for wahs
   uint8_t FX_DYNAMICS_colour; // Colour for dynamics
+  uint8_t Read_MIDI_clock_port; // Read MIDI clock data port
+  uint8_t Send_MIDI_clock_port; // SendMIDI clock data port
+  uint8_t LED_bpm_synced_colour; // Colour of the tempo LED when tempo is synced with MIDI clock
+  uint8_t RGB_Backlight_scheme; // The colour scheme of the backlight
 };
 
 #ifdef IS_VCMINI
@@ -47,6 +53,7 @@ struct Setting_struct { // All the global settings in one place.
 #define DEFAULT_MAIN_DISPLAY_MODE 1
 #endif
 
+// Table below has a copy in VC-edit/Sources/VController/globals.cpp 
 const Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
   false,  // US20_emulation_active
@@ -81,6 +88,10 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // MEP_control - basic control
   5,     // FX_WAH_colour (Purple)
   7,     // FX_DYNAMICS_colour (Yellow)
+  0,     // Read MIDI clock data port
+  0,     // Send MIDI clock data port
+  3,     // Colour of the tempo LED when tempo is synced with MIDI clock (Blue)
+  0,     // The colour scheme of the backlight - Adafruit
 };
 
 Setting_struct Setting;
@@ -107,7 +118,7 @@ struct MIDI_switch_settings_struct {
 
 #define MIDI_SWITCH_OFF 0
 #define MIDI_SWITCH_CC_MOMENTARY 1 // CC controlled by momentary switch
-#define MIDI_SWITCH_CC_TOGGLE 2 // CC controlled by toggle switch
+#define MIDI_SWITCH_PRESSED_NO_RELEASE 2 // CC controlled by toggle switch
 #define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
 #define MIDI_SWITCH_PC 4
 

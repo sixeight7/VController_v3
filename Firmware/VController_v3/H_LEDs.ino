@@ -82,7 +82,7 @@ colour colours[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 31 is spare dimmed
 };
 
-colour Backlight_colours[NUMBER_OF_COLOURS] = {
+colour Backlight_colours_Adafruit[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 0 is LED OFF
   {0, 255, 0} ,  // Colour 1 is Green
   {255, 50, 50} ,  //  Colour 2 is Red
@@ -93,6 +93,25 @@ colour Backlight_colours[NUMBER_OF_COLOURS] = {
   {204, 204, 0} ,   // Colour 7 is Yellow
   {128, 50, 204} ,   // Colour 8 is Purple
   {255, 50, 128} ,   // Colour 9 is Pink
+  {92, 255, 114} ,   // Colour 10 is Soft Green
+  {0, 0, 0} ,   // Colour 11 is spare
+  {0, 0, 0} ,   // Colour 12 is spare
+  {0, 0, 0} ,   // Colour 13 is spare
+  {0, 0, 0} ,   // Colour 14 is spare
+  {0, 0, 0} ,   // Colour 15 is spare
+};
+
+colour Backlight_colours_Buydisplay[NUMBER_OF_COLOURS] = {
+  {0, 0, 0} ,   // Colour 0 is LED OFF
+  {0, 255, 0} ,  // Colour 1 is Green
+  {255, 50, 50} ,  //  Colour 2 is Red
+  {50, 50, 255} ,  // Colour 3 is Blue
+  {255, 178, 50} ,  // Colour 4 is Orange
+  {0, 255, 128} ,  // Colour 5 is Cyan
+  {192, 255, 240} ,  // Colour 6 is White
+  {255, 255, 0} ,   // Colour 7 is Yellow
+  {128, 50, 255} ,   // Colour 8 is Purple
+  {255, 70, 150} ,   // Colour 9 is Pink
   {92, 255, 114} ,   // Colour 10 is Soft Green
   {0, 0, 0} ,   // Colour 11 is spare
   {0, 0, 0} ,   // Colour 12 is spare
@@ -128,6 +147,7 @@ uint8_t global_tap_tempo_LED;
 uint8_t prev_page_shown = 255;
 uint8_t MIDI_LEDs[NUMBER_OF_LEDS];
 uint8_t main_backlight_colour = 0;
+bool LED_state_changed = false;
 
 class LED_init_class
 {
@@ -200,6 +220,8 @@ void LED_update() {
   Main_backlight.setBrightness(Setting.Backlight_brightness);
 #endif
 
+  LED_state_changed = false;
+
   //Check the switch_states on the current page
   for (uint8_t s = 0; s < NUMBER_OF_LEDS; s++) {
 
@@ -207,6 +229,7 @@ void LED_update() {
     uint8_t sw = s + 1;
     uint8_t colour;
     uint8_t Dev = SP[sw].Device;
+    uint8_t cs;
     if (Dev == CURRENT) Dev = Current_device;
 
     if (Dev < NUMBER_OF_DEVICES) {
@@ -301,7 +324,9 @@ void LED_update() {
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case SNAPSCENE:
-          if (Device[Dev]->current_snapscene == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+          cs = Device[Dev]->current_snapscene;
+          if ((cs == SP[sw].PP_number) || (SP[sw].Pressed)) LED_show_colour(s, SP[sw].Colour);
+          else if ((cs != 0) && ((cs == SP[sw].Value1) || (cs == SP[sw].Value2) || (cs == SP[sw].Value3))) LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
           else LED_show_colour(s, 0);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
@@ -375,15 +400,18 @@ void LED_update() {
       }
     }
   }
-  LEDs.show();
-  //#ifdef MAINDISPLAYBACKLIGHTPIN
-  //  Main_backlight.show();
-  //#endif
+
+  if (LED_state_changed) {
+    LEDs.show();
+    //#ifdef MAINDISPLAYBACKLIGHTPIN
+    //  Main_backlight.show();
+    //#endif
 #ifdef BACKLIGHTNEOPIXELPIN
-  Backlights.show();
+    Backlights.show();
 #endif
-  MIDI_update_LEDs(MIDI_LEDs, NUMBER_OF_LEDS);
-  //DEBUGMSG("LEDs updated");
+    MIDI_update_LEDs(MIDI_LEDs, NUMBER_OF_LEDS);
+    //DEBUGMSG("LEDs updated");
+  }
 }
 
 void LED_show_dimmed(uint8_t no, uint8_t colour) {
@@ -421,27 +449,39 @@ void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the sp
         // Turn the LED on
         if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
         if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
-        MIDI_LEDs[LED_number] = number_fixed;
+        if (MIDI_LEDs[LED_number] != number_fixed) {
+          MIDI_LEDs[LED_number] = number_fixed;
+          LED_state_changed = true;
+        }
       }
       else {
         // Turn the LED off
         if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], 0, 0, 0);
         if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, 0); // Update the virtual LEDs on the LCD as well
-        MIDI_LEDs[LED_number] = 0;
+        if (MIDI_LEDs[LED_number] != 0) {
+          MIDI_LEDs[LED_number] = 0;
+          LED_state_changed = true;
+        }
       }
     }
     else {
       // Turn the LED on
       if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
       if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
-      MIDI_LEDs[LED_number] = number_fixed;
+      if (MIDI_LEDs[LED_number] != number_fixed) {
+        MIDI_LEDs[LED_number] = number_fixed;
+        LED_state_changed = true;
+      }
     }
   }
   else {
     // Invalid colour: show message and give error
     LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[10].red, colours[10].green, colours[10].blue));
     DEBUGMSG("Invalid colour (number " + String(number_fixed) + ") on LED " + String(LED_number));
-    MIDI_LEDs[LED_number] = 0;
+    if (MIDI_LEDs[LED_number] != 0) {
+      MIDI_LEDs[LED_number] = 0;
+      LED_state_changed = true;
+    }
   }
 
 }
@@ -449,8 +489,12 @@ void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the sp
 void Backlight_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the specified LED to the specified colour
 #ifdef BACKLIGHTNEOPIXELPIN
   if ((colour_number < NUMBER_OF_COLOURS) && (LED_number < NUMBER_OF_BACKLIGHTS)) {
-    //DEBUGMSG("Backlight #" + String(LED_number) + " gets colour #" + String(colour_number));
-    Backlights.setPixelColor(Backlight_order[LED_number], LEDs.Color(Backlight_colours[colour_number].red, Backlight_colours[colour_number].green, Backlight_colours[colour_number].blue));
+    if (Setting.RGB_Backlight_scheme != 1) {
+      Backlights.setPixelColor(Backlight_order[LED_number], LEDs.Color(Backlight_colours_Adafruit[colour_number].red, Backlight_colours_Adafruit[colour_number].green, Backlight_colours_Adafruit[colour_number].blue));
+    }
+    else {
+      Backlights.setPixelColor(Backlight_order[LED_number], LEDs.Color(Backlight_colours_Buydisplay[colour_number].red, Backlight_colours_Buydisplay[colour_number].green, Backlight_colours_Buydisplay[colour_number].blue));
+    }
   }
 #else
   // try to switch backlights
@@ -464,7 +508,12 @@ void Main_backlight_show_colour(uint8_t colour_number) { // Sets the specified L
 #ifdef MAINDISPLAYBACKLIGHTPIN
   if ((colour_number != main_backlight_colour) && (colour_number < NUMBER_OF_COLOURS)) {
     DEBUGMSG("Main Backlight gets colour #" + String(colour_number));
-    Main_backlight.setPixelColor(0, LEDs.Color(Backlight_colours[colour_number].red, Backlight_colours[colour_number].green, Backlight_colours[colour_number].blue));
+    if (Setting.RGB_Backlight_scheme != 1) {
+      Main_backlight.setPixelColor(0, LEDs.Color(Backlight_colours_Adafruit[colour_number].red, Backlight_colours_Adafruit[colour_number].green, Backlight_colours_Adafruit[colour_number].blue));
+    }
+    else {
+      Main_backlight.setPixelColor(0, LEDs.Color(Backlight_colours_Buydisplay[colour_number].red, Backlight_colours_Buydisplay[colour_number].green, Backlight_colours_Buydisplay[colour_number].blue));
+    }
     Main_backlight.show();
     main_backlight_colour = colour_number;
   }
@@ -529,4 +578,8 @@ void LED_show_are_you_sure() {
   LCD_switch_on_backlight(9);
   LCD_switch_on_backlight(10);
 #endif
+}
+
+void LED_start_remote_control() {
+  MIDI_update_LEDs(MIDI_LEDs, NUMBER_OF_LEDS);
 }

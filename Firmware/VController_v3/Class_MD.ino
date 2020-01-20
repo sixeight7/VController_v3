@@ -12,7 +12,7 @@
 // Section 9: MD_FAS_class declaration (derived)
 // Section 10: MD_KTN_class declaration (derived)
 // Section 11: MD_KPA_class declaration (derived)
-
+// Section 12: MD_SVL_class declaration (derived)
 
 // Here we declare the class objects for the midi devices the VController supports. The actual class code is found in the Md_<device_name>.ino files.
 
@@ -173,7 +173,7 @@ class MD_base_class
     uint16_t bank_number = 0; // The bank number of the current_patch
     uint16_t bank_select_number; // The bank number used for bank up/down
     uint16_t bank_size = 10;
-    uint8_t CC01 = 0;
+    uint8_t CC00 = 0;
     uint8_t direct_select_state = 0;
     //uint8_t bank_select_number;
     bool connected = false;
@@ -215,6 +215,9 @@ class MD_base_class
     uint8_t my_device_page3 = 0;  // Variable no.6
     uint8_t my_device_page4 = 0;  // Variable no.7
     uint8_t current_device_page = 0; // The page that is selected
+
+    uint8_t external_MIDI_port = 0;
+    uint8_t external_MIDI_channel = 0;
 };
 
 // Looper commands:
@@ -523,7 +526,6 @@ class MD_VG99_class : public MD_base_class
     uint8_t COSM_A_onoff;
     uint8_t COSM_B_onoff;
     uint8_t FC300_device_id;
-    bool editor_mode = false; // Indicates that the VG-99 is in editor mode
 };
 
 // ********************************* Section 5: MD_ZG3_class declaration (derived) ********************************************
@@ -905,6 +907,7 @@ class MD_KTN_class : public MD_base_class
     // Device connection procedures
     virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
     virtual void do_after_connect();
+    void check_default_page_settings();
 
     // Midi out procedures
     void write_sysex(uint32_t address, uint8_t value);
@@ -933,10 +936,12 @@ class MD_KTN_class : public MD_base_class
     // Patch loading and saving
     void load_patch(uint8_t number);
     void save_patch();
+    void update_patch();
     void store_patch();
     bool exchange_patch();
     void request_patch_message(uint8_t number);
     void read_patch_message(uint8_t number, const unsigned char* sxdata, short unsigned int sxlength, bool checksum_ok);
+    void skip_patch_message(uint8_t number, uint8_t start_index, uint8_t data_length);
     bool FX_chain_changed();
     void read_patch_name_from_buffer(String &txt);
     void store_patch_name_to_buffer(String txt);
@@ -970,7 +975,8 @@ class MD_KTN_class : public MD_base_class
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
 
     // Variables:
-#define KTN_PATCH_SIZE 188
+    uint8_t version;
+#define KTN_PATCH_SIZE 192
     uint8_t KTN_patch_buffer[KTN_PATCH_SIZE];
 #define KTN_FX_CHAIN_SIZE 20
     uint8_t KTN_FX_chain[KTN_FX_CHAIN_SIZE];
@@ -978,6 +984,8 @@ class MD_KTN_class : public MD_base_class
     uint8_t current_mod_type = 0;
     bool fx_enabled = false;
     uint8_t current_fx_type = 0;
+    uint8_t current_eq_type = 0;
+    uint8_t current_pedal_type = 0;
     uint8_t current_midi_message; // Used for reading the patch from the Katana
     uint32_t current_midi_message_address;
     uint8_t save_patch_number = 0;
@@ -985,7 +993,7 @@ class MD_KTN_class : public MD_base_class
     uint8_t prev_patch_number = 255;
 };
 
-// ********************************* Section 8: MD_HLX_class declaration (derived) ********************************************
+// ********************************* Section 11: MD_KPA_class declaration (derived) ********************************************
 
 class MD_KPA_class : public MD_base_class
 {
@@ -1078,4 +1086,57 @@ class MD_KPA_class : public MD_base_class
     uint8_t last_looper_cmd;
     bool performance_name_requested = false;
     //uint8_t flash_bank_of_five;
+};
+
+// ********************************* Section 12: MD_SVL_class declaration (derived) ********************************************
+
+class MD_SVL_class : public MD_base_class
+{
+  public:
+    MD_SVL_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
+
+    // Basic procedures
+    virtual void init();
+
+    // Midi in procedures
+    //virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void check_PC_in(uint8_t program, uint8_t channel, uint8_t port);
+    virtual void check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port);
+
+    // Device connection procedures
+    virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void do_after_connect();
+
+    // Midi out procedures
+    virtual void bpm_tap();
+
+    // Patch selection procedures
+    virtual void select_patch(uint16_t new_patch);
+    virtual void do_after_patch_selection();
+    virtual void number_format(uint16_t number, String &Output);
+
+    // Direct select procedures
+    virtual void direct_select_format(uint16_t number, String &Output);
+
+    // Parameter control procedures
+    virtual void read_parameter_title(uint16_t number, String &Output);
+    virtual void read_parameter_name(uint16_t number, String &Output);
+    virtual void read_parameter_value_name(uint16_t number, uint16_t value, String &Output);
+    virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual bool request_parameter(uint8_t sw, uint16_t number);
+    void read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2);
+    void check_update_label(uint8_t Sw, uint8_t value);
+    virtual uint16_t number_of_parameters();
+    virtual uint8_t number_of_values(uint16_t parameter);
+    void update_parameter_state_through_cc(uint8_t control, uint8_t value);
+
+    // Master expression pedal procedures
+    virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
+    virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
+
+    // Variables:
+#define SVL_NUMBER_OF_PARAMETERS 15
+    bool par_on[SVL_NUMBER_OF_PARAMETERS]; // Keeps track of the state the parameters
+    uint8_t flash_bank_of_four = 255;
 };

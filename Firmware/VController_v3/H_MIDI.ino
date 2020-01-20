@@ -25,6 +25,8 @@
 // Change buffersize of usbMIDI:
 // Edit on Mac: /Applications/Arduino.app/Contents/Resources/Java/hardware/teensy/avr/cores/teensy3/usb_midi.h in Teksteditor and change USB_MIDI_SYSEX_MAX 256
 
+// Online list of manufacturers MIDI codes: https://github.com/strymon/spl/blob/master/lib/DcMidi/DcMidiIdent.h
+
 #include <MIDI.h>
 
 // Midi IDs for sysex messages of the VController
@@ -54,6 +56,8 @@
 #define VC_FINISH_COMMANDS_DUMP 12
 #define VC_REQUEST_KATANA_PATCHES 14
 #define VC_SET_KATANA_PATCH 15
+#define VC_SAVE_SETTINGS 16
+#define VC_FINISH_KATANA_PATCH_DUMP 17
 
 
 #define CHECK4DEVICES_TIMER_LENGTH 250 // Check every second which Roland devices are connected
@@ -118,6 +122,7 @@ void setup_MIDI_common()
   usbMIDI.setHandleControlChange(OnControlChange);
   usbMIDI.setHandleSysEx(OnSysEx);
   usbMIDI.setHandleActiveSensing(OnActiveSense);
+  usbMIDI.setHandleClock(OnClock);
 
   //pinMode(0, INPUT_PULLUP); //Add the internal pullup resistor to pin 0 (Rx)
   delay(100);
@@ -129,6 +134,7 @@ void setup_MIDI_common()
   MIDI1.setHandleControlChange(OnControlChange);
   MIDI1.setHandleSystemExclusive(OnSerialSysEx);
   MIDI1.setHandleActiveSensing(OnActiveSense);
+  MIDI1.setHandleClock(OnClock);
 
   delay(100);
   MIDI2.begin(MIDI_CHANNEL_OMNI);
@@ -139,6 +145,7 @@ void setup_MIDI_common()
   MIDI2.setHandleControlChange(OnControlChange);
   MIDI2.setHandleSystemExclusive(OnSerialSysEx);
   MIDI2.setHandleActiveSensing(OnActiveSense);
+  MIDI2.setHandleClock(OnClock);
 
 #ifdef MIDI3_ENABLED
   delay(100);
@@ -150,6 +157,7 @@ void setup_MIDI_common()
   MIDI3.setHandleControlChange(OnControlChange);
   MIDI3.setHandleSystemExclusive(OnSerialSysEx);
   MIDI3.setHandleActiveSensing(OnActiveSense);
+  MIDI3.setHandleClock(OnClock);
 #endif
 
 #ifdef MIDI_T36_HOST_PORT_ENABLED
@@ -161,9 +169,9 @@ void setup_MIDI_common()
     usbhMIDI[p]->setHandleControlChange(OnControlChange);
     usbhMIDI[p]->setHandleSysEx(OnSysEx);
     usbhMIDI[p]->setHandleActiveSensing(OnActiveSense);
+    usbhMIDI[p]->setHandleClock(OnClock);
   }
 #endif
-
 }
 
 void main_MIDI_common()
@@ -227,12 +235,16 @@ void OnProgramChange(byte channel, byte program)
     Device[d]->check_PC_in(program, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
     if (Current_MIDI_port == USBMIDI_PORT) Device[d]->forward_PC_message(program, channel);
   }
+  MIDI_check_switch_pc(program, channel, Current_MIDI_port);
 }
 
 void OnControlChange(byte channel, byte control, byte value)
 {
   uint8_t VCbridge_index = Current_MIDI_port >> 4;
+  if (value & 0x80) value = 0; // Check for false values - seems to happen with the FCB1010
+
   DEBUGMIDI("CC #" + String(control) + " Value:" + String(value) + " received on channel " + String(channel) + " and port " + String(Current_MIDI_port >> 4) + ":" + String(VCbridge_in_port[VCbridge_index])); // Show on serial debug screen
+
   if ((channel == VCONTROLLER_MIDI_CHANNEL) && (control == LINE_SELECT_CC_NUMBER)) {
     VCbridge_in_port[VCbridge_index] = value;
     DEBUGMIDI("Changed virtual input channel for port " + String(VCbridge_index) + " to: " + String(VCbridge_in_port[VCbridge_index]));
@@ -242,6 +254,7 @@ void OnControlChange(byte channel, byte control, byte value)
       Device[d]->check_CC_in(control, value, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
     }
   }
+
   MIDI_check_switch_cc(control, value, channel, Current_MIDI_port);
 }
 
@@ -294,6 +307,18 @@ void OnActiveSense() {
   }
 }
 
+void OnClock() {
+  if (Setting.Read_MIDI_clock_port == 0) return;
+  uint8_t p = MIDI_set_port_number_from_menu(Setting.Read_MIDI_clock_port - 1);
+  if ((p != Current_MIDI_port) && (p != ALL_MIDI_PORTS)) return;
+
+  uint8_t VCbridge_index = Current_MIDI_port >> 4;
+  SCO_receive_MIDI_clock_pulse(Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
+
+  // Forward to midi2
+  //MIDI2.sendRealTime(midi::Clock);
+}
+
 // ********************************* Section 3: MIDI Out Functions ********************************************
 
 // Send Program Change message
@@ -319,7 +344,7 @@ void MIDI_send_PC(uint8_t Program, uint8_t Channel, uint8_t Port) {
   }
 #endif
 
-  if ((Port & 0xF0) == ALL_PORTS) {
+  if ((Port & 0xF0) == ALL_MIDI_PORTS) {
     usbMIDI.sendProgramChange(Program, Channel);
     MIDI1.sendProgramChange(Program, Channel);
     MIDI2.sendProgramChange(Program, Channel);
@@ -361,7 +386,7 @@ void MIDI_send_CC(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Po
     }
   }
 #endif
-  if ((Port & 0xF0) == ALL_PORTS) {
+  if ((Port & 0xF0) == ALL_MIDI_PORTS) {
     usbMIDI.sendControlChange(Controller, Value, Channel);
     MIDI1.sendControlChange(Controller, Value, Channel);
     MIDI2.sendControlChange(Controller, Value, Channel);
@@ -403,7 +428,7 @@ void MIDI_send_note_on(uint8_t Note, uint8_t Velocity, uint8_t Channel, uint8_t 
     }
   }
 #endif
-  if ((Port & 0xF0) == ALL_PORTS) {
+  if ((Port & 0xF0) == ALL_MIDI_PORTS) {
     usbMIDI.sendNoteOn(Note, Velocity, Channel);
     MIDI1.sendNoteOn(Note, Velocity, Channel);
     MIDI2.sendNoteOn(Note, Velocity, Channel);
@@ -439,7 +464,7 @@ void  MIDI_send_note_off(uint8_t Note, uint8_t Velocity, uint8_t Channel, uint8_
     }
   }
 #endif
-  if ((Port & 0xF0) == ALL_PORTS) {
+  if ((Port & 0xF0) == ALL_MIDI_PORTS) {
     usbMIDI.sendNoteOff(Note, Velocity, Channel);
     MIDI1.sendNoteOff(Note, Velocity, Channel);
     MIDI2.sendNoteOff(Note, Velocity, Channel);
@@ -488,7 +513,7 @@ void MIDI_send_sysex(const unsigned char* sxdata, short unsigned int sxlength, u
       }
       break;
 #endif
-    case ALL_PORTS:
+    case ALL_MIDI_PORTS:
 #if defined(ARDUINO) && ARDUINO >= 10800
       usbMIDI.sendSysEx(sxlength - 2, &sxdata[1]);
 #else
@@ -531,7 +556,7 @@ void MIDI_check_port_message(uint8_t Port) { // Check if we need to tell the VCb
     }
   }
 
-  if ((Port & 0xF0) == ALL_PORTS) { // Call it recursively for all ports
+  if ((Port & 0xF0) == ALL_MIDI_PORTS) { // Call it recursively for all ports
     MIDI_check_port_message(USBMIDI_PORT | (Port & 0x0F));
     MIDI_check_port_message(MIDI1_PORT | (Port & 0x0F));
     MIDI_check_port_message(MIDI2_PORT | (Port & 0x0F));
@@ -539,6 +564,46 @@ void MIDI_check_port_message(uint8_t Port) { // Check if we need to tell the VCb
     MIDI_check_port_message(MIDI3_PORT | (Port & 0x0F));
 #endif
     // The USB host port does not need these messages
+  }
+}
+
+void MIDI_send_clock() {
+  if (Setting.Send_MIDI_clock_port == 0) return;
+  switch (MIDI_set_port_number_from_menu(Setting.Send_MIDI_clock_port - 1)) {
+    case USBMIDI_PORT:
+      usbMIDI.sendRealTime(usbMIDI.Clock);
+      break;
+    case MIDI1_PORT:
+      MIDI1.sendRealTime(MIDI_NAMESPACE::Clock);
+      break;
+    case MIDI2_PORT:
+      MIDI2.sendRealTime(MIDI_NAMESPACE::Clock);
+      break;
+    case MIDI3_PORT:
+#ifdef MIDI3_ENABLED
+      MIDI3.sendRealTime(MIDI_NAMESPACE::Clock);
+#endif
+      break;
+    case USBHMIDI_PORT:
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendRealTime(MIDI_NAMESPACE::Clock);
+      }
+#endif
+      break;
+    case ALL_MIDI_PORTS:
+      usbMIDI.sendRealTime(usbMIDI.Clock);
+      MIDI1.sendRealTime(MIDI_NAMESPACE::Clock);
+      MIDI2.sendRealTime(MIDI_NAMESPACE::Clock);
+#ifdef MIDI3_ENABLED
+      MIDI3.sendRealTime(MIDI_NAMESPACE::Clock);
+#endif
+#ifdef MIDI_T36_HOST_PORT_ENABLED
+      for (uint8_t p = 0; p < NUMBER_OF_USB_HOST_MIDI_PORTS; p++) {
+        usbhMIDI[p]->sendRealTime(MIDI_NAMESPACE::Clock);
+      }
+#endif
+      break;
   }
 }
 
@@ -566,7 +631,11 @@ void MIDI_check_SYSEX_in_universal(const unsigned char* sxdata, short unsigned i
                                  VCONTROLLER_FIRMWARE_VERSION_MAJOR, VCONTROLLER_FIRMWARE_VERSION_MINOR, VCONTROLLER_FIRMWARE_VERSION_BUILD,
                                  0x00, 0xF7
                                 };
-      MIDI_send_sysex(sysexbuffer, 6, port);
+      MIDI_send_sysex(sysexbuffer, 15, port); // Will send F0 7E 01 06 02 7D 00 68 00 02 (03 03 05) 00 F7 - version number between brackets
+    }
+    if ((port == USBMIDI_PORT) && (My_KTN.connected)) { // Send Katana response
+      uint8_t sysexbuffer[15] = { 0xf0, 0x7e, 0x00, 0x06, 0x02, 0x41, 0x33, 0x03, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0xf7 };
+      MIDI_send_sysex(sysexbuffer, 15, port);
     }
   }
 }
@@ -639,7 +708,7 @@ uint8_t MIDI_set_port_number_from_menu(uint8_t mport) {
     case 2: return MIDI2_PORT;
     case 3: return MIDI3_PORT;
     case 4: return USBHMIDI_PORT;
-    case 5: return ALL_PORTS;
+    case 5: return ALL_MIDI_PORTS;
   }
   return USBMIDI_PORT;
 }
@@ -781,13 +850,14 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
           LCD_clear_memory();
           update_main_lcd = true;
           update_page = RELOAD_PAGE;
+          LED_start_remote_control();
         }
         break;
       case VC_REMOTE_CONTROL_SWITCH_PRESSED:
-        SC_remote_switch_pressed(sxdata[6]);
+        SC_remote_switch_pressed(sxdata[6], true);
         break;
       case VC_REMOTE_CONTROL_SWITCH_RELEASED:
-        SC_remote_switch_released(sxdata[6]);
+        SC_remote_switch_released(sxdata[6], true);
         break;
       case VC_REQUEST_ALL_SETTINGS:
         MIDI_editor_send_settings();
@@ -831,8 +901,13 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         editor_dump_size = 0;
         break;
       case VC_REQUEST_KATANA_PATCHES:
+        MIDI_send_Katana_patch_dump();
         break;
       case VC_SET_KATANA_PATCH:
+        MIDI_editor_receive_Katana_patch(sxdata, sxlength);
+        break;
+      case VC_FINISH_KATANA_PATCH_DUMP:
+        update_page = RELOAD_PAGE;
         break;
     }
   }
@@ -919,8 +994,9 @@ void MIDI_editor_receive_device_settings(const unsigned char* sxdata, short unsi
     Device[dev]->set_setting(i, dsettings[i + 1]);
     DEBUGMSG("Setting " + String(i) + " has value " + String(dsettings[i + 1]));
   }
+  Device[dev]->check_manual_connection();
   //EEP_write_eeprom_common_data(); // Save to EEPROM
-  //update_page = RELOAD_PAGE;
+  update_page = RELOAD_PAGE;
 }
 
 void MIDI_editor_send_midi_switch_settings(uint8_t sw) { // Will send the device number, followed by the device settings
@@ -1000,6 +1076,27 @@ void MIDI_editor_send_command(uint16_t cmd_no) {
   MIDI_send_data(VC_SET_COMMAND, cmdbytes, sizeof(cmd));
 }
 
+void MIDI_send_Katana_patch_dump() {
+  for (uint16_t p = 0; p < EXT_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
+    MIDI_editor_send_Katana_patch(p);
+    MIDI_show_dump_progress(p, EXT_MAX_NUMBER_OF_KATANA_PRESETS);
+    delay(10); // Matching progress bar speed with the editor
+  }
+  MIDI_editor_send_finish_KTN_patch_dump();
+  LCD_show_popup_label("Upload complete", MESSAGE_TIMER_LENGTH);
+}
+
+void MIDI_editor_send_Katana_patch(uint8_t patch_no) {
+  EEPROM_load_KTN_patch(patch_no, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  uint16_t messagesize = KTN_PATCH_SIZE + 8;
+  uint8_t sysexmessage[messagesize] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_SET_KATANA_PATCH, patch_no };
+  for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
+    sysexmessage[i + 7] = My_KTN.KTN_patch_buffer[i];
+  }
+  sysexmessage[messagesize - 1] = 0xF7;
+  MIDI_send_sysex(sysexmessage, messagesize, remote_control_port);
+}
+
 void MIDI_show_dump_progress(uint16_t number, uint16_t total) {
   //if (editor_dump_size == 0) return;
 
@@ -1013,24 +1110,53 @@ void MIDI_editor_receive_command(const unsigned char* sxdata, short unsigned int
   EEPROM_write_command_from_editor(&cmd);
 }
 
+void MIDI_editor_receive_Katana_patch(const unsigned char* sxdata, short unsigned int sxlength) {
+  if (sxlength < KTN_PATCH_SIZE + 8) return;
+  uint8_t number = sxdata[6];
+  if (number >= EXT_MAX_NUMBER_OF_KATANA_PRESETS) return;
+  for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
+    uint8_t pos = i + 7;
+    My_KTN.KTN_patch_buffer[i] = sxdata[pos];
+  }
+  EEPROM_save_KTN_patch(number, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+}
+
+void MIDI_editor_send_finish_KTN_patch_dump() {
+  uint8_t sysexmessage[7] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_FINISH_KATANA_PATCH_DUMP, 0xF7
+                             };
+  MIDI_send_sysex(sysexmessage, 7, remote_control_port);
+}
+
 // ********************************* Section 7: MIDI switch command reading ********************************************
 
 void MIDI_check_switch_cc(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
   for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
     if (MIDI_switch[s].type != MIDI_SWITCH_OFF) {
-      if (((MIDI_set_port_number_from_menu(MIDI_switch[s].port) == port) || (MIDI_set_port_number_from_menu(MIDI_switch[s].port) == ALL_PORTS)) && (MIDI_switch[s].cc == control)) {
+      uint8_t p = MIDI_set_port_number_from_menu(MIDI_switch[s].port);
+      if (((p == port) || (p == ALL_MIDI_PORTS)) && (MIDI_switch[s].channel == channel) && (MIDI_switch[s].cc == control)) {
         switch (MIDI_switch[s].type) {
           case MIDI_SWITCH_CC_MOMENTARY:
-            if (value >= 64) SC_remote_switch_pressed(s);
-            else SC_remote_switch_released(s);
+            if (value >= 64) SC_remote_switch_pressed(s, false);
+            else SC_remote_switch_released(s, false);
             break;
-          case MIDI_SWITCH_CC_TOGGLE:
-            SC_remote_switch_toggled(s);
+          case MIDI_SWITCH_PRESSED_NO_RELEASE:
+            SC_remote_switch_pressed_no_release(s);
             break;
           case MIDI_SWITCH_CC_RANGE:
             SC_remote_expr_pedal(s, value);
             break;
         }
+      }
+    }
+  }
+}
+
+void MIDI_check_switch_pc(uint8_t program, uint8_t channel, uint8_t port) {
+  for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
+    if (MIDI_switch[s].type == MIDI_SWITCH_PC) {
+      uint8_t p = MIDI_set_port_number_from_menu(MIDI_switch[s].port);
+      if (((p == port) || (p == ALL_MIDI_PORTS)) && (MIDI_switch[s].channel == channel)) {
+        SC_remote_switch_select_program(s, program);
       }
     }
   }

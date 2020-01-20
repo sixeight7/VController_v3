@@ -13,7 +13,7 @@
 #define ZG3_MIDI_CHANNEL 1
 #define ZG3_PATCH_MIN 0
 #define ZG3_PATCH_MAX 99
-#define ZG3_MIDI_TIME 100 // Minimal time inbetween requests for patch data from MS70
+#define ZG3_MIDI_TIMER_LENGTH 100 // Minimal time inbetween requests for patch data from MS70
 
 // Documentation of Zoom sysex has been moved to http://www.vguitarforums.com/smf/index.php?topic=4329.msg131444#msg131444 (The ZOOM G3 v2 MIDI specification)
 // The relevant messages are repeated here
@@ -66,7 +66,7 @@ void MD_ZG3_class::update() {
     MIDI_send_PC(patch_number, MIDI_channel, MIDI_port);
     DEBUGMSG("out(" + String(device_name) + ") PC" + String(patch_number)); //Debug
     do_after_patch_selection();
-    midi_timer = millis() + ZG3_MIDI_TIME;
+    midi_timer = millis() + ZG3_MIDI_TIMER_LENGTH;
     send_patch_change = false;
   }
 }
@@ -218,12 +218,7 @@ void MD_ZG3_class::do_after_patch_selection() {
   update_main_lcd = true;
   write_sysex(ZG3_REQUEST_CURRENT_PATCH); // Request current patch, so the FX buttons will be updated
   MIDI_disable_device_check();
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
 }
 
 void MD_ZG3_class::page_check() { // Checks if the current patch is on the page

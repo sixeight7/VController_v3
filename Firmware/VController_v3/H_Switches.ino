@@ -121,9 +121,11 @@ SwitchExt ctl_jack[NUMBER_OF_CTL_JACKS] = {
 #endif
 
 #define SW_TYPE_SWITCH 0
-#define SW_TYPE_SWITCH_NO_RELEASE 1
-#define SW_TYPE_EXPRESSION_PEDAL 2
-#define SW_TYPE_ENCODER 3
+#define SW_TYPE_EXPRESSION_PEDAL 1
+#define SW_TYPE_ENCODER 2
+#define SW_TYPE_MIDI_CC 3
+#define SW_TYPE_MIDI_CC_NO_RELEASE 4
+#define SW_TYPE_MIDI_PC 5
 uint8_t switch_type = SW_TYPE_SWITCH;
 uint8_t switch_pressed = 0; //Variable set when switch is pressed
 uint8_t switch_released = 0; //Variable set when switch is released
@@ -136,6 +138,7 @@ uint8_t multi_switch_pressed = 0;
 #define SPECIAL_KEY_COMBINATION 255 // Special value for multi_switch_pressed
 uint8_t Expr_ped_value = 0;
 signed int Enc_value = 0;
+uint8_t PC_value = 0;
 uint8_t Enc1_value = 0;
 uint8_t Enc2_value = 0;
 uint8_t previous_switch_pressed = 0;
@@ -145,9 +148,12 @@ uint8_t switch_held_times_triggered = 0;
 uint32_t Hold_timer = 0;
 uint32_t Hold_time;
 bool inta_triggered = false;
-bool skip_release_and_hold_until_next_press = false;
+uint8_t skip_release_and_hold_until_next_press = 0;
+#define SKIP_RELEASE 1
+#define SKIP_LONG_PRESS 2
+#define SKIP_HOLD 4
 
-#define DEBOUNCE_TIME 20 // Time between reading the display boards
+#define DEBOUNCE_TIMER_LENGTH 20 // Time between reading the display boards
 uint32_t Debounce_timer = 0;
 bool Debounce_timer_active = false;
 bool Debounce_normal_state_timer_active = false;
@@ -343,7 +349,7 @@ void SC_update_power_switch() {
 #ifdef INTA_PIN
 void SC_check_display_board_switch() {
   // Check for a switch pressed which is connected to a display board
-  if (millis() - Debounce_timer > DEBOUNCE_TIME) { // Check if switch is debounced..
+  if (millis() - Debounce_timer > DEBOUNCE_TIMER_LENGTH) { // Check if switch is debounced..
     if (digitalRead(INTA_PIN) == LOW) { // Check if interrupt is triggered
       check_switches_on_current_board(false); // Read the state as it was when the interrupt was triggered - TEST: what is we check the "normal state" here? Does that fix the false triggers?
       if (digitalRead(INTA_PIN) == LOW) { // Check if INT_A pin is still LOW
@@ -494,46 +500,61 @@ inline bool SC_switch_is_encoder() {
   return (switch_type == SW_TYPE_ENCODER);
 }
 
+inline bool SC_switch_triggered_by_PC() {
+  return (switch_type == SW_TYPE_MIDI_PC);
+}
+
 // ********************************* Section 4: Switch Dual Press / Long Press / Extra Long Press and Hold Detection ********************************************
 void SC_update_long_presses_and_hold() {
   if (switch_released > 0) { // First check if the release was valid when in multi_switch mode
 
-    SP[switch_released].Pressed = false;
-    update_LEDS = true;
+    if (switch_type == SW_TYPE_SWITCH) {
+      SP[switch_released].Pressed = false;
+      update_LEDS = true;
 
-    // Check for release after multiple press
-    multi_switch_booleans &= ~(1 << (switch_released - 1)); // Clear this bit
-    if (multi_switch_pressed != 0) { // Make sure no switch_release commands are sent before all switches are back to zero
-      if (multi_switch_booleans == 0) {
-        if (multi_switch_pressed != SPECIAL_KEY_COMBINATION) switch_released = multi_switch_pressed | ON_DUAL_PRESS;
-        else switch_released = 0;
-        multi_switch_pressed = 0;
+      // Check for release after multiple press
+      multi_switch_booleans &= ~(1 << (switch_released - 1)); // Clear this bit
+      if (multi_switch_pressed != 0) { // Make sure no switch_release commands are sent before all switches are back to zero
+        if (multi_switch_booleans == 0) {
+          if (multi_switch_pressed != SPECIAL_KEY_COMBINATION) switch_released = multi_switch_pressed | ON_DUAL_PRESS;
+          else switch_released = 0;
+          multi_switch_pressed = 0;
+        }
+        else {
+          switch_released = 0; // Do not activate the release
+        }
+        DEBUGMSG("Release while multiswitch_pressed > 0: " + String(switch_released));
       }
-      else {
-        switch_released = 0; // Do not activate the release
-      }
-      DEBUGMSG("Release while multiswitch_pressed > 0: " + String(switch_released));
     }
-
-    if (switch_was_long_pressed) switch_released |= ON_LONG_PRESS; // Do not activate the release
+    
+    if (switch_was_long_pressed) switch_released |= ON_LONG_PRESS; // Activate the proper release
     Long_press_timer = 0;  //Reset the timer on switch released
     switch_was_long_pressed = false;
     Extra_long_press_timer = 0;
     Hold_timer = 0;
 
-    if (skip_release_and_hold_until_next_press) switch_released = 0;
+    if (skip_release_and_hold_until_next_press & SKIP_RELEASE) {
+      switch_released = 0;
+      DEBUGMAIN("RESET switch release");
+    }
   }
 
   if (switch_released > 0) {
-    DEBUGMAIN("Switch released: " + String(switch_released) + " at " + String(micros() - time_switch_pressed));
+    switch (switch_type) {
+      case SW_TYPE_SWITCH:
+        DEBUGMAIN("Switch released: " + String(switch_released) + " at " + String(micros() - time_switch_pressed));
+        break;
+      case SW_TYPE_MIDI_CC:
+        DEBUGMAIN("MIDI CC switch released: " + String(switch_released) + " at " + String(micros() - time_switch_pressed));
+        break;
+    };
   }
 
-  // Now check for Long pressing a button
   if (switch_pressed > 0) {
+
     if (switch_type == SW_TYPE_SWITCH) {
       SP[switch_pressed].Pressed = true;
       update_LEDS = true;
-
       multi_switch_booleans |= (1 << (switch_pressed - 1)); // Set this bit
 
       if (multi_switch_booleans & (1 << switch_pressed)) { // Switch on the right is also pressed
@@ -552,29 +573,44 @@ void SC_update_long_presses_and_hold() {
 
       if (multi_switch_booleans == MENU_KEY_COMBINATION) {
         SCO_select_page(PAGE_SELECT);
+        //multi_switch_booleans = MENU_KEY_COMBINATION;
         multi_switch_pressed = SPECIAL_KEY_COMBINATION;
       }
     }
 
-    if (switch_type == SW_TYPE_EXPRESSION_PEDAL) {
-      DEBUGMAIN("Expression pedal " + String(switch_pressed) + ": " + String(Expr_ped_value));
-    }
-    else {
-      DEBUGMAIN("Switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
-    }
+    switch (switch_type) {
+      case SW_TYPE_SWITCH:
+        DEBUGMAIN("Switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
+        break;
+      case SW_TYPE_EXPRESSION_PEDAL:
+        DEBUGMAIN("Expression pedal " + String(switch_pressed) + ": " + String(Expr_ped_value));
+        break;
+      case SW_TYPE_ENCODER:
+        DEBUGMAIN("Encoder changel " + String(switch_pressed) + ": " + String(Enc_value));
+        break;
+      case SW_TYPE_MIDI_CC:
+        DEBUGMAIN("MIDI CC switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
+        break;
+      case SW_TYPE_MIDI_PC:
+        DEBUGMAIN("MIDI PC switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
+        break;
+      case SW_TYPE_MIDI_CC_NO_RELEASE:
+        DEBUGMAIN("MIDI CC switch (no release) pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
+        break;
+    };
     switch_was_long_pressed = false;
     Long_press_timer = millis(); // Set timer on switch pressed
     Extra_long_press_timer = millis(); // Set timer on switch extra long pressed
-    Hold_timer = millis(); // Set timer on updown
+    Hold_timer = millis(); // Set timer on switch held
     Hold_time = 700;
     switch_held_times_triggered = 0;
     last_switch_pressed = switch_pressed; // Remember the button that was pressed
     skip_release_and_hold_until_next_press = false;
   }
 
-  if (switch_type == SW_TYPE_SWITCH) {
-    if ((millis() - Long_press_timer > LONG_PRESS_TIMER_LENGTH) && (Long_press_timer > 0)) {
-      switch_long_pressed = last_switch_pressed; //pass on the buttonvalue we remembered before
+  if ((switch_type == SW_TYPE_SWITCH) || (switch_type == SW_TYPE_MIDI_CC)) {
+    if ((millis() - Long_press_timer > LONG_PRESS_TIMER_LENGTH) && (Long_press_timer > 0) && (!(skip_release_and_hold_until_next_press & SKIP_LONG_PRESS))) {
+      switch_long_pressed = last_switch_pressed; //pass on the switch number we remembered before
       Long_press_timer = 0;
       switch_was_long_pressed = true;
       DEBUGMAIN("Switch long pressed: " + String(switch_long_pressed));
@@ -584,14 +620,14 @@ void SC_update_long_presses_and_hold() {
     // Also check for extra long pressing a button
     if ((millis() - Extra_long_press_timer > EXTRA_LONG_PRESS_TIMER_LENGTH) && (Extra_long_press_timer > 0)) {
       //if (!recheck_switches_on_current_board()) {
-      switch_extra_long_pressed = last_switch_pressed; //pass on the buttonvalue we remembered before
+      switch_extra_long_pressed = last_switch_pressed; //pass on the switch number we remembered before
       Extra_long_press_timer = 0;
       DEBUGMAIN("Switch extra long pressed: " + String(switch_extra_long_pressed));
       //}
     }
 
-    if ((millis() - Hold_timer > Hold_time) && (Hold_timer > 0) && (!skip_release_and_hold_until_next_press)) { // To check if a switch is held down
-      switch_held = last_switch_pressed; //pass on the buttonvalue we remembered before
+    if ((millis() - Hold_timer > Hold_time) && (Hold_timer > 0) && (!(skip_release_and_hold_until_next_press & SKIP_HOLD))) { // To check if a switch is held down
+      switch_held = last_switch_pressed; //pass on the switch number we remembered before
       Hold_timer = millis();
       switch_held_times_triggered++;
       Hold_time = 300;
@@ -605,26 +641,31 @@ void SC_update_long_presses_and_hold() {
 
 // ********************************* Section 5: Remote MIDI control of switches ********************************************
 
-void SC_remote_switch_pressed(uint8_t sw) {
+void SC_remote_switch_pressed(uint8_t sw, bool from_editor) {
+  DEBUGMAIN("Remote press SW " + String(sw));
   if (SC_check_valid_switch(sw)) {
     time_switch_pressed = micros();
     switch_pressed = sw;
-    switch_type = SW_TYPE_SWITCH;
+    if (from_editor) switch_type = SW_TYPE_SWITCH;
+    else switch_type = SW_TYPE_MIDI_CC;
   }
 }
 
-void SC_remote_switch_released(uint8_t sw) {
+void SC_remote_switch_released(uint8_t sw, bool from_editor) {
+  DEBUGMAIN("Remote release SW " + String(sw));
   if (SC_check_valid_switch(sw)) {
+    time_switch_pressed = micros();
     switch_released = sw;
-    switch_type = SW_TYPE_SWITCH;
+    if (from_editor) switch_type = SW_TYPE_SWITCH;
+    else switch_type = SW_TYPE_MIDI_CC;
   }
 }
 
-void SC_remote_switch_toggled(uint8_t sw) {
+void SC_remote_switch_pressed_no_release(uint8_t sw) {
   if (SC_check_valid_switch(sw)) {
     time_switch_pressed = micros();
     switch_pressed = sw;
-    switch_type = SW_TYPE_SWITCH_NO_RELEASE;
+    switch_type = SW_TYPE_MIDI_CC_NO_RELEASE;
   }
 }
 
@@ -633,6 +674,16 @@ void SC_remote_expr_pedal(uint8_t sw, uint8_t value) {
     time_switch_pressed = micros();
     switch_type = SW_TYPE_EXPRESSION_PEDAL;
     Expr_ped_value = value;
+    switch_pressed = sw;
+  }
+}
+
+void SC_remote_switch_select_program(uint8_t sw, uint8_t program) {
+  if (SC_check_valid_switch(sw)) {
+    time_switch_pressed = micros();
+    switch_type = SW_TYPE_MIDI_PC;
+    PC_value = program;
+    switch_pressed = sw;
   }
 }
 
@@ -640,8 +691,9 @@ bool SC_check_valid_switch(uint8_t sw) {
   return (sw < TOTAL_NUMBER_OF_SWITCHES + 1);
 }
 
-void SC_skip_release_and_hold_until_next_press() { // Called from SCO_select_page() and global tuner press. Make sure no switch_release, long_press, etc is triggered until we press a switch again..
-  skip_release_and_hold_until_next_press = true;
+void SC_skip_release_and_hold_until_next_press(uint8_t val) { // Called from SCO_select_page() and global tuner press. Make sure no switch_release, long_press, etc is triggered until we press a switch again..
+  skip_release_and_hold_until_next_press = val;
+  DEBUGMSG("Set switches to skip release, hold or long press - " + String(val));
   //multi_switch_booleans = 0;
 }
 

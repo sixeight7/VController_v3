@@ -148,6 +148,7 @@ void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
       case 69: // Set current snapshot
         current_snapscene = value + 1;
         update_page = REFRESH_PAGE;
+        update_main_lcd = true;
         break;
     }
   }
@@ -206,12 +207,7 @@ void MD_HLX_class::do_after_patch_selection() {
   update_main_lcd = true;
   if ((flash_bank_of_four != 255) && (Current_page != read_current_device_page())) SCO_select_page(read_current_device_page()); // When in direct select, go back to the current_device_page
   flash_bank_of_four = 255;
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
 }
 
 bool MD_HLX_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.

@@ -50,6 +50,8 @@ uint8_t MD_base_class::get_setting(uint8_t variable) {
     case 8: return my_device_page3;
     case 9: return my_device_page4;
     case 10: return enabled;
+    case 11: return external_MIDI_port;
+    case 12: return external_MIDI_channel;
   }
   return 0;
 }
@@ -67,6 +69,8 @@ void MD_base_class::set_setting(uint8_t variable, uint8_t value) {
     case 8: my_device_page3 = value; break;
     case 9: my_device_page4 = value; break;
     case 10: enabled = value; break;
+    case 11: external_MIDI_port = value; break;
+    case 12: external_MIDI_channel = value; break;
   }
 }
 
@@ -93,7 +97,7 @@ void MD_base_class::forward_PC_message(uint8_t program, uint8_t channel) {}
 void MD_base_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {  // Check incoming CC messages from GR-55
   if ((channel == MIDI_channel) && (port == MIDI_port)) {
     if (control == 0) {
-      CC01 = value;
+      CC00 = value;
     }
   }
 }
@@ -211,6 +215,7 @@ uint16_t MD_base_class::calculate_patch_number(uint8_t bank_position, uint8_t ba
 
 void MD_base_class::patch_select_pressed(uint16_t new_patch) {
   // Check whether the current patch needs to be switched on or whether a new patch is chosen
+  if (new_patch > patch_max) new_patch = patch_max;
   if (new_patch == patch_number) select_switch(); // Not a new patch - do US20 emulation
   else {
     select_patch(new_patch); //New patch - send program change
@@ -266,6 +271,7 @@ bool MD_base_class::bank_selection_active() {
 
 void MD_base_class::update_bank_number(uint16_t number) {
   uint16_t bnumber;
+  if (number > patch_max) number = patch_max;
   if (bank_size == 0) bnumber = 0;
   else bnumber = (number - patch_min) / bank_size;
   bank_number = bnumber;
@@ -568,11 +574,11 @@ uint8_t MD_base_class::select_next_device_page() { // Select the next page for t
       tries--;
     }
   }
-  /*else if (Previous_page != read_current_device_page()) { // Finding our way back from the par-bank edit screen to category to the current_device_page.
+  else if (Previous_page != read_current_device_page()) { // Finding our way back from the par-bank edit screen to category to the current_device_page.
     uint8_t pg = Previous_page;
     Current_page = read_current_device_page(); // This will set the previous page on the next page change...
     return pg;
-    }*/
+  }
   return read_current_device_page();
 }
 

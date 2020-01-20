@@ -21,7 +21,7 @@
 
 #define CURRENT_EEPROM_VERSION 5 // Update this value whenever there is an update of the internal EEPROM structure 
 #define CURRENT_EXT_EEPROM_VERSION 5 // Update this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
-#define CURRENT_KATANA_MEMORY_VERSION 1 // Update this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
+#define CURRENT_KATANA_MEMORY_VERSION 2 // Update this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
 #define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Update this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
 
 // ************************ Internal EEPROM data addresses ***********************
@@ -29,10 +29,8 @@
 
 // Common data (max 16 bytes)
 #define EEPROM_VERSION_ADDR 0x00 // Address!!! Version update must be done above!!!
-#define EEPROM_EXT_VERSION_ADDR 0x01
 #define EEPROM_CURRENT_PAGE_ADDR 0x02
 #define EEPROM_CURRENT_DEVICE_ADDR 0x03
-#define EEPROM_CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_ADDR 0x04
 
 // Settings data (max 112 bytes)
 #define EEPROM_GENERAL_SETTINGS_BASE_ADDRESS 16 // Number of settings determined by size of settings array (see globals.h) - currently 34.
@@ -60,7 +58,9 @@
 
 // 24LC512 has 64 kByte of memory
 // These are writable in pages of 128 bytes = 500 pages
-// The commands are stored in bytes 3
+// Page 0 - 249:  Commands
+// Page 250 - 369 Katana presets
+// Page 375 - 390 Helix messages
 
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
 #define EEPROM_DELAY_LENGTH 5  // time between EEPROM writes (usually 5 ms is OK)
@@ -73,12 +73,14 @@ unsigned long WriteDelay = 0;
 #define EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR 1
 #define EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR 2
 #define EXT_EEP_HELIX_MSG_SPACE_ADDR 3
+#define EXT_EEP_VERSION_ADDR 4
+#define EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR 5
 #define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
 
 #define EXT_EEP_KATANA_PRESETS_BASE_ADDRESS 32000 // Katana presets are stored from address 320000 - 47359 (80 presets of 192 bytes)
 #define EXT_MAX_NUMBER_OF_KATANA_PRESETS 80
 
-#define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 48000 // Katana presets are stored from address 480000 - 482047 (128 messages of 16 bytes)
+#define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 48000 // Katana presets are stored from address 48000 - 50047 (128 messages of 16 bytes)
 #define EXT_MAX_NUMBER_OF_HELIX_MESSAGES 128
 #define MIDI_HLX_MESSAGES 5 // number of messages per patch that are stored
 
@@ -97,12 +99,15 @@ uint16_t number_of_cmds; // Contains the total number of commands stored in EEPR
 uint8_t HLX_messages[MIDI_HLX_MESSAGES][3]; // Space to store Helix forwarding messages
 uint8_t HLX_message_setlist;
 
+uint32_t EEPROM_update_timer = 0;
+#define EEPROM_UPDATE_TIMER_LENGTH 2000 // Time between reading the display boards
+
 void setup_eeprom()
 {
   if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
-  if (EEPROM.read(EEPROM_EXT_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
-  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_initialize_katana_preset_memory();
-  if (EEPROM.read(EEPROM_CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEPROM_initialize_HELIX_message_space();
+  if (read_ext_EEPROM(EXT_EEP_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
+  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_update_katana_preset_memory();
+  if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEPROM_initialize_HELIX_message_space();
 
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
@@ -114,7 +119,17 @@ void setup_eeprom()
 
 void main_eeprom()
 {
+  if ((millis() > EEPROM_update_timer) && (EEPROM_update_timer > 0)) EEPROM_update(); 
+}
 
+void EEPROM_update_when_quiet() {
+  EEPROM_update_timer = millis() + EEPROM_UPDATE_TIMER_LENGTH;
+}
+
+void EEPROM_update() {
+  EEPROM_update_timer = 0;
+  EEPROM.write(EEPROM_CURRENT_PAGE_ADDR, Current_page);
+  EEPROM.write(EEPROM_CURRENT_DEVICE_ADDR, Current_device);
 }
 
 // ********************************* Section 2: Internal EEPROM functions ********************************************
@@ -355,7 +370,7 @@ void copy_cmd(const Cmd_struct* source, Cmd_struct* dest) {
 // ********************************* Section 4: Command and index functions ********************************************
 
 void EEP_initialize_external_eeprom_data() {
-  EEPROM_write(EEPROM_EXT_VERSION_ADDR, CURRENT_EXT_EEPROM_VERSION); // Save the current eeprom version
+  write_ext_EEPROM(EXT_EEP_VERSION_ADDR, CURRENT_EXT_EEPROM_VERSION); // Save the current eeprom version
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
 
@@ -386,9 +401,10 @@ void EEPROM_create_indexes() {
   DEBUGMSG("Creating indexes");
 
   // Fill the indexes with external commands
-  //DEBUGMSG("Creating index internal commands");
+  DEBUGMSG("Creating index internal commands");
   //LCD_show_popup_label("Index internal");
   number_of_cmds = (read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR) << 8) + read_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR);
+  DEBUGMSG("Number of commands is " + String(number_of_cmds));
   Number_of_pages = 0;
   for (uint16_t c = number_of_cmds; c-- > 0; ) { //Run backwards through the EEPROM command array
     read_cmd_EEPROM(c, &cmd); // read the command from EEPROM
@@ -410,7 +426,8 @@ void EEPROM_create_indexes() {
   }
 
   // Fill the indexes with internal commands
-  //DEBUGMSG("Creating index internal commands");
+  DEBUGMSG("Creating index internal commands");
+  DEBUGMSG("Number of internal commands is " + String(NUMBER_OF_INTERNAL_COMMANDS));
   //LCD_show_popup_label("Index internal");
   for (uint16_t c = NUMBER_OF_INTERNAL_COMMANDS; c-- > 0; ) { //Run backwards through the EEPROM command array
     if (EEPROM_is_label(Fixed_commands[c].Switch)) { // Check if it is a name label
@@ -429,7 +446,7 @@ void EEPROM_create_indexes() {
       if (Fixed_commands[c].Page >= FIRST_FIXED_CMD_PAGE) First_cmd_index[Fixed_commands[c].Page][Fixed_commands[c].Switch & SWITCH_MASK] = c | INTERNAL_CMD; // Store the first command
     }
   }
-  //LCD_show_popup_label("Done indexing..");
+  DEBUGMSG("Done indexing..");
 }
 
 void EEPROM_purge_cmds() { // Will delete any empty commands
@@ -699,6 +716,20 @@ void EEPROM_delete_title(uint8_t pg, uint8_t sw) {
 
 // ********************************* Section 6: Reading/writing Katana data to EEPROM ********************************************
 
+void EEP_update_katana_preset_memory() {
+  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != 1) {
+    EEP_initialize_katana_preset_memory();
+    return;
+  }
+
+  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_KATANA_PRESETS; i++) {
+    EEPROM_load_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+    My_KTN.update_patch();
+    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  }
+  write_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR, CURRENT_KATANA_MEMORY_VERSION);
+}
+
 void EEP_initialize_katana_preset_memory() {
   write_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR, CURRENT_KATANA_MEMORY_VERSION);
   LED_show_initializing_data();
@@ -757,7 +788,9 @@ void EEPROM_load_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_len
 
   Wire.requestFrom (EEPROM_ADDRESS, (int) 128);
   for (uint8_t i = 0; i < 128; i++) {
-    patch_data[i] = Wire.receive();
+    uint b = Wire.receive();
+    if (b & 0x80) b = 0; // Check for uninitialized values
+    patch_data[i] = b;
   }
 
   Wire.beginTransmission(EEPROM_ADDRESS);
@@ -853,7 +886,7 @@ void EEPROM_load_HELIX_message(uint8_t number) { // Read HLX_messages[5][3] arra
 void EEPROM_initialize_HELIX_message_space() {
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
-  EEPROM_write(EEPROM_CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_ADDR, CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION); // Save the current eeprom version
+  write_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR, CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION); // Save the current eeprom version
   EEPROM_clear_HLX_message_array();
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_HELIX_MESSAGES; i++) {
     EEPROM_store_HELIX_message(i, 0);

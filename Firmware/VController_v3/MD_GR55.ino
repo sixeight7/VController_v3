@@ -171,7 +171,7 @@ void MD_MD_GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t por
 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // GR55 sends a program change
-    uint16_t new_patch = (CC01 * 128) + program;
+    uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
       patch_number = new_patch;
       if (patch_number > 2047) patch_number = patch_number - 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will close it.
@@ -314,12 +314,7 @@ void MD_MD_GR55_class::do_after_patch_selection() {
   update_LEDS = true;
   update_main_lcd = true;
   request_guitar_switch_states();
-  if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
-    update_page = REFRESH_PAGE;
-  }
-  else {
-    update_page = REFRESH_FX_ONLY;
-  }
+  MD_base_class::do_after_patch_selection();
   if ((flash_bank_of_three != 255) && (Current_page != Previous_page)) { // When in direct select, go back to the current_device_page
     bank_size = Previous_bank_size;
     SCO_select_page(Previous_page);
