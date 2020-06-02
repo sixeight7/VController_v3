@@ -24,10 +24,10 @@ A number of guitar modelers and synths are supported, where it actively read pat
 * TC Electronics G-Major
 
 # General MIDI
-The V-Controller is also able to send MIDI PC, CC and Note on/off messages to control any device that is able to receive these messages.
+The V-Controller and VC-mini are also able to send MIDI PC, CC and Note on/off messages to control any device that is able to receive these messages.
 
 # Programmability
-The V-Controller supports up to 200 user pages, where a total of almost 3000 commands can be programmed. Any button can execute up to 50 commands.
+The V-Controller and VC-mini support up to 200 user pages, where a total of almost 3000 commands can be programmed. Any button can execute up to 50 commands.
 
 # Connectivity of the V-Controller
 * There are two MIDI in/out conenctors and MIDI 2 doubles as an RRC2 connection for the VG-99.
@@ -53,6 +53,8 @@ For VC-edit there is a ready to run zip file for windows and dmg-file for Mac. A
 Please visit https://www.vguitarforums.com/smf/index.php?board=277.0 for additional information or for any questions you have regarding this project. Please post any questions on the board, where several V-Controller/VC-mini users and builders can respond and help.
 
 I currently do not build any more V-Controllers to sell, so if you would like one you have to build it yourself. Visit vguitarforums.com to connect to other people who are building the same project.
+
+VC-mini's are built in small numbers. Also the PCB can be optained from me. Send me an e-mail at SixEightSoundControl@gmail.com to get more information on aailability and pricing of the VC-mini.
 
 I have invested thousands of hours in this project. You can support me here: https://www.paypal.me/sixeight
 
