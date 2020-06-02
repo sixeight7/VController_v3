@@ -1,7 +1,7 @@
 # VController_v3
 Production model of the VController and the VC-mini
 
-![VController]()
+![VController](https://github.com/sixeight7/VController_v3/blob/master/Firmware/VC-edit/VController_RGB.JPG)
 
 The V-Controller is a MIDI footcontroller with 16 buttons, 12 LCDs and 12 LEDs.
 It can be fully programmed both onboard and via an external editor for Mac and PC called VC-edit for VController.
