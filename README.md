@@ -20,6 +20,7 @@ A number of guitar modelers and synths are supported, where it actively read pat
 * Line 6 M13
 * Zoom G3
 * Zoom MS70-cdr
+* Strymon Volante
 * TC Electronics G-Major
 
 # General MIDI
