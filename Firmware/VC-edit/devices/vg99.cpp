@@ -29,6 +29,7 @@ bool VG99_class::check_command_enabled(uint8_t cmd)
     case MUTE:
     case OPEN_PAGE_DEVICE:
     case OPEN_NEXT_PAGE_OF_DEVICE:
+    case MASTER_EXP_PEDAL:
     case TOGGLE_EXP_PEDAL:
     //case SNAPSCENE:
     //case LOOPER:

@@ -506,6 +506,47 @@ const QVector<Cmd_struct> Fixed_commands = {
     //{PAGE_CURRENT_ASSIGN, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
     {PAGE_CURRENT_ASSIGN, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
+    // ******************************* PAGE 225: SY1000_patch_bank (8 buttons per page) *************************************************
+    {PAGE_SY1000_PATCH_BANK, LABEL, 'P', 'A', 'T', 'C', 'H', ' ', 'B', 'N' },
+    {PAGE_SY1000_PATCH_BANK, LABEL, 'K', ' ', 'S', 'Y', '1', '0', '0', '0' },
+    {PAGE_SY1000_PATCH_BANK, 1, PATCH, SY1000, BANKSELECT, 1, 8}, // ** Switch 01 **
+    {PAGE_SY1000_PATCH_BANK, 2, PATCH, SY1000, BANKSELECT, 2, 8}, // ** Switch 02 **
+    {PAGE_SY1000_PATCH_BANK, 3, PATCH, SY1000, BANKSELECT, 3, 8}, // ** Switch 03 **
+    {PAGE_SY1000_PATCH_BANK, 4, PATCH, SY1000, BANKSELECT, 4, 8}, // ** Switch 04 **
+    {PAGE_SY1000_PATCH_BANK, 5, PATCH, SY1000, BANKSELECT, 5, 8}, // ** Switch 05 **
+    {PAGE_SY1000_PATCH_BANK, 6, PATCH, SY1000, BANKSELECT, 6, 8}, // ** Switch 06 **
+    {PAGE_SY1000_PATCH_BANK, 7, PATCH, SY1000, BANKSELECT, 7, 8}, // ** Switch 07 **
+    {PAGE_SY1000_PATCH_BANK, 8, PATCH, SY1000, BANKSELECT, 8, 8}, // ** Switch 08 **
+    //{PAGE_SY1000_PATCH_BANK, 9, PARAMETER, SY1000, 14, STEP, 0, 6, 1}, // ** Switch 09 **
+    //{PAGE_SY1000_PATCH_BANK, 10, PAGE, COMMON, SELECT, PAGE_FULL_LOOPER}, // ** Switch 10 **
+    //{PAGE_SY1000_PATCH_BANK, 11, PARAMETER, SY1000, 1, TOGGLE, 1, 0}, // ** Switch 11 **
+    //{PAGE_SY1000_PATCH_BANK, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+    {PAGE_SY1000_PATCH_BANK, 13, PATCH, SY1000, BANKDOWN, 8}, // ** Switch 13 **
+    {PAGE_SY1000_PATCH_BANK, 13 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+    {PAGE_SY1000_PATCH_BANK, 14, PATCH, SY1000, BANKUP, 8}, // ** Switch 14 **
+    {PAGE_SY1000_PATCH_BANK, 14 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+    //{PAGE_SY1000_PATCH_BANK, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+    {PAGE_SY1000_PATCH_BANK, 16, OPEN_NEXT_PAGE_OF_DEVICE, SY1000}, // ** Switch 16 **
+
+    // ******************************* PAGE 226: SY1000 assign *************************************************
+    {PAGE_SY1000_ASSIGNS, LABEL, 'A', 'S', 'S', 'I', 'G', 'N', 'S', ' ' },
+    {PAGE_SY1000_ASSIGNS, LABEL, 'S', 'Y', '1', '0', '0', '0', ' ', ' ' },
+    {PAGE_SY1000_ASSIGNS, 1, ASSIGN, SY1000, SELECT, 0, 21}, // ** Switch 01 *
+    {PAGE_SY1000_ASSIGNS, 2, ASSIGN, SY1000, SELECT, 1, 22}, // ** Switch 02 **
+    {PAGE_SY1000_ASSIGNS, 3, ASSIGN, SY1000, SELECT, 2, 23}, // ** Switch 03 **
+    {PAGE_SY1000_ASSIGNS, 4, ASSIGN, SY1000, SELECT, 3, 24}, // ** Switch 04 **
+    {PAGE_SY1000_ASSIGNS, 5, ASSIGN, SY1000, SELECT, 4, 25}, // ** Switch 05 **
+    {PAGE_SY1000_ASSIGNS, 6, ASSIGN, SY1000, SELECT, 5, 26}, // ** Switch 06 **
+    {PAGE_SY1000_ASSIGNS, 7, ASSIGN, SY1000, SELECT, 6, 27}, // ** Switch 07 **
+    {PAGE_SY1000_ASSIGNS, 8, ASSIGN, SY1000, SELECT, 7, 28}, // ** Switch 08 **
+    {PAGE_SY1000_ASSIGNS, 9, NOTHING, COMMON}, // ** Switch 09 **
+    {PAGE_SY1000_ASSIGNS, 10, NOTHING, COMMON}, // ** Switch 10 **
+    //{PAGE_SY1000_ASSIGNS, 11, NOTHING, COMMON}, // ** Switch 11 *
+    //{PAGE_SY1000_ASSIGNS, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+    {PAGE_SY1000_ASSIGNS, 13, PATCH, SY1000, PREV, 9}, // ** Switch 13 **
+    {PAGE_SY1000_ASSIGNS, 14, PATCH, SY1000, NEXT, 9}, // ** Switch 14 **
+    //{PAGE_SY1000_ASSIGNS, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+    {PAGE_SY1000_ASSIGNS, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = Fixed_commands.size();

@@ -212,7 +212,6 @@ void MainWindow::setupLcdDisplays() {
     int id = QFontDatabase::addApplicationFont(":/fonts/LCD_Solid.ttf");
     QString family = QFontDatabase::applicationFontFamilies(id).at(0);
     QFont LCD_Solid(family);
-    //LCD_Solid.setPointSize(28);
     LCD_Solid.setPixelSize(28);
     ui->lcd0->setFont(LCD_Solid);
 #ifndef IS_VCMINI
@@ -230,6 +229,9 @@ void MainWindow::setupLcdDisplays() {
     ui->lcd10->setFont(LCD_Solid);
     ui->lcd11->setFont(LCD_Solid);
     ui->lcd12->setFont(LCD_Solid);
+#else
+    LCD_Solid.setPixelSize(56);
+    ui->lcd0->setFont(LCD_Solid);
 #endif
 }
 
@@ -385,8 +387,13 @@ void MainWindow::updateLcdDisplay(int lcd_no, QString line1, QString line2) {
     line1.resize(16);
     line2.resize(16);
     if (lcd_no == 0) {
+    #ifndef IS_VCMINI
         richText = "<html><body><p style=\"line-height:.5\">" + addNonBreakingSpaces(line1.toHtmlEscaped()) +
                 "</p><p style=\"line-height:1\">" + addNonBreakingSpaces(line2.toHtmlEscaped()) + "</p></body></html>";
+    #else
+        richText = "<html><body><p style=\"line-height:.8\">" + addNonBreakingSpaces(line1.toHtmlEscaped()) +
+                "</p><p style=\"line-height:1\">" + addNonBreakingSpaces(line2.toHtmlEscaped()) + "</p></body></html>";
+    #endif
     }
     else {
         richText = "<html><body><p style=\"line-height:.3\">" + addNonBreakingSpaces(line1.toHtmlEscaped()) +
@@ -442,29 +449,42 @@ void MainWindow::setButtonColour(int button, int colour) {
     }
 
     // Create a stylesheet with the colour.
-    QString styleSheetString = "QPushButton{background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+    QString styleSheetString_small = "QPushButton{background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
                                "stop: 0 white, stop: 1 " + colourName + ");" "border-style: solid;" "border-color: black;"
                                "border-width: 2px;" "border-radius: 10px;}";
-
+    QString styleSheetString_large = "QPushButton{background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+                               "stop: 0 white, stop: 1 " + colourName + ");" "border-style: solid;" "border-color: black;"
+                               "border-width: 2px;" "border-radius: 50px;}";
+    QString styleSheetString_medium = "QPushButton{background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+                               "stop: 0 white, stop: 1 " + colourName + ");" "border-style: solid;" "border-color: black;"
+                               "border-width: 2px;" "border-radius: 20px;}";
     // Set the colour for the switch by changing the stylesheet.
     switch (button) {
-      case 1: ui->switch_1->setStyleSheet(styleSheetString); break;
-      case 2: ui->switch_2->setStyleSheet(styleSheetString); break;
-      case 3: ui->switch_3->setStyleSheet(styleSheetString); break;
-      case 4: ui->switch_4->setStyleSheet(styleSheetString); break;
-      case 5: ui->switch_5->setStyleSheet(styleSheetString); break;
-      case 6: ui->switch_6->setStyleSheet(styleSheetString); break;
-      case 7: ui->switch_7->setStyleSheet(styleSheetString); break;
-      #ifndef IS_VCMINI
-      case 8: ui->switch_8->setStyleSheet(styleSheetString); break;
-      case 9: ui->switch_9->setStyleSheet(styleSheetString); break;
-      case 10: ui->switch_10->setStyleSheet(styleSheetString); break;
-      case 11: ui->switch_11->setStyleSheet(styleSheetString); break;
-      case 12: ui->switch_12->setStyleSheet(styleSheetString); break;
-      case 13: ui->switch_13->setStyleSheet(styleSheetString); break;
-      case 14: ui->switch_14->setStyleSheet(styleSheetString); break;
-      case 15: ui->switch_15->setStyleSheet(styleSheetString); break;
-      case 16: ui->switch_16->setStyleSheet(styleSheetString); break;
+#ifdef IS_VCMINI
+      case 1: ui->switch_1->setStyleSheet(styleSheetString_large); break;
+      case 2: ui->switch_2->setStyleSheet(styleSheetString_large); break;
+      case 3: ui->switch_3->setStyleSheet(styleSheetString_large); break;
+      case 4: ui->switch_4->setStyleSheet(styleSheetString_small); break;
+      case 5: ui->switch_5->setStyleSheet(styleSheetString_small); break;
+      case 6: ui->switch_6->setStyleSheet(styleSheetString_small); break;
+      case 7: ui->switch_7->setStyleSheet(styleSheetString_small); break;
+#else
+      case 1: ui->switch_1->setStyleSheet(styleSheetString_medium); break;
+      case 2: ui->switch_2->setStyleSheet(styleSheetString_medium); break;
+      case 3: ui->switch_3->setStyleSheet(styleSheetString_medium); break;
+      case 4: ui->switch_4->setStyleSheet(styleSheetString_medium); break;
+      case 5: ui->switch_5->setStyleSheet(styleSheetString_medium); break;
+      case 6: ui->switch_6->setStyleSheet(styleSheetString_medium); break;
+      case 7: ui->switch_7->setStyleSheet(styleSheetString_medium); break;
+      case 8: ui->switch_8->setStyleSheet(styleSheetString_medium); break;
+      case 9: ui->switch_9->setStyleSheet(styleSheetString_medium); break;
+      case 10: ui->switch_10->setStyleSheet(styleSheetString_medium); break;
+      case 11: ui->switch_11->setStyleSheet(styleSheetString_medium); break;
+      case 12: ui->switch_12->setStyleSheet(styleSheetString_medium); break;
+      case 13: ui->switch_13->setStyleSheet(styleSheetString_medium); break;
+      case 14: ui->switch_14->setStyleSheet(styleSheetString_medium); break;
+      case 15: ui->switch_15->setStyleSheet(styleSheetString_medium); break;
+      case 16: ui->switch_16->setStyleSheet(styleSheetString_medium); break;
       #endif
     }
 }

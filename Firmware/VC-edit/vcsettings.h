@@ -50,21 +50,17 @@ private:
     const QVector<Setting_menu_struct> VCsettingMenu =
     {
       { "General Settings", HEADER, 0, 0, 0, 0 },
-      { "US20 Emulation", OPTION, 1, 0, 1, &Setting.US20_emulation_active }, // Switch 1
-      { "Glob.tempo on PC", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 2
-      { "Main display mode", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 3
+      { "Main display mode shows on bottom line", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
+      { "Main display shows top right", OPTION, 48, 0, 1, &Setting.Main_display_show_top_right }, // Switch 2
+      { "CURNUM action", OPTION, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
       { "Master Expression Pedal also controls", OPTION, 35, 0, 2, &Setting.MEP_control }, // Switch 4
-      { "Bass mode G2M channel", VALUE, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
-      { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 5
-      { "Bass mode CC number", VALUE, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
-      { "Bass mode min velocity", VALUE, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
-      { "Read MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 9
-      { "Send MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 10
+      { "Send Global Tempo on patch change", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
+      { "Hide tap tempo LED", OPTION, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
 
       { "LED Settings", HEADER, 0, 0, 0, 0 }, // Menu title
       { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 1
-      { "Backlight Bright", VALUE, 0, 0, 255, &Setting.Backlight_brightness }, // Switch 2
-      { "Virtual LEDs", OPTION, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 3
+      { "Backlight Brightness", VALUE, 0, 0, 254, &Setting.Backlight_brightness }, // Switch 2
+      { "Show Virtual LEDs", OPTION, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 3
       { "FX off is dimmed", OPTION, 1, 0, 1, &Setting.LED_FX_off_is_dimmed }, // Switch 4
       { "Global colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_global_colour }, // Switch 5
       { "MIDI PC colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 6
@@ -87,6 +83,15 @@ private:
       { "DEFAULT colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_default_colour }, // Switch 10
       { "WAH COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_WAH_colour }, // Switch 11
       { "DYNAMICS COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_DYNAMICS_colour }, // Switch 12
+
+      { "MIDI advanced settings", HEADER, 0, 0, 0, 0 }, // Menu title
+      { "Read MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
+      { "Send MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
+      { "Bass mode Guitar-to-MIDI channel", VALUE, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
+      { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
+      { "Bass mode CC number", VALUE, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
+      { "Bass mode min velocity", VALUE, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
+      { "HighNotePriotyCC", VALUE, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
     };
 
     const uint16_t NUMBER_OF_SETTINGS_MENU_ITEMS = VCsettingMenu.size();
@@ -115,6 +120,12 @@ private:
 
       // Sublist 46 - 47: RGB Display colour schemes
       "ADAFRUIT", "BUYDISPLAY",
+
+      // Sublist 48 - 50: Main display top right types
+      "CURRENT DEVICE", "CURRENT TEMPO", "",
+
+      // Sublist 51 - 56: Current number actions
+      "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
     };
 };
 

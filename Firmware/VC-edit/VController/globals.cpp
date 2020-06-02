@@ -13,7 +13,7 @@ Setting_struct Setting = {  // Default values for global settings
   true,  // Physical_LEDs
   false, // Virtual_LEDs
   10,    // LED_brightness
-  255,   // Backlight_brightness
+  254,   // Backlight_brightness
   120,   // Bpm
   true,  // LED_FX_off_is_dimmed
   6,     // LED_global_colour (white)
@@ -45,6 +45,9 @@ Setting_struct Setting = {  // Default values for global settings
   0,     // Send MIDI clock data port
   3,     // Colour of the tempo LED when tempo is synced with MIDI clock (Blue)
   0,     // The colour scheme of the backlight - Adafruit
+  0,     // Main_display_show_top_right: show current device
+  16,    // HNP_mode_cc_number
+  2,     // CURNUM_action: Tap tempo
 };
 
 MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings

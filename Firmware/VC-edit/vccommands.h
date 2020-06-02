@@ -245,7 +245,7 @@ private:
         "Ext 1 / Exp1", "Ext 2", "Ext 3 / Exp 2", "Ext 4", "Ext 5 / Exp 3", "Ext 6", "Ext 7 / Exp 4", "Ext 8",
     #else
         "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Encoder #1", "Encoder #1 Switch", "Encoder #2", "Encoder #2 Switch", "Ext 1 / Exp1",
-        "Ext 2", "MIDI Switch 1", "MIDI Switch 2", "MIDI Switch 3", "MIDI Switch 4", "MIDI Switch 5", "MIDI Switch 6", "MIDI Switch 7",
+        "Ext 2", "MIDI Switch 1 / SW4", "MIDI Switch 2 / SW5", "MIDI Switch 3 / SW6", "MIDI Switch 4", "MIDI Switch 5", "MIDI Switch 6", "MIDI Switch 7",
         "MIDI Switch 8", "MIDI Switch 9", "MIDI Switch 10", "MIDI Switch 11", "MIDI Switch 12", "MIDI Switch 13", "MIDI Switch 14", "MIDI Switch 15",
     #endif
 

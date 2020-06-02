@@ -10,7 +10,7 @@
 
 struct Setting_struct { // All the global settings in one place.
   uint8_t Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
-  uint8_t US20_emulation_active; // Switch software emulation of US20 on and off
+  uint8_t Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
   uint8_t Physical_LEDs; // Does the VController have Physical LEDs
   uint8_t Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
   uint8_t LED_brightness; // The neopixels are very bright. I find setting them to 10 is just fine for an indicator light.
@@ -46,6 +46,9 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Send_MIDI_clock_port; // SendMIDI clock data port
   uint8_t LED_bpm_synced_colour; // Colour of the tempo LED when tempo is synced with MIDI clock
   uint8_t RGB_Backlight_scheme; // The colour scheme of the backlight
+  uint8_t Main_display_show_top_right; // What will be shown top right on the nmain display
+  uint8_t HNP_mode_cc_number; // Addition to Bass mode
+  uint8_t CURNUM_action; // What to do when current patch number is pressed again
 };
 
 extern Setting_struct Setting;
@@ -63,7 +66,7 @@ struct MIDI_switch_settings_struct {
 #define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
 #define MIDI_SWITCH_PC 4
 
-#define NUMBER_OF_MIDI_SWITCHES 24
+#define NUMBER_OF_MIDI_SWITCHES 25 // Switch 0 is also counted
 
 extern MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES];
 
