@@ -14,11 +14,13 @@ A number of guitar modelers and synths are supported, where it actively read pat
 * Roland GR-55
 * Roland VG-99
 * Boss Katana (50/100/Artist)
+* Boss SY-1000
 * Kemper Profiling Amp
 * Line 6 Helix (limited)
 * Line 6 M13
 * Zoom G3
 * Zoom MS70-cdr
+* TC Electronics G-Major
 
 # General MIDI
 The V-Controller is also able to send MIDI PC, CC and Note on/off messages to control any device that is able to receive these messages.
