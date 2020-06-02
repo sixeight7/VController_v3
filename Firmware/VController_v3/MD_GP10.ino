@@ -39,25 +39,20 @@
 // Initialize device variables
 // Called at startup of VController
 void MD_GP10_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Boss GP-10 variables:
   enabled = DEVICE_DETECT; // Default value
-  //enabled = DEVICE_ON; // Default value
-  //MIDI_port_manual = 4;
   strcpy(device_name, "GP10");
   strcpy(full_device_name, "Boss GP-10");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = GP10_PATCH_MIN;
   patch_max = GP10_PATCH_MAX;
-  //bank_size = 10;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the GP-10 does not have to respond before disconnection
   COSM_onoff = 0;
   nrml_pu_onoff = 0;
   sysex_delay_length = 5; // minimum delay time between sysex messages (in msec).
   my_LED_colour = 4; // Default value: orange
   MIDI_channel = GP10_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
   is_always_on = true; // Default value
   my_device_page1 = GP10_DEFAULT_PAGE1; // Default value
   my_device_page2 = GP10_DEFAULT_PAGE2; // Default value
@@ -81,6 +76,7 @@ void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
     // Check if it is the patch number
     if ((address == 0x00000000) && (checksum_ok)) {
       if (patch_number != sxdata[12]) { //Right after a patch change the patch number is sent again. So here we catch that message.
+        prev_patch_number = patch_number;
         patch_number = sxdata[12];
         //page_check();
         do_after_patch_selection();
@@ -163,6 +159,7 @@ void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // GP10 sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program;
       request_sysex(GP10_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
@@ -279,12 +276,12 @@ void MD_GP10_class::request_current_patch_name() {
 }
 
 void MD_GP10_class::number_format(uint16_t number, String &Output) {
-  Output += "P" + String((number + 1) / 10) + String((number + 1) % 10);
+  Output += 'P' + String((number + 1) / 10) + String((number + 1) % 10);
 }
 
 void MD_GP10_class::direct_select_format(uint16_t number, String &Output) {
-  if (direct_select_state == 0) Output += "P" + String(number) + "_";
-  else Output += "P" + String(bank_select_number) + String(number);
+  if (direct_select_state == 0) Output += 'P' + String(number) + "_";
+  else Output += 'P' + String(bank_select_number) + String(number);
 }
 
 // ** US-20 simulation
@@ -321,7 +318,7 @@ void MD_GP10_class::unmute() {
 }
 
 void MD_GP10_class::mute() {
-  if ((Setting.US20_emulation_active) && (!is_always_on) && (is_on)) {
+  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
     //    GP10_select_LED = GP10_OFF_COLOUR; //Switch the LED off
     //write_sysex(GP10_FOOT_VOL, 0);
@@ -529,8 +526,8 @@ void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number
     String msg = "";
     if (SP[Sw].Type != ASSIGN) {
       msg = GP10_parameters[number].Name;
-      if ((GP10_parameters[number].Sublist & SUBLIST_FROM_BYTE2) || (GP10_parameters[number].Sublist == 0)) msg += " ";
-      else msg += ":";
+      if ((GP10_parameters[number].Sublist & SUBLIST_FROM_BYTE2) || (GP10_parameters[number].Sublist == 0)) msg += ' ';
+      else msg += ':';
     }
     msg += SP[Sw].Label;
     LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
@@ -596,11 +593,11 @@ void MD_GP10_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { /
   if (SP[sw].Type == ASSIGN) msg = GP10_parameters[index].Name;
   if (GP10_parameters[index].Sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
     String type_name = GP10_sublists[GP10_parameters[index].Sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
-    msg += "(" + type_name + ")";
+    msg += '(' + type_name + ')';
   }
   if ((GP10_parameters[index].Sublist > 0) && !(GP10_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
     //String type_name = GP10_sublists[GP10_parameters[index].Sublist + byte1 - 101];
-    if (SP[sw].Type == ASSIGN) msg += ":";
+    if (SP[sw].Type == ASSIGN) msg += ':';
     read_parameter_value_name(index, byte1, msg);
   }
   //Copy it to the display name:

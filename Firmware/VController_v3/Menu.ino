@@ -73,6 +73,7 @@ struct menu_struct {
 #define CALIBRATION_MENU 10
 #define KATANA_MENU 11
 #define MIDI_SWITCH_MENU 12
+#define MIDI_ADV_MENU 13
 
 #define DEVICE_SUBLIST 255
 #define PAGE_SUBLIST 254
@@ -89,10 +90,10 @@ const PROGMEM menu_struct menu[][15] = {
     { "MIDI SWITCH MENU", OPEN_MENU, MIDI_SWITCH_MENU },// Switch 3
     { "PROGRAM SWITCHES", OPEN_MENU, COMMAND_SELECT_MENU }, // Switch 4
     { "LED SETTINGS    ", OPEN_MENU, LED_SETTINGS_MENU }, // Switch 5
-    { "FX COLOURS MENU ", OPEN_MENU, LED_FX_COLOURS_MENU }, // Switch 5
-    { "CALIBRATION MENU", OPEN_MENU, CALIBRATION_MENU }, // Switch 7
-    { "FIRMWARE MENU", OPEN_MENU, FIRMWARE_MENU }, // Switch 8
-    { "", NONE }, // Switch 9
+    { "FX COLOURS MENU ", OPEN_MENU, LED_FX_COLOURS_MENU }, // Switch 6
+    { "MIDI ADVNCD MENU", OPEN_MENU, MIDI_ADV_MENU }, // Switch 7
+    { "CALIBRATION MENU", OPEN_MENU, CALIBRATION_MENU }, // Switch 8
+    { "FIRMWARE MENU", OPEN_MENU, FIRMWARE_MENU }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
     { "EXIT MENU", EXIT_MENU, 0 }, // Switch 12
@@ -102,16 +103,16 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 1 - Global settings
     { "GLOBAL SETTINGS ", NONE }, // Menu title
-    { "US20 Emulation", SET, 1, 0, 1, &Setting.US20_emulation_active }, // Switch 1
-    { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 2
-    { "Main disply mode", SET, 19, 0, 3, &Setting.Main_display_mode },// Switch 3
+    { "Main disp mode", SET, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
+    { "Main disp shows", SET, 48, 0, 1, &Setting.Main_display_show_top_right }, // Switch 2
+    { "CURNUM action", SET, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
     { "MEP also cntrols", SET, 35, 0, 2, &Setting.MEP_control }, // Switch 4
-    { "Bass mode G2M ch", SET, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
-    { "Bass mode device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 5
-    { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
-    { "Bass mode min vl", SET, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
-    { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 9
-    { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 10
+    { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
+    { "Hide tempo LED", SET, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
+    { "Backlight Type", SET, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 7
+    { "", NONE }, // Switch 8
+    { "", NONE }, // Switch 9
+    { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
     { "", NONE }, // Switch 13 (LEFT)
@@ -139,7 +140,7 @@ const PROGMEM menu_struct menu[][15] = {
   { // Menu 3 - LED settings menu
     { "LED SETTINGS    ", NONE }, // Menu title
     { "LED Brightness", SET, 0, 0, 100, &Setting.LED_brightness }, // Switch 1
-    { "Backlight Bright", SET, 0, 0, 255, &Setting.Backlight_brightness }, // Switch 2
+    { "Backlight Bright", SET, 0, 0, 254, &Setting.Backlight_brightness }, // Switch 2
     { "Virtual LEDs", SET, 1, 0, 1, &Setting.Virtual_LEDs },// Switch 3
     { "FX off is dimmed", SET, 1, 0, 1, &Setting.LED_FX_off_is_dimmed }, // Switch 4
     { "Global colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_global_colour }, // Switch 5
@@ -275,7 +276,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 8
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
-    { "RGB DISPLAY CLR ", SET, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 11
+    { "", NONE }, // Switch 11
     { "EXIT",  OPEN_MENU, SELECT_MENU }, // Switch 12
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
@@ -320,7 +321,7 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 12 - MIDI switch
     { "MIDI SWITCH MENU", NONE }, // Menu title
-    { "Select switch", SET, SWITCH_SUBLIST, 1, 24, &Current_MIDI_switch }, // Switch 1
+    { "Select switch", SET, SWITCH_SUBLIST, 1, TOTAL_NUMBER_OF_SWITCHES, &Current_MIDI_switch }, // Switch 1
     { "Type",  MIDI_SWITCH_SET, 38, 0, 4, (void*) 1 }, // Switch 2
     { "Midi port", MIDI_SWITCH_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
     { "Midi channel", MIDI_SWITCH_SET, 0, 1, 16, (void*) 3 }, // Switch 4
@@ -335,7 +336,26 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
+
+  { // Menu 13 - Midi advanced settings
+    { "MIDI ADVNCD MENU", NONE }, // Menu title
+    { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
+    { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
+    { "", NONE }, // Switch 3
+    { "", NONE }, // Switch 4
+    { "Bass mode G2M ch", SET, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
+    { "Bass mode device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
+    { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
+    { "Bass mode min vl", SET, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
+    { "HighNotePriotyCC", SET, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
+    { "", NONE }, // Switch 10
+    { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
 };
+
 
 const uint16_t NUMBER_OF_MENUS = sizeof(menu) / sizeof(menu[0]);
 
@@ -363,6 +383,12 @@ const PROGMEM char menu_sublist[][17] = {
 
   // Sublist 46 - 47: RGB Display colour schemes
   "ADAFRUIT", "BUYDISPLAY",
+
+  // Sublist 48 - 50: Main display top right types
+  "CURRENT DEVICE", "CURRENT TEMPO", "",
+
+  // Sublist 51 - 57: Current number actions
+  "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
 };
 
 #define SUBLIST_COLOUR 4
@@ -532,7 +558,7 @@ void menu_load(uint8_t Sw) {
       }
       else if (menu[current_menu][number].Sublist == KTN_NUMBER_SUBLIST) {
         My_KTN.number_format(My_KTN.save_patch_number + 9 , msg);
-        msg += ":";
+        msg += ':';
         EEPROM_read_KTN_title(My_KTN.save_patch_number, msg);
         //LCD_set_SP_label(Sw, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
@@ -562,7 +588,7 @@ void menu_load(uint8_t Sw) {
       strcpy(menu_title, menu[current_menu][number].Label);
       val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
       vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
-      if (Current_MIDI_switch < TOTAL_NUMBER_OF_SWITCHES) {
+      if (Current_MIDI_switch <= TOTAL_NUMBER_OF_SWITCHES) {
         switch (vnumber) {
           case 1:
             value = MIDI_switch[Current_MIDI_switch].type;
@@ -662,7 +688,7 @@ void menu_set_menu_label(String & lbl) { // Will set the Label string in the SP 
 
 void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is pressed
   uint8_t number = SP[Sw].PP_number;
-  if (number == MENU_BACK) { // The menu back button has limited functionality, allowing the user to go back the menu structure without changing anything
+  if (number == MENU_BACK) { // The menu back button has limited functionality, allowing the user to go back the menu structure and saving everything
     if (current_menu == KEYBOARD_MENU) {
       close_edit_name();
       return;
@@ -677,6 +703,10 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
     if (current_menu == COMMAND_EDIT_MENU) {
       // Save the command first
       go_save_cmd();
+      return;
+    }
+    if (current_menu == KATANA_MENU) {
+      KTN_save();
       return;
     }
     number = current_menu_switch;
@@ -781,7 +811,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         uint8_t *p = NULL;
-        if (Current_MIDI_switch < TOTAL_NUMBER_OF_SWITCHES) {
+        if (Current_MIDI_switch <= TOTAL_NUMBER_OF_SWITCHES) {
           switch (vnumber) {
             case 1:
               p = &MIDI_switch[Current_MIDI_switch].type;
@@ -1562,7 +1592,7 @@ void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String &msg) {
         }
         if ((sel_cmd.Type == PAGE) || (sel_cmd.Type == PATCH) || (sel_cmd.Type == ASSIGN)) { // Add SELECT / BANK SELECT / etc to the string
           msg1 = cmd_sublist[sel_cmd.Data1 + SUBLIST_SELECT_TYPE_NUMBER - 1];
-          msg += " " + msg1;
+          msg += ' ' + msg1;
         }
       }
       break;
@@ -2081,7 +2111,7 @@ void menu_set_main_title() { // Called from main_LCD_control() when the main dis
       LCD_main_set_title(msg);
     }
     else if ((current_menu == MIDI_SWITCH_MENU) && (menu[current_menu][current_menu_switch].Type == MIDI_SWITCH_SET)) { // Show adapter switch menu name on VCmini
-      String msg = "SW" + String(Current_MIDI_switch) + " ";
+      String msg = "SW" + String(Current_MIDI_switch) + ' ';
       msg += menu[current_menu][current_menu_switch].Label;
       LCD_main_set_title(msg);
     }

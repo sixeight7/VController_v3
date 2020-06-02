@@ -53,6 +53,10 @@ Bounce switch_direct[NUMBER_OF_CONNECTED_SWITCHES] = {
 };
 #endif
 
+#ifdef CUSTOM_SWITCH_NUMBERS
+const uint8_t switch_number[NUMBER_OF_CONNECTED_SWITCHES] = { CUSTOM_SWITCH_NUMBERS };
+#endif
+
 // Create objects for switchpad (max 1) if defined in hardware.h
 // Functionality of the switchpad is described in switchpad.h
 #ifdef ROWPINS
@@ -243,6 +247,11 @@ void setup_switch_check() {
     ctl_jack[j].init();
   }
 #endif
+
+  // Check for reset settings
+#if defined IS_VCMINI && defined SWITCH1_PIN && defined SWITCH3_PIN
+  if ((digitalRead(SWITCH1_PIN) == LOW) && (digitalRead(SWITCH3_PIN) == LOW)) EEP_initialize_internal_eeprom_data(); // Initialize settings on pressing switch 1 and 3
+#endif
 }
 
 void main_switch_check() {
@@ -257,11 +266,19 @@ void main_switch_check() {
   for (uint8_t s = 0; s < NUMBER_OF_CONNECTED_SWITCHES; s++) {
     switch_direct[s].update();
     if (switch_direct[s].fallingEdge()) { // Check if switch is pressed
+#ifdef CUSTOM_SWITCH_NUMBERS
+      switch_pressed = switch_number[s];
+#else
       switch_pressed = s + 1;
+#endif
       switch_type = SW_TYPE_SWITCH;
     }
     if (switch_direct[s].risingEdge()) { // Check if switch is released
+#ifdef CUSTOM_SWITCH_NUMBERS
+      switch_released = switch_number[s];
+#else
       switch_released = s + 1;
+#endif
       switch_type = SW_TYPE_SWITCH;
     }
   }
@@ -526,7 +543,7 @@ void SC_update_long_presses_and_hold() {
         DEBUGMSG("Release while multiswitch_pressed > 0: " + String(switch_released));
       }
     }
-    
+
     if (switch_was_long_pressed) switch_released |= ON_LONG_PRESS; // Activate the proper release
     Long_press_timer = 0;  //Reset the timer on switch released
     switch_was_long_pressed = false;

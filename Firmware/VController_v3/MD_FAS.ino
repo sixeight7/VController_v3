@@ -88,24 +88,20 @@
 // Initialize device variables
 // Called at startup of VController
 void MD_FAS_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // AXE-FX variables:
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "AXEFX");
   strcpy(full_device_name, "Fractal device");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   model_number = FAS_MODEL_AF2;
   patch_min = FAS_PATCH_MIN;
   patch_max = FAS_PATCH_MAX;
-  //bank_size = 10;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the AXEFX does not have to respond before disconnection
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 1; // Default value: green
   MIDI_channel = FAS_MIDI_CHANNEL; // Default value
   MIDI_port = FAS_MIDI_PORT; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = FAS_DEFAULT_PAGE1; // Default value
   my_device_page2 = FAS_DEFAULT_PAGE2; // Default value
   my_device_page3 = FAS_DEFAULT_PAGE3; // Default value
@@ -150,6 +146,7 @@ void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
         case FAS_GET_PRESET_NUMBER:
           new_patch = sxdata[6] << 7 | sxdata[7];
           if (patch_number != new_patch) { //Right after a patch change the patch number is sent again. So here we catch that message.
+            prev_patch_number = patch_number;
             patch_number = new_patch;
             //page_check();
             do_after_patch_selection();
@@ -254,6 +251,7 @@ void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
+      prev_patch_number = patch_number;
       patch_number = new_patch;
       write_sysex(FAS_GET_PRESET_NAME); // So the main display always show the correct patch
       //page_check();
@@ -433,6 +431,7 @@ void MD_FAS_class::stop_tuner() {
 
 void MD_FAS_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
+  prev_patch_number = patch_number;
   patch_number = new_patch;
 
   MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_port);
@@ -501,7 +500,7 @@ void MD_FAS_class::unmute() {
 }
 
 void MD_FAS_class::mute() {
-  if ((Setting.US20_emulation_active) && (!is_always_on) && (is_on)) {
+  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
     MIDI_send_CC(FAS_BYPASS_CC, 127, MIDI_channel, MIDI_port);
   }

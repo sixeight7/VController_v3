@@ -74,23 +74,19 @@ uint8_t beaconFlags = 0; //KPA_BEACON_FLAG_SYSEX; // Decided not to use the beac
 
 
 void MD_KPA_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Line6 KPA variables:
   enabled = DEVICE_DETECT; // Kemper can be detected via USB, but not via regular MIDI...
   strcpy(device_name, "KPA");
   strcpy(full_device_name, "Kemper Profiler");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = KPA_PERFORMANCE_PATCH_MIN;
   patch_max = KPA_PERFORMANCE_PATCH_MAX;
-  //bank_size = 8;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the KPA does not have to respond before disconnection
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 10; // Default value: soft green
   MIDI_channel = KPA_MIDI_CHANNEL; // Default value
   MIDI_port = KPA_MIDI_PORT; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = KPA_DEFAULT_PAGE1; // Default value
   my_device_page2 = KPA_DEFAULT_PAGE2; // Default value
   my_device_page3 = KPA_DEFAULT_PAGE3; // Default value
@@ -187,6 +183,7 @@ void MD_KPA_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // KPA sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program;
       //page_check();
       do_after_patch_selection();
@@ -321,10 +318,12 @@ void MD_KPA_class::switch_mode(uint8_t mode) {
     patch_min = KPA_PERFORMANCE_PATCH_MIN;
     patch_max = KPA_PERFORMANCE_PATCH_MAX;
   }
+  prev_patch_number = patch_number;
   update_bank_number(patch_number);
 }
 
 void MD_KPA_class::select_patch(uint16_t new_patch) {
+  prev_patch_number = patch_number;
   patch_number = new_patch;
   if (current_mode == KPA_BROWSE_MODE) {
     browse_rig_number = new_patch;
@@ -444,13 +443,13 @@ void MD_KPA_class::direct_select_press(uint8_t number) {
     }
     else  {
       // Second digit pressed
-      device_in_bank_selection = my_device_number + 1; // Go into bank mode
       uint16_t base_patch = (bank_select_number * 50) + (number - 1) * 5;
       //flash_bank_of_five = base_patch / 5;
       bank_select_number = (base_patch / Previous_bank_size);
       bank_size = Previous_bank_size;
-      DEBUGMSG("PREVIOUS BANK_SIZE: " + String(Previous_bank_size));
+      //DEBUGMSG("PREVIOUS BANK_SIZE: " + String(Previous_bank_size));
       SCO_select_page(KPA_DEFAULT_PAGE1); // Which should give PAGE_KPA_RIG_SELECT
+      device_in_bank_selection = my_device_number + 1; // Go into bank mode
     }
   }
 }
@@ -499,7 +498,7 @@ bool MD_KPA_class::request_patch_name(uint8_t sw, uint16_t number) {
       msg += " listed rig";
     }
     else {
-      msg = "(Bank:" + String ((number - 5) / 128) + " PC:" + String((number - 5) % 128) + ")";
+      msg = "(Bank:" + String ((number - 5) / 128) + " PC:" + String((number - 5) % 128) + ')';
     }
     LCD_set_SP_label(sw, msg);
     return true;
@@ -780,11 +779,11 @@ void MD_KPA_class::check_update_label(uint8_t Sw, uint8_t value) {
   uint16_t index = SP[Sw].PP_number;
   msg = KPA_CC_types[index].Name;
   if ((index == KPA_WAH_PEDAL) || (index == KPA_PITCH_PEDAL) || (index == KPA_VOL_PEDAL) || (index == KPA_MORPH_PEDAL)) {
-    msg += ":";
+    msg += ':';
     LCD_add_3digit_number(value, msg);
   }
   if ((index == KPA_MODE) && (value < 2)) {
-    msg += ":";
+    msg += ':';
     msg += KPA_parameter_names[value];
   }
   LCD_set_SP_label(Sw, msg);
@@ -827,7 +826,7 @@ void MD_KPA_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_port);
   check_update_label(sw, value);
   String msg = KPA_CC_types[number].Name;
-  msg += ":";
+  msg += ':';
   LCD_add_3digit_number(value, msg);
   LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page

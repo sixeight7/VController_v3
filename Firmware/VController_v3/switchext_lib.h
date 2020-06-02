@@ -15,8 +15,16 @@
 #define SWITCH_NORMALLY_CLOSED 2
 #define EXPRESSION_PEDAL 3
 
-#define DEFAULT_EXP_PEDAL_UPDATE_TIME 25 // Time between two updates of the expression pedal.
+#define DEFAULT_EXP_PEDAL_UPDATE_TIME 25 // Time between detecting and reading.
 #define NUMBER_OF_UNIQUE_READINGS 3 // Number of values remembered. To avoid jitter of the expression pedal, a new value must be unique.
+//#define NUMBER_OF_STABLE_READINGS 5
+
+#define PAUSE_READING_TIME 50
+#define NUMBER_OF_PAUSES_BEFORE_SWITCH_TYPE_CHANGE 10
+
+#define NO_REDETECT 0
+#define REDETECT_HOLD_SWITCH_ACTIVITY 1
+#define REDETECT_SEND_SWITCH_RELEASE 2
 
 class SwitchExt
 {
@@ -38,10 +46,11 @@ class SwitchExt
     bool check_calibration();
 
   private:
-    void detect_type();
     bool update_expr_pedal();
     bool update_switches();
-    bool check_unique_value(uint16_t new_value);
+    bool detect(bool first_time);
+    bool check_unique_tip_value(uint16_t new_value);
+    //bool check_stable_ring_value(uint16_t new_value);
 
     uint8_t dpin_tip; // Pin number of digital pin connected to the tip of the Jack connector
     uint8_t dpin_ring; // Pin number of digital pin connected to the ring of the Jack connector
@@ -51,8 +60,9 @@ class SwitchExt
     bool pull_up; // Do the inputs need the internal pullup resistors activated
     bool auto_calibrate;
     uint8_t switch_type;
+    uint8_t new_switch_type;
     uint32_t updateTimer; // Timer for update - will determine the number of updates on an expression pedal
-    uint32_t updateTime; // Time between two updates of the pedal
+    uint8_t number_of_pauses_before_switch_type_change;
 
     uint8_t newState; // New digital state for external switches
     uint8_t State; // Current state of external switches
@@ -60,13 +70,19 @@ class SwitchExt
     uint32_t bounceDelay;
     uint32_t debounceTime; // Debounce time for switches
     bool do_not_check_ring; // Do not check ring with normally open switch with mono jack
-
+    bool detectable;
+    
     uint16_t expr_value;
     uint16_t expr_ped_min; // Minimal value the expression pedal has reached
     uint16_t expr_ped_max; // maximum value the expression pedal has reached
 
-    uint16_t reading[NUMBER_OF_UNIQUE_READINGS] = { 255 };
-    uint8_t read_index;
+    uint16_t reading_tip_values[NUMBER_OF_UNIQUE_READINGS] = { 255 };
+    uint8_t read_index_tip;
+    //uint16_t reading_ring_values[NUMBER_OF_STABLE_READINGS] = { 255 };
+    uint8_t read_index_ring;
+    uint32_t redetect_timer = 0;
+    //uint32_t pause_reading_timer = 0;
+    uint16_t counter = 0;
 };
 
 SwitchExt::SwitchExt(uint8_t dpin_tip, uint8_t dpin_ring, uint8_t apin_tip, uint8_t apin_ring, uint16_t max_ring_for_exp_pedal, uint32_t debounceTime, uint8_t switch_type, bool pull_up) {
@@ -83,10 +99,12 @@ SwitchExt::SwitchExt(uint8_t dpin_tip, uint8_t dpin_ring, uint8_t apin_tip, uint
   this->debounceTime = debounceTime;
   this->switch_type = switch_type;
   this->pull_up = pull_up;
-  this->updateTime = DEFAULT_EXP_PEDAL_UPDATE_TIME;
   this->expr_ped_max = 0;
   this->expr_ped_min = 1023;
-  read_index = 0;
+  read_index_tip = 0;
+  read_index_ring = 0;
+  detectable = ((switch_type == DETECT) && (!pull_up));
+  number_of_pauses_before_switch_type_change = 0;
 }
 
 void SwitchExt::init() {
@@ -100,56 +118,69 @@ void SwitchExt::init() {
     pinMode(dpin_tip, INPUT);
     pinMode(dpin_ring, INPUT);
   }
-
-  // Detect type
-  if (switch_type == DETECT) detect_type();
-  //DEBUGMSG("Type: " + String(switch_type));
-
-  // If an expression pedal is connected and there are no external pull up resistors, put power on the ring
-  if ((switch_type == EXPRESSION_PEDAL) && (pull_up)) {
-    pinMode(dpin_ring, OUTPUT);
-    digitalWrite(dpin_ring, HIGH);
-  }
+  updateTimer = millis() + DEFAULT_EXP_PEDAL_UPDATE_TIME;
+  switch_type = SWITCH_NORMALLY_OPEN;
+  detect(true);
 }
 
-void SwitchExt::detect_type() {
-  // First check if it is an expression pedal by checking the voltage on the analog ring pin
+bool SwitchExt::detect(bool first_time) {
+  uint8_t new_switch_type = switch_type;
   uint16_t ring_value = analogRead(apin_ring);
-  DEBUGMSG("Ring value: " + String(ring_value));
-  if ((ring_value > 100) && (ring_value < max_ring_for_exp_pedal)) {
-    switch_type = EXPRESSION_PEDAL;
-    DEBUGMAIN("Expression pedal detected on pin " + String(apin_ring));
-    for (uint8_t i = 0; i < NUMBER_OF_UNIQUE_READINGS; i++) update_expr_pedal(); // Do a first couple of readings, so we do not get a false trigger at startup
-    return;
+  uint16_t tip_value = analogRead(apin_tip);
+
+  if ((ring_value < 100) && (switch_type == SWITCH_NORMALLY_OPEN) && (tip_value < 100)) {
+    new_switch_type = SWITCH_NORMALLY_CLOSED;
+    //DEBUGMSG("Detect NC switch");
+  }
+  if ((ring_value >= 100) && (ring_value < max_ring_for_exp_pedal) && (switch_type == SWITCH_NORMALLY_OPEN)) {
+    new_switch_type = EXPRESSION_PEDAL;
+    //DEBUGMSG("Detect Expression Pedal");
+  }
+  if ((ring_value >= max_ring_for_exp_pedal) && (switch_type != SWITCH_NORMALLY_OPEN) && ((tip_value + 200) > max_ring_for_exp_pedal)) {
+    new_switch_type = SWITCH_NORMALLY_OPEN;
+    //DEBUGMSG("Detect NO switch");
   }
 
-  // Then check if it is normally open or normally closed by checking the digital tip pin
-  if (digitalRead(dpin_tip) == HIGH) {
-    switch_type = SWITCH_NORMALLY_OPEN;
-    if (digitalRead(dpin_ring) == LOW) do_not_check_ring = true; // Exception for mono plug
-    DEBUGMAIN("Normally open switch detected on pin " + String(dpin_tip));
+  if (new_switch_type == switch_type) return false;
+  
+  updateTimer = millis() + PAUSE_READING_TIME;
+  number_of_pauses_before_switch_type_change++;
+  if ((first_time) || (number_of_pauses_before_switch_type_change > NUMBER_OF_PAUSES_BEFORE_SWITCH_TYPE_CHANGE)) {
+    switch_type = new_switch_type;
+    DEBUGMSG("Switch type set to " + String(switch_type));
+    number_of_pauses_before_switch_type_change = 0;
+    if (switch_type == EXPRESSION_PEDAL) {
+      if (auto_calibrate) {
+        expr_ped_min = 1023;
+        expr_ped_max = 0;
+        expr_value = 127;
+      }
+      // If an expression pedal is connected and there are no external pull up resistors, put power on the ring
+      if (pull_up) {
+        pinMode(dpin_ring, OUTPUT);
+        digitalWrite(dpin_ring, HIGH);
+      }
+    }
   }
-  else {
-    switch_type = SWITCH_NORMALLY_CLOSED;
-    DEBUGMAIN("Normally closed switch detected on pin " + String(dpin_tip));
-  }
+  return true;
 }
 
 bool SwitchExt::update() {
-  if (millis() > updateTimer + updateTime) {
-    updateTime = millis(); // Reset the timer
-    if (switch_type == EXPRESSION_PEDAL) {
-      return update_expr_pedal();
+  if (millis() > updateTimer) {
+    updateTimer = millis() + DEFAULT_EXP_PEDAL_UPDATE_TIME; // Reset the timer
+
+    // Detect_type
+    if (detectable) {
+      if (detect(false)) return false;
     }
-    else {
-      return update_switches();
-    }
+
+    if (switch_type == EXPRESSION_PEDAL) return update_expr_pedal();
+    else return update_switches();
   }
-  return 0;
+  return false;
 }
 
 bool SwitchExt::update_expr_pedal() {
-
   uint16_t new_state = analogRead(apin_tip);
   //DEBUGMSG("Analog pin " + String(apin_tip) + ": " + String(new_state));
 
@@ -164,7 +195,7 @@ bool SwitchExt::update_expr_pedal() {
 
   uint16_t new_value = map(new_state, expr_ped_min, expr_ped_max, 0, 137); // Map to 137 instead of 127, so we have five on either side, so we always reach min and max value.
   if ((expr_ped_max - expr_ped_min < 137)) return false; // exit if we have not calibrated yet...
-  if (check_unique_value(new_value) == false) return false; // exit if this is not a unique value
+  if (check_unique_tip_value(new_value) == false) return false; // exit if this is not a unique value
   if (new_value > 132) new_value = 132;
   if (new_value < 5) new_value = 5;
   expr_value = new_value - 5; // Set the expression value variable
@@ -172,17 +203,28 @@ bool SwitchExt::update_expr_pedal() {
   return true;
 }
 
-bool SwitchExt::check_unique_value(uint16_t new_value) {
+bool SwitchExt::check_unique_tip_value(uint16_t new_value) {
 
   for (uint8_t i = 0; i < NUMBER_OF_UNIQUE_READINGS; i++) { // Check if the new-value is in the reading array
-    if (reading[i] == new_value) return false;
+    if (reading_tip_values[i] == new_value) return false;
   }
 
-  reading[read_index] = new_value; // Add new unique value to reading array
-  read_index++;
-  if (read_index >= NUMBER_OF_UNIQUE_READINGS) read_index = 0;
+  reading_tip_values[read_index_tip] = new_value; // Add new unique value to reading array
+  read_index_tip++;
+  if (read_index_tip >= NUMBER_OF_UNIQUE_READINGS) read_index_tip = 0;
   return true;
 }
+
+/*bool SwitchExt::check_stable_ring_value(uint16_t new_value) {
+
+  for (uint8_t i = 0; i < NUMBER_OF_STABLE_READINGS; i++) { // Check if the new-value is in the reading array
+    if (reading_ring_values[i] != new_value) {
+      reading_ring_values[i] = new_value;
+      return false;
+    }
+  }
+  return true;
+  }*/
 
 uint8_t SwitchExt::pedal_value() {
   if (switch_type == EXPRESSION_PEDAL) {
@@ -262,7 +304,7 @@ void SwitchExt::set_max(uint8_t value) {
     auto_calibrate = true;
     expr_ped_max = 0;  // Reset the calibration values so the pedal will recalibrate.
     expr_ped_min = 1023;
-    DEBUGMSG("...set to auto-calibrate");
+    DEBUGMSG("...set to auto - calibrate");
   }
   else {
     expr_ped_max = value << 4;

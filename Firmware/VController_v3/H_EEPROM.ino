@@ -19,10 +19,10 @@
 //#include <Wire.h>
 #include <i2c_t3.h>
 
-#define CURRENT_EEPROM_VERSION 5 // Update this value whenever there is an update of the internal EEPROM structure 
-#define CURRENT_EXT_EEPROM_VERSION 5 // Update this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
-#define CURRENT_KATANA_MEMORY_VERSION 2 // Update this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
-#define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Update this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the internal EEPROM structure 
+#define CURRENT_EXT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
+#define CURRENT_KATANA_MEMORY_VERSION 2 // Increase this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Increase this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
 
 // ************************ Internal EEPROM data addresses ***********************
 // Total size: 2048 bytes (Teensy 3.2), 4096 bytes (Teensy 3.6)
@@ -105,6 +105,7 @@ uint32_t EEPROM_update_timer = 0;
 void setup_eeprom()
 {
   if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
+  else EEP_check_internal_eeprom_data(false);
   if (read_ext_EEPROM(EXT_EEP_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
   if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_update_katana_preset_memory();
   if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEPROM_initialize_HELIX_message_space();
@@ -145,7 +146,7 @@ void EEP_read_eeprom_common_data() {
   SC_set_expression_pedals();
 
   // Read MIDI switch data
-  for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
+  for (uint8_t s = 0; s <= TOTAL_NUMBER_OF_SWITCHES; s++) {
     uint16_t address = EEPROM_MIDI_SWITCH_SETTINGS_BASE + (EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE * s);
     MIDI_switch[s].type = EEPROM.read(address + EEPROM_MIDI_SWITCH_TYPE_ADDR);
     MIDI_switch[s].port = EEPROM.read(address + EEPROM_MIDI_SWITCH_PORT_ADDR);
@@ -157,6 +158,7 @@ void EEP_read_eeprom_common_data() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
     Device[d]->patch_number = (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) << 8) + EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB);
+    Device[d]->prev_patch_number = Device[d]->patch_number;
     Device[d]->update_bank_number(Device[d]->patch_number);
     Device[d]->current_setlist = EEPROM.read(address + EEPROM_DEVICE_SETLIST);
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
@@ -170,7 +172,7 @@ void EEP_write_eeprom_common_data() {
   for (uint8_t s = 0; s < sizeof(Setting); s++) {
     EEPROM.write(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + s, *settingbytes++);
   }
-  for (uint8_t s = 0; s < TOTAL_NUMBER_OF_SWITCHES; s++) {
+  for (uint8_t s = 0; s <= TOTAL_NUMBER_OF_SWITCHES; s++) {
     uint16_t address = EEPROM_MIDI_SWITCH_SETTINGS_BASE + (EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE * s);
     EEPROM_write(address + EEPROM_MIDI_SWITCH_TYPE_ADDR, MIDI_switch[s].type);
     EEPROM_write(address + EEPROM_MIDI_SWITCH_PORT_ADDR, MIDI_switch[s].port);
@@ -197,30 +199,37 @@ void EEP_initialize_internal_eeprom_data() {
   EEPROM_write(EEPROM_CURRENT_PAGE_ADDR, DEFAULT_PAGE);
   EEPROM_write(EEPROM_CURRENT_DEVICE_ADDR, 0); // Select first device
 
+  EEP_check_internal_eeprom_data(true);
+}
+
+void EEP_check_internal_eeprom_data(bool initialize) {
+  // Run with initialize = true to always overwrite settings
+  // Run with initialize = false to only write those settings who have not been initialized yet (by default EEPROM memory is initialized with 0xFF values)
   byte* settingbytes = (byte*)&Default_settings;
   for (uint8_t s = 0; s < sizeof(Setting); s++) {
-    EEPROM.write(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + s, *settingbytes++);
+    if ((initialize) || (EEPROM.read(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + s) == 0xFF)) EEPROM.write(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + s, *settingbytes);
+    settingbytes++;
   }
 
-  uint8_t no_of_midi_switches = TOTAL_NUMBER_OF_SWITCHES;
+  uint8_t no_of_midi_switches = TOTAL_NUMBER_OF_SWITCHES + 1;
   if (NUMBER_OF_DEFAULT_MIDI_SWITCHES < no_of_midi_switches) no_of_midi_switches = NUMBER_OF_DEFAULT_MIDI_SWITCHES;
   for (uint8_t s = 0; s < no_of_midi_switches; s++) {
     uint16_t address = EEPROM_MIDI_SWITCH_SETTINGS_BASE + (EEPROM_MIDI_SWITCH_SETTINGS_DATA_SIZE * s);
-    EEPROM_write(address + EEPROM_MIDI_SWITCH_TYPE_ADDR, MIDI_switch_default_settings[s].type);
-    EEPROM_write(address + EEPROM_MIDI_SWITCH_PORT_ADDR, MIDI_switch_default_settings[s].port);
-    EEPROM_write(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR, MIDI_switch_default_settings[s].channel);
-    EEPROM_write(address + EEPROM_MIDI_SWITCH_CC_ADDR, MIDI_switch_default_settings[s].cc);
+    if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_TYPE_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_TYPE_ADDR, MIDI_switch_default_settings[s].type);
+    if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_PORT_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_PORT_ADDR, MIDI_switch_default_settings[s].port);
+    if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR, MIDI_switch_default_settings[s].channel);
+    if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_CC_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_CC_ADDR, MIDI_switch_default_settings[s].cc);
   }
 
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
-    EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, 0);
-    EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, 0);
-    EEPROM_write(address + EEPROM_DEVICE_SETLIST, 0);
+    if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, 0);
+    if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, 0);
+    if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_SETLIST) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_SETLIST, 0);
     Device[d]->init(); // So default values will be restored
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) { // Just write the settings from EEPROM
-      EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
-      DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
+      if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
+      //DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
     }
   }
 }
@@ -229,7 +238,7 @@ void EEP_initialize_internal_eeprom_data() {
 void EEPROM_write(uint16_t address, uint8_t value) { // Only write data if it has changed
   if (value != EEPROM.read(address)) {
     EEPROM.write(address, value);
-    DEBUGMSG("wrote value " + String(value) + " to address " + String(address));
+    //DEBUGMSG("wrote value " + String(value) + " to address " + String(address));
   }
 }
 
@@ -492,7 +501,7 @@ void EEPROM_write_command_from_editor(Cmd_struct *cmd) {
 
 void EEPROM_check_data_received(uint8_t check_number_of_pages, uint16_t check_number_of_cmds) {
   if (check_number_of_cmds != number_of_cmds) {
-    DEBUGMAIN("MIDI read error: number of commands (" + String(number_of_cmds) + ") is different from the number of received commands (" + String(check_number_of_cmds) + ")");
+    DEBUGMAIN("MIDI read error: number of commands (" + String(number_of_cmds) + ") is different from the number of received commands (" + String(check_number_of_cmds) + ')');
     LCD_show_popup_label("Receive failed!", MESSAGE_TIMER_LENGTH);
   }
   else {

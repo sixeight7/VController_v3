@@ -63,7 +63,7 @@ void setup_debug() {
 void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port, bool is_out) {
 
 #if defined(DEBUG_NORMAL) || defined(DEBUG_MAIN) || defined(DEBUG_MIDI) || defined(DEBUG_SYSEX)
-  Serial.print((char)0); // Hack to keep serial running together with midi, char 0 prints as nothing, but it does keep the serial monitor from freezing
+  //Serial.print((char)0); // Hack to keep serial running together with midi, char 0 prints as nothing, but it does keep the serial monitor from freezing
 #endif
 
 #ifndef DEBUG_SYSEX_UNIVERSAL
@@ -79,27 +79,31 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
   uint8_t VCbridge_port = (port & 0x0F);
   switch (port & 0xF0) {
     case USBMIDI_PORT:
-      Serial.print("USB_M:" + String(VCbridge_port) + " ");
+      Serial.print("USB_M:" + String(VCbridge_port) + ' ');
       break;
     case MIDI1_PORT:
-      Serial.print("MIDI1:" + String(VCbridge_port) + " ");
+      Serial.print("MIDI1:" + String(VCbridge_port) + ' ');
       break;
     case MIDI2_PORT:
-      Serial.print("MIDI2:" + String(VCbridge_port) + " ");
+      Serial.print("MIDI2:" + String(VCbridge_port) + ' ');
       break;
     case MIDI3_PORT:
-      Serial.print("MIDI3:" + String(VCbridge_port) + " ");
+      Serial.print("MIDI3:" + String(VCbridge_port) + ' ');
       break;
     case USBHMIDI_PORT:
-      Serial.print("USBH_M:" + String(VCbridge_port) + " ");
+      Serial.print("USBH_M:" + String(VCbridge_port) + ' ');
       break;
     default:
-      Serial.print("multiple:" + String(VCbridge_port) + " ");
+      Serial.print("multiple:" + String(VCbridge_port) + ' ');
   }
-  Serial.print("(" + String(sxlength) + " bytes) ");
+  Serial.print('(' + String(sxlength) + " bytes) ");
+  if (sxlength > 32) {
+    sxlength = 32; // limit the largest messages
+    Serial.print("(first 32 bytes) ");
+  }
   for (uint8_t i = 0; i < sxlength; i++) {
-    if (sxdata[i] < 0x10) Serial.print("0" + String(sxdata[i], HEX) + " ");
-    else Serial.print(String(sxdata[i], HEX) + " ");
+    if (sxdata[i] < 0x10) Serial.print("0" + String(sxdata[i], HEX) + ' ');
+    else Serial.print(String(sxdata[i], HEX) + ' ');
   }
   Serial.println();
 #endif

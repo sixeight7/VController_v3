@@ -10,7 +10,7 @@
 // ********************************* Section 1: VController commands ********************************************
 
 // Here we define the supported devices
-#define NUMBER_OF_DEVICES 11
+#define NUMBER_OF_DEVICES 13
 #define GP10 0
 #define GR55 1
 #define VG99 2
@@ -22,6 +22,8 @@
 #define KTN 8
 #define KPA 9
 #define SVL 10
+#define SY1000 11
+#define GM2 12
 
 #define CURRENT 254 // To select the current device
 #define COMMON 255 // Not really a device, but used for common procedures, that are not device specific or for all devices.
@@ -89,7 +91,7 @@
 #define TOGGLE 1
 #define TRISTATE 2
 #define FOURSTATE 3
-#define STEP 4 // Set minimum ,maximum and step value
+#define STEP 4 // Set minimum, maximum and step value
 #define RANGE 5 // For use with expression pedal
 #define UPDOWN 6 // Press and hold to increase/decrease. Press shortly to change direction
 #define TGL_OFF 255 // To show nothing
@@ -186,7 +188,9 @@
 #define PAGE_KPA_RIG_SELECT 222
 #define PAGE_KPA_LOOPER 223
 #define PAGE_CURRENT_ASSIGN 224
-#define LAST_FIXED_CMD_PAGE 224
+#define PAGE_SY1000_PATCH_BANK 225
+#define PAGE_SY1000_ASSIGNS 226
+#define LAST_FIXED_CMD_PAGE 226
 
 #define DEFAULT_PAGE PAGE_SELECT // The page that gets selected when a valid page number is unknown
 
@@ -245,6 +249,16 @@
 #define SVL_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
 #define SVL_DEFAULT_PAGE3 0
 #define SVL_DEFAULT_PAGE4 0
+
+#define SY1000_DEFAULT_PAGE1 PAGE_SY1000_PATCH_BANK
+#define SY1000_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SY1000_DEFAULT_PAGE3 PAGE_SY1000_ASSIGNS
+#define SY1000_DEFAULT_PAGE4 0
+
+#define GM2_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define GM2_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define GM2_DEFAULT_PAGE3 0
+#define GM2_DEFAULT_PAGE4 0
 
 const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 201: MENU *************************************************
@@ -685,7 +699,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   //{PAGE_KTN_FX, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 12 **
   {PAGE_KTN_FX, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 12 **
 
-  // ******************************* PAGE 215: KPA Rig select *************************************************
+  // ******************************* PAGE 222: KPA Rig select *************************************************
   {PAGE_KPA_RIG_SELECT, LABEL, 'K', 'P', 'A', ' ', 'R', 'I', 'G', ' ' },
   {PAGE_KPA_RIG_SELECT, LABEL, 'S', 'E', 'L', 'E', 'C', 'T', ' ', ' ' },
   {PAGE_KPA_RIG_SELECT, 1, PATCH, KPA, BANKSELECT, 1, 5}, // ** Switch 01 **
@@ -707,7 +721,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   //{PAGE_KPA_RIG_SELECT, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
   {PAGE_KPA_RIG_SELECT, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
-  // ******************************* PAGE 216: KPA Looper control *************************************************
+  // ******************************* PAGE 223: KPA Looper control *************************************************
   {PAGE_KPA_LOOPER, LABEL, 'K', 'P', 'A', ' ', 'L', 'O', 'O', 'P' },
   {PAGE_KPA_LOOPER, LABEL, 'E', 'R', ' ', 'C', 'T', 'L', ' ', ' ' },
   {PAGE_KPA_LOOPER, 1, LOOPER, CURRENT, LOOPER_REC_PLAY_OVERDUB}, // ** Switch 01 **
@@ -727,7 +741,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   //{PAGE_KPA_LOOPER, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
   {PAGE_KPA_LOOPER, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
-  // ******************************* PAGE 217: Parameters current device *************************************************
+  // ******************************* PAGE 224: Parameters current device *************************************************
   {PAGE_CURRENT_ASSIGN, LABEL, 'A', 'S', 'G', ' ', 'B', 'A', 'N', 'K' },
   {PAGE_CURRENT_ASSIGN, 1, ASSIGN, CURRENT, BANKSELECT, 1, 10}, // ** Switch 01 **
   {PAGE_CURRENT_ASSIGN, 2, ASSIGN, CURRENT, BANKSELECT, 2, 10}, // ** Switch 02 **
@@ -746,6 +760,49 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   //{PAGE_CURRENT_ASSIGN, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
   {PAGE_CURRENT_ASSIGN, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
+// ******************************* PAGE 225: SY1000_patch_bank (8 buttons per page) *************************************************
+  {PAGE_SY1000_PATCH_BANK, LABEL, 'P', 'A', 'T', 'C', 'H', ' ', 'B', 'N' },
+  {PAGE_SY1000_PATCH_BANK, LABEL, 'K', ' ', 'S', 'Y', '1', '0', '0', '0' },
+  {PAGE_SY1000_PATCH_BANK, 1, PATCH, SY1000, BANKSELECT, 1, 8}, // ** Switch 01 **
+  {PAGE_SY1000_PATCH_BANK, 2, PATCH, SY1000, BANKSELECT, 2, 8}, // ** Switch 02 **
+  {PAGE_SY1000_PATCH_BANK, 3, PATCH, SY1000, BANKSELECT, 3, 8}, // ** Switch 03 **
+  {PAGE_SY1000_PATCH_BANK, 4, PATCH, SY1000, BANKSELECT, 4, 8}, // ** Switch 04 **
+  {PAGE_SY1000_PATCH_BANK, 5, PATCH, SY1000, BANKSELECT, 5, 8}, // ** Switch 05 **
+  {PAGE_SY1000_PATCH_BANK, 6, PATCH, SY1000, BANKSELECT, 6, 8}, // ** Switch 06 **
+  {PAGE_SY1000_PATCH_BANK, 7, PATCH, SY1000, BANKSELECT, 7, 8}, // ** Switch 07 **
+  {PAGE_SY1000_PATCH_BANK, 8, PATCH, SY1000, BANKSELECT, 8, 8}, // ** Switch 08 **
+  //{PAGE_SY1000_PATCH_BANK, 9, PARAMETER, SY1000, 14, STEP, 0, 6, 1}, // ** Switch 09 **
+  //{PAGE_SY1000_PATCH_BANK, 10, PAGE, COMMON, SELECT, PAGE_FULL_LOOPER}, // ** Switch 10 **
+  //{PAGE_SY1000_PATCH_BANK, 11, PARAMETER, SY1000, 1, TOGGLE, 1, 0}, // ** Switch 11 **
+  //{PAGE_SY1000_PATCH_BANK, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+  {PAGE_SY1000_PATCH_BANK, 13, PATCH, SY1000, BANKDOWN, 8}, // ** Switch 13 **
+  {PAGE_SY1000_PATCH_BANK, 13 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+  {PAGE_SY1000_PATCH_BANK, 14, PATCH, SY1000, BANKUP, 8}, // ** Switch 14 **
+  {PAGE_SY1000_PATCH_BANK, 14 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+  //{PAGE_SY1000_PATCH_BANK, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+  {PAGE_SY1000_PATCH_BANK, 16, OPEN_NEXT_PAGE_OF_DEVICE, SY1000}, // ** Switch 16 **
+
+// ******************************* PAGE 226: SY1000 assign *************************************************
+  {PAGE_SY1000_ASSIGNS, LABEL, 'A', 'S', 'S', 'I', 'G', 'N', 'S', ' ' },
+  {PAGE_SY1000_ASSIGNS, LABEL, 'S', 'Y', '1', '0', '0', '0', ' ', ' ' },
+  {PAGE_SY1000_ASSIGNS, 1, ASSIGN, SY1000, SELECT, 0, 21}, // ** Switch 01 **
+  {PAGE_SY1000_ASSIGNS, 2, ASSIGN, SY1000, SELECT, 1, 22}, // ** Switch 02 **
+  {PAGE_SY1000_ASSIGNS, 3, ASSIGN, SY1000, SELECT, 2, 23}, // ** Switch 03 **
+  {PAGE_SY1000_ASSIGNS, 4, ASSIGN, SY1000, SELECT, 3, 24}, // ** Switch 04 **
+  {PAGE_SY1000_ASSIGNS, 5, ASSIGN, SY1000, SELECT, 4, 25}, // ** Switch 05 **
+  {PAGE_SY1000_ASSIGNS, 6, ASSIGN, SY1000, SELECT, 5, 26}, // ** Switch 06 **
+  {PAGE_SY1000_ASSIGNS, 7, ASSIGN, SY1000, SELECT, 6, 27}, // ** Switch 07 **
+  {PAGE_SY1000_ASSIGNS, 8, ASSIGN, SY1000, SELECT, 7, 28}, // ** Switch 08 **
+  {PAGE_SY1000_ASSIGNS, 9, NOTHING, COMMON}, // ** Switch 09 **
+  {PAGE_SY1000_ASSIGNS, 10, NOTHING, COMMON}, // ** Switch 10 **
+  //{PAGE_SY1000_ASSIGNS, 11, NOTHING, COMMON}, // ** Switch 11 **
+  //{PAGE_SY1000_ASSIGNS, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+  {PAGE_SY1000_ASSIGNS, 13, PATCH, SY1000, PREV, 9}, // ** Switch 13 **
+  {PAGE_SY1000_ASSIGNS, 14, PATCH, SY1000, NEXT, 9}, // ** Switch 14 **
+  //{PAGE_SY1000_ASSIGNS, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+  {PAGE_SY1000_ASSIGNS, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
+
+  
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = sizeof(Fixed_commands) / sizeof(Fixed_commands[0]);
@@ -970,6 +1027,16 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define SVL_DEFAULT_PAGE3 0
 #define SVL_DEFAULT_PAGE4 0
 
+#define SY1000_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define SY1000_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SY1000_DEFAULT_PAGE3 PAGE_CURRENT_ASSIGN
+#define SY1000_DEFAULT_PAGE4 0
+
+#define GM2_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define GM2_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define GM2_DEFAULT_PAGE3 0
+#define GM2_DEFAULT_PAGE4 0
+
 const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 201: MENU *************************************************
   {PAGE_MENU, LABEL, 'M', 'E', 'N', 'U', ' ', ' ', ' ', ' ' },
@@ -996,7 +1063,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_SELECT, 1, PAGE, COMMON, SELECT, 1}, // ** Switch 01 **
   {PAGE_SELECT, 2, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 02 **
   {PAGE_SELECT, 3, PAGE, COMMON, SELECT, PAGE_MENU}, // ** Switch 03 **
-  {PAGE_SELECT, 5 | ON_RELEASE, PAGE, COMMON, SELECT, 1}, // ** Enc1 SW **
+  {PAGE_SELECT, 5 | ON_RELEASE, SELECT_NEXT_DEVICE, COMMON}, // ** Enc1 SW **
   {PAGE_SELECT, 7 | ON_RELEASE, PAGE, COMMON, SELECT, PAGE_MENU}, // ** Enc2 SW **
 
   // ******************************* PAGE 204: Pages current device *************************************************

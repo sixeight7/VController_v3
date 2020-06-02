@@ -139,12 +139,12 @@ uint8_t Backlight_order[NUMBER_OF_BACKLIGHTS] = {BACKLIGHT_ORDER};
 #endif
 
 #ifdef MAINDISPLAYBACKLIGHTPIN
-Adafruit_NeoPixel Main_backlight = Adafruit_NeoPixel(1, MAINDISPLAYBACKLIGHTPIN, NEO_RGB + NEO_KHZ400);
+Adafruit_NeoPixel Main_backlight = Adafruit_NeoPixel(1, MAINDISPLAYBACKLIGHTPIN, NEO_RGB + NEO_KHZ800);
 #endif
 
 boolean update_LEDS = true;
 uint8_t global_tap_tempo_LED;
-uint8_t prev_page_shown = 255;
+//uint8_t prev_page_shown = 255;
 uint8_t MIDI_LEDs[NUMBER_OF_LEDS];
 uint8_t main_backlight_colour = 0;
 bool LED_state_changed = false;
@@ -403,9 +403,6 @@ void LED_update() {
 
   if (LED_state_changed) {
     LEDs.show();
-    //#ifdef MAINDISPLAYBACKLIGHTPIN
-    //  Main_backlight.show();
-    //#endif
 #ifdef BACKLIGHTNEOPIXELPIN
     Backlights.show();
 #endif

@@ -72,9 +72,9 @@ void main_switch_control()  // Checks if a button has been pressed and check out
       if (switch_pressed & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_PRESSED;
       else current_cmd_switch_action = SWITCH_PRESSED;
       current_cmd = EEPROM_first_cmd(Current_page, switch_pressed & SWITCH_MASK); // Is always fast, because first_cmd is read from the index which is in RAM
-      DEBUGMSG("Current cmd:" + String(current_cmd) + " on page:" + String(Current_page));
+      //DEBUGMSG("Current cmd:" + String(current_cmd) + " on page:" + String(Current_page));
       current_cmd_switch = switch_pressed;
-      DEBUGMSG("Current_cmd_switch: " + String(current_cmd_switch));
+      //DEBUGMSG("Current_cmd_switch: " + String(current_cmd_switch));
       current_cmdbuf_index = 0;
     }
     switch_pressed = 0;
@@ -142,7 +142,7 @@ void SCO_execute_cmd(uint8_t sw, uint8_t action, uint8_t index) {
   }
 
   uint8_t switch_type = cmd_buf[index].Switch & SWITCH_TYPE_MASK;
-  DEBUGMSG("Checking Cmd index: " +  String(index) + ", switch type: " + String(switch_type) + ", switch: " + String(sw) + ", action: " + String(action));
+  //DEBUGMSG("Checking Cmd index: " +  String(index) + ", switch type: " + String(switch_type) + ", switch: " + String(sw) + ", action: " + String(action));
 
   switch (action) {
     case SWITCH_PRESSED:
@@ -219,6 +219,7 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
+  bool show_label;
 
   DEBUGMAIN("Execute command " + String(Type) + " for device " + String(Dev));
 
@@ -353,19 +354,20 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         }
         if (SC_switch_is_encoder()) {
           if (Enc_value == 0) break;
-          if (Enc_value > 0) pnumber = Device[Dev]->next_patch_number();
-          if (Enc_value < 0) pnumber = Device[Dev]->prev_patch_number();
+          if (Enc_value > 0) pnumber = Device[Dev]->calculate_next_patch_number();
+          if (Enc_value < 0) pnumber = Device[Dev]->calculate_prev_patch_number();
         }
         else {
           if (Data1 == SELECT) pnumber = (cmd->Value1 * 100) + Data2;
-          else if (Data1 == PREV) pnumber = Device[Dev]->prev_patch_number();
-          else if (Data1 == NEXT) pnumber = Device[Dev]->next_patch_number();
+          else if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_patch_number();
+          else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_next_patch_number();
           else pnumber = SP[Sw].PP_number;
         }
-        Device[Dev]->patch_select_pressed(pnumber);
+        show_label = Device[Dev]->patch_select_pressed(pnumber);
         Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
         mute_all_but_me(Dev); // mute all the other devices
-        if (SP[Sw].Label[0] != ' ') LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+        if ((show_label) && (SP[Sw].Label[0] != ' ')) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+        update_page = RELOAD_PAGE;
         break;
       case DIRECT_SELECT:
         if (SC_switch_is_expr_pedal()) break;
@@ -589,7 +591,7 @@ void SCO_execute_command_long_pressed(uint8_t Sw, Cmd_struct *cmd, bool first_cm
       Current_page = Previous_page; // "Undo" for pressing PAGE or SELECT_NEXT_DEVICE
       set_current_device(Previous_device);
       SCO_select_page(PAGE_SELECT);
-      prev_page_shown = Previous_page; // Page to be displayed on PAGE_SELECT LEDS
+      //prev_page_shown = Previous_page; // Page to be displayed on PAGE_SELECT LEDS
       break;
     case PATCH: // Go to direct select on long press of bank up/down or patch up/down
       if ((cmd->Data1 == SELECT) || (cmd->Data1 == BANKSELECT)) break;
@@ -776,7 +778,7 @@ bool SCO_update_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t St
         }
         break;
     }
-    DEBUGMSG("New state is " + String(SP[Sw].State));
+    //DEBUGMSG("New state is " + String(SP[Sw].State));
   }
   return true;
 }
@@ -903,7 +905,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
 
       msg = "CC #";
       LCD_add_3digit_number(CC_number, msg);
-      msg += ":";
+      msg += ':';
       LCD_add_3digit_number(val, msg);
       LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
     }
@@ -984,7 +986,7 @@ void SCO_select_page(uint8_t new_page) {
   if (SCO_valid_page(new_page)) {
     Previous_page = Current_page; // Store the page we come from...
     Current_page = new_page;
-    prev_page_shown = 255; // Clear page number to be displayed on LEDS
+    //prev_page_shown = 255; // Clear page number to be displayed on LEDS
     if ((Current_page != PAGE_MENU) && (Current_page != PAGE_CURRENT_DIRECT_SELECT)) {
       EEPROM_update_when_quiet();
     }
@@ -992,10 +994,10 @@ void SCO_select_page(uint8_t new_page) {
     if ((Current_page == PAGE_CURRENT_DIRECT_SELECT) && (Current_device < NUMBER_OF_DEVICES)) {
       Device[Current_device]->direct_select_start();
     }
+    else device_in_bank_selection = 0;
     my_looper_lcd = 0;
     update_page = RELOAD_PAGE;
     update_main_lcd = true;
-    device_in_bank_selection = 0;
     SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_HOLD); // So no release, long press or hold commands will be triggered on the new page by the switch that is still pressed now
     if (Current_page != PAGE_MENU) LCD_show_page_name(); // Temporary show page name on main display
     DEBUGMAIN("*** SCO_select_page: " + String(new_page));
@@ -1050,6 +1052,10 @@ void SCO_select_next_device() { // Will select the next device that is connected
     Previous_device = Current_device;
     set_current_device(current_selected_device);
     SCO_select_page(Device[current_selected_device]->read_current_device_page()); // Load the current page associated to this device
+    if (Setting.Main_display_show_top_right != 0) {
+      String Name = Device[current_selected_device]->device_name;
+      LCD_show_popup_label("Selecting " + Name, MESSAGE_TIMER_LENGTH);
+    }
   }
   else {
     SCO_select_page(DEFAULT_PAGE);
@@ -1261,8 +1267,10 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
       tap_array_full = true; // So we need to calculate the average tap time in a different way
     }
   }
-  LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
-  update_lcd = sw; // Update the LCD of the display above the tap tempo button
+  if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
+  else update_main_lcd = true;
+  if (sw > 0) update_lcd = sw; // Update the LCD of the display above the tap tempo button
+  else update_page = REFRESH_PAGE; // Running tap tempo from CURNUM - update entire page
   do_not_tap_port = 255;
   SCO_delay_receiving_MIDI_clock();
   SCO_MIDI_clock_update();
@@ -1356,9 +1364,12 @@ void SCO_update_tap_tempo_LED() {
   if (bpm_LED_tick == 0) {
     // Check if we lost the bpm clock
     if (micros() - previous_midi_clock_time > MAX_BPM_TIME) MIDI_clock_received = false;
-    
-    if (!MIDI_clock_received) global_tap_tempo_LED = Setting.LED_bpm_colour;   // Turn the LED on
-    else global_tap_tempo_LED = Setting.LED_bpm_synced_colour;
+
+    if (!Setting.Hide_tap_tempo_LED) {
+      if (!MIDI_clock_received) global_tap_tempo_LED = Setting.LED_bpm_colour;   // Turn the LED on
+      else global_tap_tempo_LED = Setting.LED_bpm_synced_colour;
+      update_LEDS = true;
+    }
 
     if (send_new_bpm_value) { // Send updated tempo to the devices
       send_new_bpm_value = false;
@@ -1374,10 +1385,10 @@ void SCO_update_tap_tempo_LED() {
     else do_not_tap_port = 255;
   }
 
-  if (bpm_LED_tick == 6) { // The sixth tick is at a quarter of 24 ticks
+  if ((bpm_LED_tick == 6) && (!Setting.Hide_tap_tempo_LED)) { // The sixth tick is at a quarter of 24 ticks
     global_tap_tempo_LED = 0;  // Turn the LED off
+    update_LEDS = true;
   }
-  update_LEDS = true;
 }
 
 void SCO_reset_tap_tempo_LED() {
@@ -1479,7 +1490,7 @@ void SCO_bass_mode_check_high_string() {
   if (highest_string_played != top_string) {
     top_string = highest_string_played;
     if (Setting.Bass_mode_device < NUMBER_OF_DEVICES)
-      MIDI_send_CC(Setting.Bass_mode_cc_number + 1, top_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
+      MIDI_send_CC(Setting.HNP_mode_cc_number, top_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
     DEBUGMAIN("Set highest string: " + String(top_string));
   }
 }

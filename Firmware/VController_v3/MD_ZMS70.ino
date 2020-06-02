@@ -39,21 +39,18 @@
 // Called at startup of VController
 void MD_ZMS70_class::init() // Default values for variables
 {
+  MD_base_class::init();
+  
   // Variables
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "MS70"); // This line crashes the VController Production Model for no apparent reason - memory leak somewhere? Fixed by changing "Optimize" to fast
   strcpy(full_device_name, "Zoom MS70-cdr");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = ZMS70_PATCH_MIN;
   patch_max = ZMS70_PATCH_MAX;
   sysex_delay_length = 5; // time between sysex messages (in msec).
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the Zoom G3 does not have to respond before disconnection
-  //bank_size = 10;
   my_LED_colour = 5; // Default value
   MIDI_channel = ZMS70_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = ZMS70_DEFAULT_PAGE1; // Default value
   my_device_page2 = ZMS70_DEFAULT_PAGE2; // Default value
   my_device_page3 = ZMS70_DEFAULT_PAGE3; // Default value
@@ -249,6 +246,7 @@ void MD_ZMS70_class::stop_tuner() {
 void MD_ZMS70_class::select_patch(uint16_t new_patch) {
 
   if (new_patch == patch_number) unmute();
+  else prev_patch_number = patch_number;
   patch_number = new_patch;
   send_patch_change = true;
   update_LEDS = true;
@@ -550,7 +548,7 @@ void MD_ZMS70_class::read_parameter_title(uint16_t number, String &Output) {
 
 void MD_ZMS70_class::read_parameter_title_short(uint16_t number, String &Output) {
   uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
-  Output += String(number + 1) + ":" + ZMS70_FX_types[FX_type].Name;
+  Output += String(number + 1) + ':' + ZMS70_FX_types[FX_type].Name;
 }
 
 bool MD_ZMS70_class::request_parameter(uint8_t sw, uint16_t number) {

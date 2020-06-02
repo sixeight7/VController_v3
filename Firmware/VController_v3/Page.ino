@@ -300,11 +300,11 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
               SP[Current_switch].PP_number = my_patch_number;
             }
             if (SP[Current_switch].Sel_type == NEXT) {
-              my_patch_number = Device[Dev]->next_patch_number();
+              my_patch_number = Device[Dev]->calculate_next_patch_number();
               SP[Current_switch].PP_number = my_patch_number;
             }
             if (SP[Current_switch].Sel_type == PREV) {
-              my_patch_number = Device[Dev]->prev_patch_number();
+              my_patch_number = Device[Dev]->calculate_prev_patch_number();
               SP[Current_switch].PP_number = my_patch_number;
             }
             if ((Device[Dev]->can_request_sysex_data()) || (Dev == KPA)) {
@@ -332,7 +332,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             {
               uint16_t par_num = (Device[Dev]->parameter_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position - 1;
               uint16_t par_id = Device[Dev]->get_parbank_parameter_id(par_num); // If the device supports parameter categories, this will point to the parameter within the selected category
-              DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
+              //DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
               if (par_num < Device[Dev]->number_of_parbank_parameters()) {
 
                 // Determine if the pedal type: TOGGLE, STEP or UPDOWN
@@ -410,10 +410,10 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             break;
           case TOGGLE_EXP_PEDAL:
             if (switch_controlled_by_master_exp_pedal > 0) { // If we are controlling an UPDOWN or STEP switch.
-              LCD_set_SP_title(Current_switch, "[SWITCH " + String(switch_controlled_by_master_exp_pedal) + "]");
+              LCD_set_SP_title(Current_switch, "[SWITCH " + String(switch_controlled_by_master_exp_pedal) + ']');
               msg = "";
               Device[Dev]->read_parameter_title(SP[switch_controlled_by_master_exp_pedal].PP_number, msg);
-              msg += ":";
+              msg += ':';
               msg += SP[switch_controlled_by_master_exp_pedal].Label;
               LCD_set_SP_label(Current_switch, msg); // Copy the title and label from that switch
               break;
@@ -506,13 +506,13 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
 void PAGE_start_sysex_watchdog() {
   SysexWatchdog = millis() + SYSEX_WATCHDOG_LENGTH;
   Sysex_watchdog_running = true;
-  DEBUGMSG("Sysex watchdog started");
+  //DEBUGMSG("Sysex watchdog started");
 }
 
 void PAGE_stop_sysex_watchdog() {
   if (Sysex_watchdog_running) {
     Sysex_watchdog_running = false;
-    DEBUGMSG("Sysex watchdog stopped");
+    //DEBUGMSG("Sysex watchdog stopped");
   }
 }
 

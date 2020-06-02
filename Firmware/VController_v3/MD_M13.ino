@@ -1,4 +1,4 @@
-// Please read VController_v3.ino for information about the license and authors
+ // Please read VController_v3.ino for information about the license and authors
 
 // This page has the following parts:
 // Section 1: M13 Initialization
@@ -42,22 +42,18 @@ M13_data_struct *M13_data; // Memory will we be allocated after M13 connects.
 // Initialize device variables
 // Called at startup of VController
 void MD_M13_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Line6 M13 variables:
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "M13");
   strcpy(full_device_name, "Line6 M13");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = M13_PATCH_MIN;
   patch_max = M13_PATCH_MAX;
-  //bank_size = 10;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the M13 does not have to respond before disconnection
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 6; // Default value: white
   MIDI_channel = M13_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = M13_DEFAULT_PAGE1; // Default value
   my_device_page2 = M13_DEFAULT_PAGE2; // Default value
   my_device_page3 = M13_DEFAULT_PAGE3; // Default value
@@ -198,7 +194,7 @@ void MD_M13_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
             //read_scene_byte = 0;
             //delay(10); // Essential for getting correct read from the M13!
             request_scene(read_scene);
-            
+
           }
           else {
             MIDI_enable_device_check();
@@ -219,6 +215,7 @@ void MD_M13_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // M13 sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program;
       do_after_patch_selection();
       update_page = REFRESH_PAGE;

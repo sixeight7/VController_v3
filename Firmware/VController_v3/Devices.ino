@@ -37,6 +37,7 @@ uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
 #define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 
 bool open_menu_for_Katana_edit = false;
+bool do_not_forward_after_Helix_PC_message = false;
 
 #define UP true
 #define DOWN false
@@ -56,7 +57,7 @@ bool on_looper_page = false;
 // ********************************* Section 3: Device Object Creation and Initialization ********************************************
 
 MD_GP10_class My_GP10 = MD_GP10_class(GP10);
-MD_MD_GR55_class My_GR55 = MD_MD_GR55_class(GR55);
+MD_GR55_class My_GR55 = MD_GR55_class(GR55);
 MD_VG99_class My_VG99 = MD_VG99_class(VG99);
 MD_ZG3_class My_ZG3 = MD_ZG3_class(ZG3);
 MD_ZMS70_class My_ZMS70 = MD_ZMS70_class(ZMS70);
@@ -66,10 +67,11 @@ MD_FAS_class My_AXEFX = MD_FAS_class(AXEFX);
 MD_KTN_class My_KTN = MD_KTN_class(KTN);
 MD_KPA_class My_KPA = MD_KPA_class(KPA);
 MD_SVL_class My_SVL = MD_SVL_class(SVL);
+MD_SY1000_class My_SY1000 = MD_SY1000_class(SY1000);
+MD_GM2_class My_GM2 = MD_GM2_class(GM2);
 
 // Here we create an array for the devices, so we can access them by pointer reference
-//MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13};
-MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL};
+MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2};
 
 void setup_devices() { // Trigger the initialization of  the devices
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {

@@ -58,23 +58,19 @@
 #define HLX_SNAPSHOT_SELECT_CC 69
 
 void MD_HLX_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Line6 HLX variables:
   enabled = DEVICE_DETECT; // Helix can be detected via USB, but not via regular MIDI...
   strcpy(device_name, "HELIX");
   strcpy(full_device_name, "Line6 HELIX");
   current_patch_name.reserve(17);
-  current_patch_name = "                ";
-  patch_min = HLX_PATCH_MIN;
   patch_max = HLX_PATCH_MAX;
-  //bank_size = 8;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the HLX does not have to respond before disconnection
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 2; // Default value: red
   MIDI_channel = HLX_MIDI_CHANNEL; // Default value
   MIDI_port = HLX_MIDI_PORT; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = HLX_DEFAULT_PAGE1; // Default value
   my_device_page2 = HLX_DEFAULT_PAGE2; // Default value
   my_device_page3 = HLX_DEFAULT_PAGE3; // Default value
@@ -94,6 +90,7 @@ void MD_HLX_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // HLX sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program;
       //request_sysex(HLX_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
@@ -266,13 +263,12 @@ void MD_HLX_class::direct_select_press(uint8_t number) {
   }
   else  {
     // Second digit pressed
-    device_in_bank_selection = my_device_number + 1; // Go into bank mode
     uint16_t base_patch = (bank_select_number * 40) + (number - 1) * 4;
     flash_bank_of_four = base_patch / 4;
     bank_select_number = (base_patch / Previous_bank_size);
     bank_size = Previous_bank_size;
-    DEBUGMSG("PREVIOUS BANK_SIZE: " + String(Previous_bank_size));
     SCO_select_page(HLX_DEFAULT_PAGE1); // Which should give PAGE_HLX_PATCH_BANK
+    device_in_bank_selection = my_device_number + 1; // Go into bank mode
   }
 }
 
@@ -327,7 +323,7 @@ void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
 
   String msg = HLX_CC_types[number].Name;
   if (HLX_CC_types[number].NumVals < 127) {
-    msg += " ";
+    msg += ' ';
     msg += SP[Sw].Label;
   }
   else { // Expression pedal
@@ -408,7 +404,7 @@ void MD_HLX_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_port);
   check_update_label(sw, value);
   String msg = HLX_CC_types[number].Name;
-  msg += ":";
+  msg += ':';
   LCD_add_3digit_number(value, msg);
   LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
@@ -512,10 +508,9 @@ void MD_HLX_class::send_looper_cmd(uint8_t cmd) {
 
 void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port) {
   if (Port != MIDI_port) return;
-  if (Channel == My_HLX.MIDI_channel) { // Check if it is PC message from the Helix
+  if (Channel == MIDI_channel) { // Check if it is PC message from the Helix
     // Forward PC message from the Helix
     MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
-    //MIDI_send_PC(Program, Channel, My_VG99.MIDI_port);
 
     // Check if more messages have been sent than received on last transmit - this means a message has been deleted from the Helix
     if (MIDI_Helix_sent_msg_no > MIDI_Helix_received_msg_no) {
@@ -531,23 +526,22 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
     // Forward messages from EEPROM memory
     EEPROM_load_HELIX_message(Program);
     DEBUGMSG("Stored setlist: " + String(HLX_message_setlist) + " == HLX setlist: " + String(current_setlist));
-    if (My_HLX.current_setlist == HLX_message_setlist) {
+    if (current_setlist == HLX_message_setlist) {
       MIDI_Helix_sent_msg_no = 0;
       for (uint8_t m = 0; m < MIDI_HLX_MESSAGES; m++) {
         if (HLX_messages[m][0] != 0) {
           MIDI_Helix_sent_msg_no++;
           switch (HLX_messages[m][0] & 0xF0) {
             case 0xC0: // Program change message
-              MIDI_forward_PC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][0] & 0x0F,  My_HLX.MIDI_port);
-              //MIDI_send_PC(HLX_messages[m][1], HLX_messages[m][0] & 0x0F, My_VG99.MIDI_port);
+              MIDI_forward_PC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][0] & 0x0F,  MIDI_port);
               break;
             case 0xB0: // Control change message
-              MIDI_forward_CC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][2], HLX_messages[m][0] & 0x0F, My_HLX.MIDI_port);
-              //MIDI_send_CC(HLX_messages[m][1], HLX_messages[m][2], HLX_messages[m][0] & 0x0F, My_VG99.MIDI_port);
+              MIDI_forward_CC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][2], HLX_messages[m][0] & 0x0F, MIDI_port);
               break;
           }
         }
       }
+      do_not_forward_after_Helix_PC_message = true;
 
       DEBUGMSG("Done sending " + String(MIDI_Helix_sent_msg_no) + " messages from memory at " + String(millis()));
     }
@@ -561,7 +555,7 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
     if ((millis() < MIDI_Helix_IC_timer) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
       // Check message with stored message in EEPROM
       DEBUGMSG("Checking PC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
-      if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Program != HLX_messages[MIDI_Helix_received_msg_no][1]) || (My_HLX.current_setlist != HLX_message_setlist)) {
+      if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Program != HLX_messages[MIDI_Helix_received_msg_no][1]) || (current_setlist != HLX_message_setlist)) {
         DEBUGMSG("PC message does not match - Channel:" + String(Channel) + "!=" + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
         MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
         //MIDI_send_PC(Program, Channel, My_VG99.MIDI_port); // Forward the message
@@ -574,22 +568,20 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
     else {
       // Forward message
       MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
-      //MIDI_send_PC(Program, Channel, My_VG99.MIDI_port);
     }
   }
 }
 
 void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Port) {
   if (Port != MIDI_port) return;
-  if ((millis() < MIDI_Helix_IC_timer) && (Channel != My_HLX.MIDI_channel) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
+  if ((millis() < MIDI_Helix_IC_timer) && (Channel != MIDI_channel) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
     // Check message with stored message in EEPROM
     DEBUGMSG("Checking CC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
-    if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Controller != HLX_messages[MIDI_Helix_received_msg_no][1]) || (Value != HLX_messages[MIDI_Helix_received_msg_no][2]) || (My_HLX.current_setlist != HLX_message_setlist)) {
+    if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Controller != HLX_messages[MIDI_Helix_received_msg_no][1]) || (Value != HLX_messages[MIDI_Helix_received_msg_no][2]) || (current_setlist != HLX_message_setlist)) {
       DEBUGMSG("CC message does not match message #" + String(MIDI_Helix_received_msg_no));
       DEBUGMSG("Received: CC#" + String(Controller) + ", value: " + String(Value) + " on channel " + String(Channel));
       DEBUGMSG("Stored:   CC#" + String(HLX_messages[MIDI_Helix_received_msg_no][1]) + ", value: " + String(HLX_messages[MIDI_Helix_received_msg_no][2]) + " on channel " + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
       MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_port);
-    //MIDI_send_CC(Controller, Value, Channel, My_VG99.MIDI_port); // Forward the message
       HLX_messages[MIDI_Helix_received_msg_no][1] = Controller;
       HLX_messages[MIDI_Helix_received_msg_no][2] = Value;
       HLX_messages[MIDI_Helix_received_msg_no][0] = 0xB0 | Channel;
@@ -600,6 +592,5 @@ void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Chan
   else {
     // Forward message
     MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_port);
-    //MIDI_send_CC(Controller, Value, Channel, My_VG99.MIDI_port);
   }
 }

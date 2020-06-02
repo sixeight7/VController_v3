@@ -1,4 +1,4 @@
-/****************************************************************************
+ /****************************************************************************
 **
 ** Copyright (C) 2015 Catrinus Feddema
 ** All rights reserved.
@@ -33,7 +33,7 @@
 
 // Hardware of production model 
 //#include "hardware.h" 
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Faster, Programmer: AVRISP mkII 
+// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII 
 
 // Hardware of VC-mini rev. B 
 #include "hardware_VCmini_b.h" 
@@ -41,11 +41,18 @@
 
 // Hardware of VController V1 model of sixeight 
 //#include "hardware1.h" 
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Faster, Programmer: AVRISP mkII
+// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
 
 // Hardware of VController model of Ryan Muar
 //#include "hardware_RM.h" 
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Faster, Programmer: AVRISP mkII
+
+// In order for the Serial MIDI ports to receive larger messages the following files have to be edited:
+// Win: C:\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\serial1.c
+// Mac: /Applications/Arduino.app/Contents/Java/hardware/teensy/avr/cores/teensy3/serial1.c
+// Change the number 64 to 650 on the following line:
+// #define SERIAL1_RX_BUFFER_SIZE 650
+// Do the same thing for serial2.c and serial3.c
 
 // ********************************* Section 2: Library declaration and main setup() and loop() ********************************************
 
@@ -53,7 +60,7 @@
 #include "debug.h"
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 4
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 5
 #define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
@@ -261,4 +268,19 @@ void loop() {
   12-01-2020 Added EQ/GEQ and PEDAL block parameters to the edit page of the VController.
   18-01-2020 Fixed the menu on VController and in VC-edit to work with the new parameters. Fixed some bugs in showing the proper parameter values in VC-edit.
   20-01-2020 v.3.4.0 release version. Is backwards compatible with older versions of the Katana. Version is detected at startup.
+  27-01-2020 Fixed some bugs: 1) Sysex errors on sending clock via USB host port - temporary workaround: clock is not sent on this port!
+                              2) Changing settings will reset them??? Looks like the labels are disappearing on the VC-mini - labels now always show for page select and menu.
+                              3) Last MIDI switch can not be edited - fixed on VController and VC-edit
+  17-03-2020 Started developing the SY1000 compatibility remotely with Dave LaBrosse
+  28-03-2020 EEPROM is now automatically initialized for new values in settings on firmware upgrades
+  29-03-2020 SY1000 code in Alpha - waiting on Dave to finish testing
+  06-04-2020 Started developing the TC electronics GMajor-2 compatibility remotely with AndyE of vguitarforums.com
+  27-04-2020 Cannot read long sysex messages via serial port - therefore patchnames are not read beforehand on GMajor.
+  30-04-2020 USB MIDI name has been renamed from Teensy MIDI to VC MIDI
+  01-05-2020 GMajor code is now in Alpha - waiting for AndyE to finish testing
+  02-05-2020 External pedals (expression and switches) are now hot pluggable
+  03-05-2020 Enabled optional SW 4-6 in the firmware of the VC-mini
+  08-05-2020 Added the option to show the tempo instead of the device name at the top tight of the main menu.
+  09-05-2020 Added CURNUM option in Global Menu with option for Previous patch, tap tempo, tuner and direct select.
+  22-05-2020 Fixed Helix/VG99 issue with forwarding PC messages. Fix of 03-01-2020 was causing trouble since firmware 2.9 of Helix
 */

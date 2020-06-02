@@ -3,7 +3,7 @@
 // This page has the following parts:
 // Section 1: MD_base_class declaration (base)
 // Section 2: MD_GP10_class declaration (derived)
-// Section 3: MD_MD_GR55_class declaration (derived)
+// Section 3: MD_GR55_class declaration (derived)
 // Section 4: MD_VG99_class declaration (derived)
 // Section 5: MD_ZG3_class declaration (derived)
 // Section 6: MD_ZMS70_class declaration (derived)
@@ -71,9 +71,9 @@ class MD_base_class
     virtual bool request_patch_name(uint8_t sw, uint16_t number);
     virtual void request_current_patch_name();
     uint16_t calculate_patch_number(uint8_t bank_position, uint8_t bank_size);
-    void patch_select_pressed(uint16_t new_patch);
-    uint16_t prev_patch_number();
-    uint16_t next_patch_number();
+    bool patch_select_pressed(uint16_t new_patch);
+    uint16_t calculate_prev_patch_number();
+    uint16_t calculate_next_patch_number();
     void bank_updown(signed int delta, uint8_t my_bank_size);
     bool bank_selection_active();
     void update_bank_number(uint16_t number);
@@ -95,6 +95,7 @@ class MD_base_class
     virtual void mute();
     void select_switch();
     void is_always_on_toggle();
+    bool US20_mode_enabled();
 
     // Parameter control procedures
     virtual void read_parameter_title(uint16_t number, String &Output);
@@ -165,6 +166,7 @@ class MD_base_class
     uint8_t MIDI_port_manual = 0; // Variable no.4
     uint8_t MIDI_device_id; // Variable no.3
     uint16_t patch_number = 0;
+    uint16_t prev_patch_number = 0;
     uint8_t patch_number_offset = 1; // Is the first patch numbered one or zero?
     uint32_t PC_ignore_timer;
     String current_patch_name;
@@ -337,12 +339,12 @@ class MD_GP10_class : public MD_base_class
     uint8_t exp_sw_type;
 };
 
-// ********************************* Section 3: MD_MD_GR55_class declaration (derived) ********************************************
+// ********************************* Section 3: MD_GR55_class declaration (derived) ********************************************
 
-class MD_MD_GR55_class : public MD_base_class
+class MD_GR55_class : public MD_base_class
 {
   public:
-    MD_MD_GR55_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
+    MD_GR55_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
 
     // Basic procedures
     virtual void init();
@@ -971,6 +973,7 @@ class MD_KTN_class : public MD_base_class
     virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
     virtual void toggle_expression_pedal(uint8_t sw);
     void auto_toggle_exp_pedal(uint8_t parameter, uint8_t value);
+    void reset_exp_pedal_selection();
     virtual void set_expr_title(uint8_t sw);
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
 
@@ -990,7 +993,7 @@ class MD_KTN_class : public MD_base_class
     uint32_t current_midi_message_address;
     uint8_t save_patch_number = 0;
     uint32_t midi_timer;
-    uint8_t prev_patch_number = 255;
+    uint8_t prev_channel_number = 255;
 };
 
 // ********************************* Section 11: MD_KPA_class declaration (derived) ********************************************
@@ -1139,4 +1142,171 @@ class MD_SVL_class : public MD_base_class
 #define SVL_NUMBER_OF_PARAMETERS 15
     bool par_on[SVL_NUMBER_OF_PARAMETERS]; // Keeps track of the state the parameters
     uint8_t flash_bank_of_four = 255;
+};
+
+// ********************************* Section 13: MD_SY1000_class declaration (derived) ********************************************
+
+class MD_SY1000_class : public MD_base_class
+{
+  public:
+    MD_SY1000_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
+
+    // Basic procedures
+    virtual void init();
+
+    // Midi in procedures
+    virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void check_PC_in(uint8_t program, uint8_t channel, uint8_t port);
+
+    // Device connection procedures
+    virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void do_after_connect();
+
+    // Midi out procedures
+    void write_sysex(uint32_t address, uint8_t value);
+    void write_sysex(uint32_t address, uint8_t value1, uint8_t value2);
+    void write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4);
+    void request_sysex(uint32_t address, uint8_t no_of_bytes);
+    virtual void set_bpm();
+    virtual void start_tuner();
+    virtual void stop_tuner();
+
+    // Patch selection procedures
+    virtual void select_patch(uint16_t new_patch);
+    virtual void do_after_patch_selection();
+    //virtual uint32_t calculate_patch_address(uint16_t number);
+    virtual bool request_patch_name(uint8_t sw, uint16_t number);
+    virtual void request_current_patch_name();
+    void request_current_patch_number();
+    //void page_check();
+    //virtual void display_patch_number_string();
+    bool flash_LEDs_for_patch_bank_switch(uint8_t sw);
+    virtual void number_format(uint16_t number, String &Output);
+
+    // Direct select procedures
+    virtual bool valid_direct_select_switch(uint8_t number);
+    virtual void direct_select_format(uint16_t number, String &Output);
+    virtual void direct_select_start();
+    virtual uint16_t direct_select_patch_number_to_request(uint8_t number);
+    virtual void direct_select_press(uint8_t number);
+
+    void request_guitar_switch_states();
+    void check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
+    virtual void unmute();
+    virtual void mute();
+
+    // Parameter control procedures
+    virtual void read_parameter_title(uint16_t number, String &Output);
+    virtual void read_parameter_name(uint16_t number, String &Output);
+    virtual void read_parameter_value_name(uint16_t number, uint16_t value, String &Output);
+    virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual bool request_parameter(uint8_t sw, uint16_t number);
+    void read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2);
+    void check_update_label(uint8_t Sw, uint8_t value);
+    virtual uint16_t number_of_parameters();
+    virtual uint8_t number_of_values(uint16_t parameter);
+    uint32_t check_address_for_bass_mode(uint32_t address);
+
+    // Assign control procedures
+    uint32_t calculate_assign_address(uint8_t number);
+    virtual void read_assign_name(uint8_t number, String &Output);
+    virtual void read_assign_short_name(uint8_t number, String &Output);
+    virtual void read_assign_trigger(uint8_t number, String &Output);
+    virtual uint8_t get_number_of_assigns();
+    virtual uint8_t trigger_follow_assign(uint8_t number);
+    virtual void assign_press(uint8_t Sw, uint8_t value);
+    virtual void assign_release(uint8_t Sw);
+    virtual void assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number);
+    virtual void request_current_assign(uint8_t sw);
+    void read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength);
+    void assign_request(uint8_t sw);
+    bool target_lookup(uint8_t sw, uint16_t target);
+
+    // Master expression pedal procedures
+    virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
+    void send_expression_value(uint8_t exp_type, uint8_t value);
+    virtual void toggle_expression_pedal(uint8_t sw);
+    virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
+    void update_exp_label(uint8_t sw);
+
+    // Variables:
+    uint8_t INST1_onoff;
+    uint8_t INST2_onoff;
+    uint8_t INST3_onoff;
+    uint8_t INST1_type;
+    uint8_t INST2_type;
+    uint8_t INST3_type;
+    uint8_t nrml_pu_onoff;
+    uint8_t exp1_type;
+    uint8_t exp2_type;
+    uint8_t flash_bank_of_four = 255;
+    bool bass_mode = false;
+    bool tuner_active = false;
+};
+
+// ********************************* Section 14: MD_GM2_class declaration (derived) ********************************************
+
+class MD_GM2_class : public MD_base_class
+{
+  public:
+    MD_GM2_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
+
+    // Basic procedures
+    virtual void init();
+    virtual void update(); // Called in loop() of sketch
+
+    // Midi in procedures
+    virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void check_PC_in(uint8_t program, uint8_t channel, uint8_t port);
+
+    // Device connection procedures
+    virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    virtual void do_after_connect();
+
+    // Midi out procedures
+    void write_sysex(uint8_t address, uint8_t data1, uint8_t data2);
+    void request_sysex(uint8_t address);
+    void request_patch(uint16_t number);
+    void request_current_patch();
+    //void start_editor_mode();
+    void page_check();
+    virtual bool request_patch_name(uint8_t sw, uint16_t number);
+    virtual void set_bpm();
+    virtual void start_tuner();
+    virtual void stop_tuner();
+
+    // Patch selection procedures
+    virtual void select_patch(uint16_t new_patch);
+    void do_after_patch_selection();
+    virtual void number_format(uint16_t number, String &Output);
+
+    // Direct select procedures
+    virtual void direct_select_format(uint16_t number, String &Output);
+    //virtual uint16_t direct_select_patch_number_to_request(uint8_t number);
+    //virtual void direct_select_press(uint8_t number);
+
+    // Parameter control procedures
+    void GM2_Recall_FXs(uint8_t Sw);
+    //virtual void FX_press(uint8_t Sw, Cmd_struct *cmd, uint8_t number);
+    //virtual void FX_set_type_and_state(uint8_t Sw);
+    virtual void read_parameter_title(uint16_t number, String &Output);
+    virtual bool request_parameter(uint8_t sw, uint16_t number);
+    void read_FX_parameter(uint8_t sw, uint8_t byte);
+    virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual void read_parameter_name(uint16_t number, String &Output);
+    virtual uint16_t number_of_parameters();
+    virtual uint8_t number_of_values(uint16_t parameter);
+    virtual void read_parameter_value_name(uint16_t number, uint16_t value, String &Output);
+
+    // Master expression pedal procedures
+    virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
+    virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
+
+    // Variables:
+#define GM2_NUMBER_OF_FX 8
+    uint8_t FX_state[GM2_NUMBER_OF_FX];
+    uint8_t FX_type[GM2_NUMBER_OF_FX];
+    bool send_patch_change = false;
 };

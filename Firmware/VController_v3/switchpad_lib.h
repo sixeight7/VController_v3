@@ -194,4 +194,3 @@ uint8_t Switchpad::released() {
 }
 
 #endif
-

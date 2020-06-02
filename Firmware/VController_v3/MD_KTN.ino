@@ -46,25 +46,19 @@
 
 // Called at startup of VController
 void MD_KTN_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Boss KATANA variables:
   version = 4;
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "KTNA");
   strcpy(full_device_name, "Boss KATANA");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = KTN_PATCH_MIN;
   patch_max = KTN_PATCH_MAX;
-  //bank_size = 8;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the KATANA does not have to respond before disconnection
-  //  COSM_onoff = 0;
-  //  nrml_pu_onoff = 0;
   sysex_delay_length = 5; // time between sysex messages (in msec).
   my_LED_colour = 2; // Default value: red
   MIDI_channel = KTN_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = KTN_DEFAULT_PAGE1; // Default value
   my_device_page2 = KTN_DEFAULT_PAGE2; // Default value
   my_device_page3 = KTN_DEFAULT_PAGE3; // Default value
@@ -157,6 +151,7 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 
     if ((address == KTN_CURRENT_PATCH_NUMBER_ADDRESS) && (checksum_ok)) { // check if we are reading the current patch number
       patch_number = sxdata[13];
+      prev_patch_number = patch_number;
       do_after_patch_selection();
       update_page = REFRESH_PAGE;
     }
@@ -188,8 +183,8 @@ void MD_KTN_class::forward_MIDI_message(const unsigned char* sxdata, short unsig
 
     // Pull out the patch number
     if ((sxdata[7] == 0x12) && (sxdata[8] == 0x10) && (sxdata[10] == 0x00) && (sxdata[11] == 0x00)) {
-      DEBUGMSG("HERE " + String(sxdata[9]));
       if (sxdata[9] < 8) {
+        prev_patch_number = patch_number;
         patch_number = sxdata[9];
         do_after_patch_selection();
         update_page = REFRESH_PAGE;
@@ -207,6 +202,7 @@ void MD_KTN_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
     else if (program < 4) new_patch_number = program + 1; // CH1 - CH4
     else new_patch_number = program; // CH5 - CH8
     if (patch_number != new_patch_number) {
+      prev_patch_number = patch_number;
       patch_number = new_patch_number;
       request_current_patch_name();
       do_after_patch_selection();
@@ -225,6 +221,7 @@ void MD_KTN_class::forward_PC_message(uint8_t program, uint8_t channel) { // For
     else if (program < 4) new_patch_number = program + 1; // CH1 - CH4
     else new_patch_number = program; // CH5 - CH8
     if (patch_number != new_patch_number) {
+      prev_patch_number = patch_number;
       patch_number = new_patch_number;
       //request_current_patch_name();
       //do_after_patch_selection();
@@ -343,21 +340,24 @@ void MD_KTN_class::set_bpm() {
 // ********************************* Section 4: KTN program change ********************************************
 
 void MD_KTN_class::select_patch(uint16_t new_patch) {
-  uint8_t send_number;
-  if (new_patch == patch_number) unmute();
+  uint8_t send_channel_number;
+  if (new_patch == patch_number) {
+    unmute();
+  }
+  prev_patch_number = patch_number;
   patch_number = new_patch;
   if (new_patch < 9) {
     // Order of patches is not logical, so we have to fix it
-    if (new_patch == 0) send_number = 4; // PC 0 will select PANEL
-    else if (new_patch <= 4) send_number = new_patch - 1; // PC 1 - 4 will select CH1 - CH4
-    else send_number = new_patch; // PC 5 - 8 will select CH5 - CH8
-    if ((send_number == prev_patch_number) || (prev_patch_number == 255)) {
+    if (new_patch == 0) send_channel_number = 4; // PC 0 will select PANEL
+    else if (new_patch <= 4) send_channel_number = new_patch - 1; // PC 1 - 4 will select CH1 - CH4
+    else send_channel_number = new_patch; // PC 5 - 8 will select CH5 - CH8
+    if ((send_channel_number == prev_channel_number) || (prev_channel_number == 255)) {
       // Can't reselect patch via midi Pc, so we send a different PC number first...
-      if (prev_patch_number != 4) MIDI_send_PC(4, MIDI_channel, MIDI_port);
+      if (prev_channel_number != 4) MIDI_send_PC(4, MIDI_channel, MIDI_port);
       else MIDI_send_PC(3, MIDI_channel, MIDI_port);
     }
-    MIDI_send_PC(send_number, MIDI_channel, MIDI_port);
-    prev_patch_number = send_number;
+    MIDI_send_PC(send_channel_number, MIDI_channel, MIDI_port);
+    prev_channel_number = send_channel_number;
     DEBUGMSG("out(" + String(device_name) + ") PC" + String(new_patch)); //Debug
   }
   else { // Load patch from EEPROM
@@ -379,6 +379,7 @@ void MD_KTN_class::do_after_patch_selection() {
   update_main_lcd = true;
   request_sysex(KTN_MOD_TYPE_ADDRESS, 2);
   request_sysex(KTN_FX_TYPE_ADDRESS, 2);
+  reset_exp_pedal_selection();
   //EEPROM_write_patch_number(KTN, patch_number);
   MD_base_class::do_after_patch_selection();
 }
@@ -1846,7 +1847,7 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
       //msg = KTN_parameters[number].Name;
       read_parameter_title(number, msg);
       if (!(KTN_parameters[number].Sublist & SUBLIST_FROM_BYTE2)) {
-        msg += ":";
+        msg += ':';
         msg += SP[Sw].Label;
       }
       else { // Sublist from byte 2 - only used for toggle FX
@@ -1957,15 +1958,15 @@ void MD_KTN_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //
   if (sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
     //msg.remove(msg.length() - 1); // Remove the last character (semicolon)
     String type_name = KTN_sublists[sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
-    msg += "(" + type_name + ")";
+    msg += '(' + type_name + ')';
   }
   if (sublist == SHOW_DELAY_TIME) {
-    //msg += ":";
+    //msg += ':';
     read_parameter_value_name(index, (128 * byte1) + byte2 , msg);
   }
   else if ((sublist > 0) && !(sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
     //String type_name = KTN_sublists[KTN_parameters[index].Sublist + byte1 - 101];
-    //msg += ":";
+    //msg += ':';
     read_parameter_value_name(index, byte1, msg);
   }
   //Copy it to the display name:
@@ -2256,6 +2257,11 @@ void MD_KTN_class::auto_toggle_exp_pedal(uint8_t parameter, uint8_t value) {
   }
 }
 
+void MD_KTN_class::reset_exp_pedal_selection() {
+  if ((current_exp_pedal == KTN_EXP1) || (current_exp_pedal == KTN_EXP2)) return;
+  current_exp_pedal = KTN_EXP_FOOTVOL;
+}
+
 void MD_KTN_class::set_expr_title(uint8_t sw) {
   const char KTN_Exp0[] = "EXP1  EXP2  AUTO";
   const char KTN_Exp1[] = "[EXP1] EXP2 AUTO";
@@ -2296,11 +2302,11 @@ bool MD_KTN_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
       if (KTN_FX_control[current_mod_type] > 0) {
         index = KTN_first_fx_item[current_mod_type] + KTN_FX_control[current_mod_type] - 1;
         msg = "MOD ";
-        if (!mod_enabled) msg += "(";
+        if (!mod_enabled) msg += '(';
         //msg += KTN_sublists[KTN_FX_TYPE_SUBLIST - 1 + current_mod_type];
-        //msg += " ";
+        //msg += ' ';
         msg += KTN_fx_parameters[index].Name;
-        if (!mod_enabled) msg += ")";
+        if (!mod_enabled) msg += ')';
         LCD_set_SP_label(sw, msg);
       }
       else {
@@ -2313,11 +2319,11 @@ bool MD_KTN_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
       if (KTN_FX_control[current_fx_type] > 0) {
         index = KTN_first_fx_item[current_fx_type] + KTN_FX_control[current_fx_type] - 1;
         msg = "FX ";
-        if (!fx_enabled) msg += "(";
+        if (!fx_enabled) msg += '(';
         //msg += KTN_sublists[KTN_FX_TYPE_SUBLIST - 1 + current_fx_type];
-        //msg += " ";
+        //msg += ' ';
         msg += KTN_fx_parameters[index].Name;
-        if (!fx_enabled) msg += ")";
+        if (!fx_enabled) msg += ')';
         LCD_set_SP_label(sw, msg);
       }
       else {

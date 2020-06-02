@@ -33,13 +33,19 @@
 #define NUMBER_OF_ENCODERS 2
 #define NUMBER_OF_EXTERNAL_SWITCHES 2 // Count 2 switches per jack
 #define NUMBER_OF_MIDI_SWITCHES 15 // Switches that only can be controlled thrugh MIDI
+#define TOTAL_NUMBER_OF_SWITCHES 24 // NUMBER_OF_SWITCHES + (NUMBER_OF_ENCODERS * 2) + NUMBER_OF_EXTERNAL_SWITCHES + NUMBER_OF_MIDI_SWITCHES
 
 // If switches are directly connected to Teensy, define them here
-#define NUMBER_OF_CONNECTED_SWITCHES 3
+#define NUMBER_OF_CONNECTED_SWITCHES 6
 #define SWITCH1_PIN 16
 #define SWITCH2_PIN 15
 #define SWITCH3_PIN 14
+#define SWITCH4_PIN 26
+#define SWITCH5_PIN 27
+#define SWITCH6_PIN 28
 #define SWITCH_BOUNCE_TIME 100 // in ms
+
+#define CUSTOM_SWITCH_NUMBERS 1, 2, 3, 10, 11, 12
 
 // If we have a switchpad, define it here
 /*#define ROWS 4 //number of rows in switchpad

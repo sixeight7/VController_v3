@@ -8,6 +8,7 @@
 // Section 3: SVL common MIDI out functions
 // Section 4: SVL program change
 // Section 5: SVL parameter control
+// Section 6: SVL expression pedal control
 
 // ********************************* Section 1: SVL Initialization ********************************************
 
@@ -74,22 +75,19 @@
 #define SVL_PATCH_MAX 299
 
 void MD_SVL_class::init() { // Default values for variables
+  MD_base_class::init();
 
   // Line6 SVL variables:
   enabled = DEVICE_DETECT; // Strymon Volante can be detected via USB, but not via regular MIDI...
   strcpy(device_name, "SVL");
   strcpy(full_device_name, "Strymon Volante");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = SVL_PATCH_MIN;
   patch_max = SVL_PATCH_MAX;
-  //bank_size = 8;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the SVL does not have to respond before disconnection
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 7; // Default value: yellow
   MIDI_channel = SVL_MIDI_CHANNEL; // Default value
   MIDI_port = SVL_MIDI_PORT; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = SVL_DEFAULT_PAGE1; // Default value
   my_device_page2 = SVL_DEFAULT_PAGE2; // Default value
   my_device_page3 = SVL_DEFAULT_PAGE3; // Default value
@@ -103,6 +101,7 @@ void MD_SVL_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // SVL sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program + (CC00 << 7);
       //request_sysex(SVL_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
@@ -147,6 +146,7 @@ void MD_SVL_class::bpm_tap() {
 
 void MD_SVL_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
+  prev_patch_number = patch_number;
   patch_number = new_patch;
 
   MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_port);
@@ -239,7 +239,7 @@ void MD_SVL_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   //if (SVL_CC_types[number].NumVals < 127) {
   //  msg += SP[Sw].Label;
   if (SVL_CC_types[number].Sublist >= 1) {
-    msg += ":";
+    msg += ':';
     msg += SVL_sublists[SVL_CC_types[number].Sublist - 1 + value];
   }
   //}
@@ -272,7 +272,7 @@ bool MD_SVL_class::request_parameter(uint8_t sw, uint16_t number) {
   /*if (SP[sw].Type == PAR_BANK) {
     if ((!SVL_CC_types[number].Momentary) && (SVL_CC_types[number].NumVals == 2)) SP[sw].Latch = TOGGLE;
     else SP[sw].Latch = MOMENTARY;
-  }*/
+    }*/
   return true; // Move to next switch is true.
 }
 
@@ -316,6 +316,8 @@ void MD_SVL_class::update_parameter_state_through_cc(uint8_t control, uint8_t va
   }
 }
 
+// ********************************* Section 6: SVL expression pedal control ********************************************
+
 void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   uint8_t number;
   number = SVL_EXP;
@@ -323,14 +325,14 @@ void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_port);
   check_update_label(sw, value);
   String msg = SVL_CC_types[number].Name;
-  msg += ":";
+  msg += ':';
   LCD_add_3digit_number(value, msg);
   LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
-  }
+}
 
-  bool MD_SVL_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+bool MD_SVL_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   SP[sw].PP_number = SVL_EXP;
   LCD_clear_SP_label(sw);
   return true;
-  }
+}

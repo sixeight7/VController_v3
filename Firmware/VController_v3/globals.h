@@ -9,7 +9,7 @@
 
 struct Setting_struct { // All the global settings in one place.
   bool Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
-  bool US20_emulation_active; // Switch software emulation of US20 on and off
+  bool Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
   bool Physical_LEDs; // Does the VController have Physical LEDs
   bool Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
   uint8_t LED_brightness; // The neopixels are very bright. I find setting them to 10 is just fine for an indicator light.
@@ -45,6 +45,9 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Send_MIDI_clock_port; // SendMIDI clock data port
   uint8_t LED_bpm_synced_colour; // Colour of the tempo LED when tempo is synced with MIDI clock
   uint8_t RGB_Backlight_scheme; // The colour scheme of the backlight
+  uint8_t Main_display_show_top_right; // What will be shown top right on the nmain display 
+  uint8_t HNP_mode_cc_number; // Addition to Bass mode
+  uint8_t CURNUM_action; // What to do when current patch number is pressed again
 };
 
 #ifdef IS_VCMINI
@@ -56,11 +59,11 @@ struct Setting_struct { // All the global settings in one place.
 // Table below has a copy in VC-edit/Sources/VController/globals.cpp 
 const Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
-  false,  // US20_emulation_active
+  false,  // Hide tap tempo LED
   true,  // Physical_LEDs
   false, // Virtual_LEDs
   10,    // LED_brightness
-  255,   // Backlight_brightness
+  254,   // Backlight_brightness
   120,   // Bpm
   true,  // LED_FX_off_is_dimmed
   6,     // LED_global_colour (white)
@@ -92,9 +95,21 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // Send MIDI clock data port
   3,     // Colour of the tempo LED when tempo is synced with MIDI clock (Blue)
   0,     // The colour scheme of the backlight - Adafruit
+  0,     // Main_display_show_top_right: show current device
+  16,    // HNP_mode_cc_number
+  2,     // CURNUM_action: Tap tempo
 };
 
 Setting_struct Setting;
+
+// CURNUM states
+#define CN_OFF 0
+#define CN_PREV_PATCH 1
+#define CN_TAP_TEMPO 2
+#define CN_GLOBAL_TUNER 3
+#define CN_US20_EMULATION 4
+#define CN_DIRECT_SELECT 5
+
 
 struct Cmd_struct { // The structure of a command as it is stored in EEPROM
   uint8_t Page;   // The page this command belongs to
@@ -122,9 +137,8 @@ struct MIDI_switch_settings_struct {
 #define MIDI_SWITCH_CC_RANGE 3 // CC controlled by expression pedal or encoder knob
 #define MIDI_SWITCH_PC 4
 
-#define TOTAL_NUMBER_OF_SWITCHES NUMBER_OF_SWITCHES + (NUMBER_OF_ENCODERS * 2) + NUMBER_OF_EXTERNAL_SWITCHES + NUMBER_OF_MIDI_SWITCHES
 #define NUMBER_OF_DEFAULT_MIDI_SWITCHES 32
-MIDI_switch_settings_struct MIDI_switch[TOTAL_NUMBER_OF_SWITCHES];
+MIDI_switch_settings_struct MIDI_switch[TOTAL_NUMBER_OF_SWITCHES + 1];
 
 const MIDI_switch_settings_struct MIDI_switch_default_settings[NUMBER_OF_DEFAULT_MIDI_SWITCHES] = {
   { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 0

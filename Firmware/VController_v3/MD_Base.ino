@@ -30,6 +30,10 @@ void MD_base_class::init() { // Default values for variables
   my_device_page2 = 0;
   my_device_page3 = 0;
   my_device_page4 = 0;
+
+  current_patch_name.reserve(17);
+  current_patch_name = "                ";
+  is_always_on = true; // Default value
 }
 
 void MD_base_class::update() {}
@@ -84,6 +88,7 @@ void MD_base_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
   // Check the source by checking the channel
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // Device sends a program change
     if (patch_number != program) {
+      prev_patch_number = patch_number;
       patch_number = program;
       //update_page = REFRESH_PAGE;
       //page_check();
@@ -98,6 +103,7 @@ void MD_base_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel,
   if ((channel == MIDI_channel) && (port == MIDI_port)) {
     if (control == 0) {
       CC00 = value;
+      DEBUGMSG("Received CC0 with value " + String(value));
     }
   }
 }
@@ -106,7 +112,6 @@ void MD_base_class::check_active_sense_in(uint8_t port) {}
 
 void MD_base_class::check_still_connected() { // Started from MIDI/MIDI_check_all_devices_still_connected()
   if ((connected) && (enabled == DEVICE_DETECT)) {
-    //DEBUGMSG(device_name + " not detected times " + String(no_response_counter));
     if (no_response_counter >= max_times_no_response) disconnect();
     no_response_counter++;
   }
@@ -138,7 +143,7 @@ void MD_base_class::connect(uint8_t device_id, uint8_t port) {
   do_after_connect();
   PAGE_check_first_connect(my_device_number); // Go to the device page of this device if it is the first device that connects
   if (enabled == DEVICE_DETECT) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
-  DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ":" + String(port & 0x0F));
+  DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ':' + String(port & 0x0F));
 }
 
 void MD_base_class::do_after_connect() {}
@@ -183,6 +188,7 @@ void MD_base_class::stop_tuner() {}
 void MD_base_class::select_patch(uint16_t new_patch) {
 
   if (new_patch == patch_number) unmute();
+  prev_patch_number = patch_number;
   patch_number = new_patch;
   MIDI_send_PC(new_patch, MIDI_channel, MIDI_port);
   DEBUGMSG("out(" + String(device_name) + ") PC" + String(new_patch)); //Debug
@@ -213,10 +219,29 @@ uint16_t MD_base_class::calculate_patch_number(uint8_t bank_position, uint8_t ba
   return new_patch;
 }
 
-void MD_base_class::patch_select_pressed(uint16_t new_patch) {
+bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
   // Check whether the current patch needs to be switched on or whether a new patch is chosen
   if (new_patch > patch_max) new_patch = patch_max;
-  if (new_patch == patch_number) select_switch(); // Not a new patch - do US20 emulation
+  if (new_patch == patch_number) { // Check if curnum needs to be executed.
+    switch (Setting.CURNUM_action) {
+      case CN_PREV_PATCH:
+        if (prev_patch_number != patch_number) patch_select_pressed(prev_patch_number);
+        return true;
+      case CN_TAP_TEMPO:
+        SCO_global_tap_tempo_press(0);
+        break;
+      case CN_GLOBAL_TUNER:
+        SCO_global_tuner_start();
+        break;
+      case CN_US20_EMULATION:
+        select_switch();
+        break;
+      case CN_DIRECT_SELECT:
+        SCO_select_page(PAGE_CURRENT_DIRECT_SELECT);
+        break;
+    };
+    return false;
+  }
   else {
     select_patch(new_patch); //New patch - send program change
     set_current_device(my_device_number);
@@ -224,14 +249,15 @@ void MD_base_class::patch_select_pressed(uint16_t new_patch) {
   }
   bank_number = bank_select_number; // Update the real bank number with the selected number
   device_in_bank_selection = 0; // Switch off bank selection mode
+  return true;
 }
 
-uint16_t MD_base_class::prev_patch_number() {
+uint16_t MD_base_class::calculate_prev_patch_number() {
   if (patch_number > patch_min) return (patch_number - 1);
   else return (patch_max);
 }
 
-uint16_t MD_base_class::next_patch_number() {
+uint16_t MD_base_class::calculate_next_patch_number() {
   if (patch_number < patch_max) return (patch_number + 1);
   else return (patch_min);
 }
@@ -240,20 +266,19 @@ void MD_base_class::bank_updown(signed int delta, uint8_t my_bank_size) {
 
   //uint16_t rel_patch_number = patch_number - patch_min;
   uint16_t rel_patch_max = patch_max - patch_min;
-
   if (!bank_selection_active()) {
     device_in_bank_selection = my_device_number + 1; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
     bank_select_number = bank_number; //Reset the bank to current patch
     bank_size = my_bank_size;
   }
-  // Perform bank up:
-  if (delta > 0) {
+
+  if (delta > 0) { // Perform bank up:
     for (uint8_t i = 0; i < delta; i++) {
       if (bank_select_number >= (rel_patch_max / bank_size)) bank_select_number = 0; // Check if we've reached the top
       else bank_select_number ++;
     }
   }
-  if (delta < 0) {
+  if (delta < 0) { // Perform bank down:
     for (uint8_t i = 0; i < abs(delta); i++) {
       if (bank_select_number <= 0) bank_select_number = (rel_patch_max / bank_size); // Check if we've reached the bottom
       else bank_select_number --;
@@ -364,7 +389,6 @@ void MD_base_class::unmute() {}
 void MD_base_class::mute() {}
 
 void MD_base_class::select_switch() {
-  //Current_device = my_device_number;
   if (Current_device == my_device_number) {
     is_always_on_toggle();
   }
@@ -377,7 +401,7 @@ void MD_base_class::select_switch() {
 }
 
 void MD_base_class::is_always_on_toggle() {
-  if (Setting.US20_emulation_active) {
+  if (US20_mode_enabled()) {
     is_always_on = !is_always_on; // Toggle is_always_on
     if (is_always_on) {
       unmute();
@@ -388,6 +412,10 @@ void MD_base_class::is_always_on_toggle() {
       LCD_show_popup_label(String(device_name) + " can be muted", ACTION_TIMER_LENGTH);
     }
   }
+}
+
+bool MD_base_class::US20_mode_enabled() {
+  return (Setting.CURNUM_action == CN_US20_EMULATION);
 }
 
 // ********************************* Section 5: Effect parameter and assign control ********************************************
@@ -467,7 +495,6 @@ void MD_base_class::par_bank_updown(signed int delta, uint8_t my_bank_size) {
   else {
     LCD_show_popup_label("Par bank " + String(parameter_bank_number + 1) + "/" + String((number_of_parbank_parameters() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
   }
-  //DEBUGMSG("***NEW BANK NUMBER: " + String(parameter_bank_number));
 
   update_page = REFRESH_PAGE; //Re-read the patchnames for this bank
 }
@@ -522,7 +549,6 @@ void MD_base_class::asgn_bank_updown(signed int delta, uint8_t my_bank_size) {
   else {
     LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
   }
-  //DEBUGMSG("***NEW BANK NUMBER: " + String(parameter_bank_number));
 
   update_page = REFRESH_PAGE; //Re-read the patchnames for this bank
 }

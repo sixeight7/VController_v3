@@ -60,23 +60,20 @@
 // Called at startup of VController
 void MD_VG99_class::init() // Default values for variables
 {
+  MD_base_class::init();
+
   // Roland VG-99 variables:
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "VG99");
   strcpy(full_device_name, "Roland VG-99");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_min = VG99_PATCH_MIN;
   patch_max = VG99_PATCH_MAX;
-  //bank_size = 10;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the VG-99 does not have to respond before disconnection
   COSM_A_onoff = 0;
   COSM_B_onoff = 0;
   sysex_delay_length = 0; // time between sysex messages (in msec)
   my_LED_colour = 2; // Default value: red
   MIDI_channel = VG99_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = VG99_DEFAULT_PAGE1;  // Default value
   my_device_page2 = VG99_DEFAULT_PAGE2; // Default value
   my_device_page3 = VG99_DEFAULT_PAGE3; // Default value
@@ -100,6 +97,7 @@ void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
     // Check if it is the patch number
     if ((address == 0x71000100) && (checksum_ok)) {
       if (patch_number != sxdata[12]) { // Right after a patch change the patch number is sent again. So here we catch that message.
+        prev_patch_number = patch_number;
         patch_number = sxdata[11] * 128 + sxdata[12];
         //page_check();
         do_after_patch_selection();
@@ -186,8 +184,10 @@ void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
   if ((port == MIDI_port) && (channel == MIDI_channel)) { // VG99 sends a program change
     uint16_t new_patch = (CC00 * 100) + program;
     if ((patch_number != new_patch) && (millis() - PC_ignore_timer > VG99_PC_IGNORE_TIMER_LENGTH)) {
+      prev_patch_number = patch_number;
       patch_number = new_patch;
-      select_patch(new_patch); // Trick to fool the VG-99 to supress messages that freeze the user interface of the VG-99
+      if (!do_not_forward_after_Helix_PC_message) select_patch(new_patch); // Trick to fool the VG-99 to supress messages that freeze the user interface of the VG-99
+      do_not_forward_after_Helix_PC_message = false;
       request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       do_after_patch_selection();
     }
@@ -280,6 +280,7 @@ void MD_VG99_class::stop_tuner() {
 
 void MD_VG99_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
+  prev_patch_number = patch_number;
   patch_number = new_patch;
 
   MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_port);
@@ -300,6 +301,7 @@ void MD_VG99_class::do_after_patch_selection() {
   request_guitar_switch_states();
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
   MD_base_class::do_after_patch_selection();
+  CC00 = 0;
 }
 
 bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
@@ -319,8 +321,8 @@ void MD_VG99_class::request_current_patch_name() {
 void MD_VG99_class::number_format(uint16_t number, String &Output) {
   // Uses patch_number as input and returns Current_patch_number_string as output in format "U001"
   // First character is U for User or P for Preset patches
-  if (number > 199) Output +=  "P";
-  else Output +=  "U";
+  if (number > 199) Output +=  'P';
+  else Output +=  'U';
 
   // Then add the patch number
   uint16_t number_plus_one = number + 1;
@@ -329,13 +331,13 @@ void MD_VG99_class::number_format(uint16_t number, String &Output) {
 
 void MD_VG99_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) {
-    if (bank_select_number >= 2) Output +=  "P";
-    else Output +=  "U";
+    if (bank_select_number >= 2) Output +=  'P';
+    else Output +=  'U';
     Output += String(bank_select_number) + String(number) + "_";
   }
   else {
-    if (bank_select_number >= 20) Output +=  "P";
-    else Output +=  "U";
+    if (bank_select_number >= 20) Output +=  'P';
+    else Output +=  'U';
     Output += String(bank_select_number / 10) + String(bank_select_number % 10) + String(number);
   }
 }
@@ -376,7 +378,7 @@ void MD_VG99_class::unmute() {
 }
 
 void MD_VG99_class::mute() {
-  if ((Setting.US20_emulation_active) && (!is_always_on) && (is_on)) {
+  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     mute_now();
   }
 }
@@ -884,7 +886,7 @@ void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number
     String lbl = "";
     if (SP[Sw].Type != ASSIGN) {
       lbl = VG99_parameters[number].Name;
-      lbl += ":";
+      lbl += ':';
     }
     lbl += SP[Sw].Label;
     LCD_show_popup_label(lbl, ACTION_TIMER_LENGTH);
@@ -963,10 +965,10 @@ void MD_VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { /
   if ((SP[sw].Type == ASSIGN) || (SP[sw].Type == TOGGLE_EXP_PEDAL) || (SP[sw].Type == MASTER_EXP_PEDAL)) msg = VG99_parameters[index].Name;
   if (VG99_parameters[index].Sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
     String type_name = VG99_sublists[VG99_parameters[index].Sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
-    msg += "(" + type_name + ")";
+    msg += '(' + type_name + ')';
   }
   if ((VG99_parameters[index].Sublist > 0) && !(VG99_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) {
-    if ((SP[sw].Type == ASSIGN) || (SP[sw].Type == TOGGLE_EXP_PEDAL) || (SP[sw].Type == MASTER_EXP_PEDAL)) msg += ":";
+    if ((SP[sw].Type == ASSIGN) || (SP[sw].Type == TOGGLE_EXP_PEDAL) || (SP[sw].Type == MASTER_EXP_PEDAL)) msg += ':';
     read_parameter_value_name(index, byte1, msg);
   }
 
@@ -985,7 +987,7 @@ void MD_VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates t
       String msg = "";
       if ((SP[Sw].Type == ASSIGN) || (SP[Sw].Type == TOGGLE_EXP_PEDAL) || (SP[Sw].Type == MASTER_EXP_PEDAL)) {
         msg = VG99_parameters[index].Name;
-        msg += ":";
+        msg += ':';
       }
       read_parameter_value_name(index, value, msg);
 
@@ -1138,7 +1140,7 @@ void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to V
   // Send cc MIDI command to VG-99. If cc is 1 - 8, send the FC300 CTL sysex code
   uint8_t cc_number = SP[Sw].Trigger;
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], value);
-  else if ((cc_number <= 31) || ((cc_number >=64) && (cc_number < 95))) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
+  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
   else {
     LCD_show_popup_label("Assign read only", MESSAGE_TIMER_LENGTH);
     SCO_update_parameter_state(Sw, 0, 1, 1); // Undo update parameter state by repeating the toggle
@@ -1163,7 +1165,7 @@ void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is
   uint8_t cc_number = SP[Sw].Trigger;
   delay(20); // To fix the release message not being picked up when ASSIGN command is triggered on switch release as well
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], 0);
-  else if ((cc_number <= 31) || ((cc_number >=64) && (cc_number < 95))) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
+  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
 
   // Update status
   if (SP[Sw].Latch == MOMENTARY) {
@@ -1274,7 +1276,7 @@ void MD_VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsi
       SP[sw].PP_number = NOT_FOUND;
       SP[sw].Colour = FX_DEFAULT_TYPE;
       // Set the Label
-      if (SP[sw].Assign_number >= 23) msg = "CC#" + String(SP[sw].Trigger) + " (ASGN" + String(SP[sw].Assign_number - 22) + ")";
+      if (SP[sw].Assign_number >= 23) msg = "CC#" + String(SP[sw].Trigger) + " (ASGN" + String(SP[sw].Assign_number - 22) + ')';
       else if (SP[sw].Assign_number < VG99_NUMBER_OF_ASSIGNS) read_assign_name(SP[sw].Assign_number, msg);
       else msg = "?";
       LCD_set_SP_label(sw, msg);

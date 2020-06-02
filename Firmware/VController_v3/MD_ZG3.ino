@@ -39,22 +39,19 @@
 // Called at startup of VController
 void MD_ZG3_class::init() // Default values for variables
 {
+  MD_base_class::init();
+  
   // Variables
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "ZG3");
   strcpy(full_device_name, "Zoom G3");
-  current_patch_name.reserve(17);
-  current_patch_name = "                ";
   patch_number_offset = 0; // First patch is numbered zero
   patch_min = ZG3_PATCH_MIN;
   patch_max = ZG3_PATCH_MAX;
   sysex_delay_length = 5; // time between sysex messages (in msec).
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the Zoom G3 does not have to respond before disconnection
-  //bank_size = 10;
   my_LED_colour = 1; // Default value: green
   MIDI_channel = ZG3_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  is_always_on = true; // Default value
   my_device_page1 = ZG3_DEFAULT_PAGE1; // Default value
   my_device_page2 = ZG3_DEFAULT_PAGE2; // Default value
   my_device_page3 = ZG3_DEFAULT_PAGE3; // Default value
@@ -205,6 +202,7 @@ void MD_ZG3_class::stop_tuner() {
 void MD_ZG3_class::select_patch(uint16_t new_patch) {
 
   if (new_patch == patch_number) unmute();
+  else prev_patch_number = patch_number;
   patch_number = new_patch;
   send_patch_change = true;
   update_LEDS = true;
@@ -420,7 +418,7 @@ void MD_ZG3_class::read_parameter_title(uint16_t number, String &Output) {
 
 void MD_ZG3_class::read_parameter_title_short(uint16_t number, String &Output) {
   uint8_t FX_type = FX[number] >> 1; //The FX type is stored in bit 1-7.
-  Output += String(number + 1) + ":" + ZG3_FX_types[FX_type].Name;
+  Output += String(number + 1) + ':' + ZG3_FX_types[FX_type].Name;
 }
 
 bool MD_ZG3_class::request_parameter(uint8_t sw, uint16_t number) {
