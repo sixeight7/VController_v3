@@ -17,7 +17,7 @@ A number of guitar modelers and synths are supported, where it actively read pat
 * Boss GP-10
 * Roland GR-55
 * Roland VG-99
-* Boss Katana (50/100/Artist)
+* Boss Katana (50/100/Artist - MK1 and MK2)
 * Boss SY-1000
 * Kemper Profiling Amp
 * Line 6 Helix (limited)
@@ -26,6 +26,7 @@ A number of guitar modelers and synths are supported, where it actively read pat
 * Zoom MS70-cdr
 * Strymon Volante
 * TC Electronics G-Major
+* NUX MG-300
 
 # General MIDI
 The V-Controller and VC-mini are also able to send MIDI PC, CC and Note on/off messages to control any device that is able to receive these messages.
