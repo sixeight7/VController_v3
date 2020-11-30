@@ -685,12 +685,10 @@ void menu_load(uint8_t Sw) {
     case MENU_PREV:
       LCD_set_SP_title(Sw, "Previous Item");
       LCD_set_SP_label(Sw, "<==");
-      update_page = REFRESH_PAGE;
       break;
     case MENU_NEXT:
       LCD_set_SP_title(Sw, "Next Item");
       LCD_set_SP_label(Sw, "==>");
-      update_page = REFRESH_PAGE;
       break;
   }
 #else
@@ -769,7 +767,8 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       return;
     }
     menu_select_prev();
-    menu_load(Sw);
+    //menu_load(Sw);
+    update_page = REFRESH_PAGE;
   }
   if (number == MENU_NEXT) {
     if (current_menu == KEYBOARD_MENU) {
@@ -781,7 +780,8 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       return;
     }
     menu_select_next();
-    menu_load(Sw);
+    //menu_load(Sw);
+    update_page = REFRESH_PAGE;
   }
 
   uint8_t cmd_byte_no;
