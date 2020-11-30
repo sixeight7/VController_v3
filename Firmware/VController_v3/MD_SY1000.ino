@@ -143,6 +143,10 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
         current_patch_name += static_cast<char>(sxdata[count]); //Add ascii character to Patch Name String
       }
       update_main_lcd = true;
+      if (popup_patch_name) {
+        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        popup_patch_name = false;
+      }
     }
 
     // Check if it is the exp sw, exp and exp_on state

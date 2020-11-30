@@ -43,9 +43,9 @@
 //#include "hardware1.h" 
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
 
-// Hardware of VController model of Ryan Muar
-//#include "hardware_RM.h" 
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Faster, Programmer: AVRISP mkII
+// Hardware of VController model of Willem Smith
+//#include "hardware_WS.h" 
+// Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast, Programmer: AVRISP mkII
 
 // In order for the Serial MIDI ports to receive larger messages the following files have to be edited:
 // Win: C:\Program Files (x86)\Arduino\hardware\teensy\avr\cores\teensy3\serial1.c
@@ -60,8 +60,8 @@
 #include "debug.h"
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 5
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 6
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
 
 void setup() {
   SCO_switch_power_on();
@@ -280,7 +280,19 @@ void loop() {
   01-05-2020 GMajor code is now in Alpha - waiting for AndyE to finish testing
   02-05-2020 External pedals (expression and switches) are now hot pluggable
   03-05-2020 Enabled optional SW 4-6 in the firmware of the VC-mini
-  08-05-2020 Added the option to show the tempo instead of the device name at the top tight of the main menu.
+  08-05-2020 Added the option to show the tempo instead of the device name at the top right of the main menu.
   09-05-2020 Added CURNUM option in Global Menu with option for Previous patch, tap tempo, tuner and direct select.
   22-05-2020 Fixed Helix/VG99 issue with forwarding PC messages. Fix of 03-01-2020 was causing trouble since firmware 2.9 of Helix
+  20-07-2020 v.3.5.0 release Added support for the SY1000 and the GMajor 2. Added hot pluggable expression pedals and CURNUM action.
+  22-08-2020 Started support for the NUX MG300.
+  23-08-2020 Updated the USBHost_t36 library to support longer sysex messages as that is the only way to communicate with the MG300
+  30-08-2020 MS70-cdr: toggling effect on the VController now selects that effect on the MS70-cdr.
+  30-08-2020 NUX MG300 effect control implemented
+  02-11-2020 Start implementing Katana MK2
+  03-11-2020 Fixed HI-LEVEL of EQ not working properly for Katana. It was swapped with Hi-CUT.
+  09-11-2020 Added GEQ support for Global Eq Katana.
+  14-11-2020 Fixed delay mod parameters were not properly saved
+  16-11-2020 Changed behaviour of encoders. Almost all encoder turns use update_encoder_value(). This will make the encoder stop at minimum and maximum values. After one second you can cross from min to max or vise versa
+  18-11-2020 Improved the speed of the encoder for parameters with large ranges (like delay time: 0 - 2000 ms)
+  30-11-2020 v.3.6.1 release Added support for the NUX MG300 and the Katana MK2.
 */

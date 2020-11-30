@@ -16,6 +16,7 @@
 #include "devices/svl.h"
 #include "devices/sy1000.h"
 #include "devices/gmajor2.h"
+#include "devices/mg300.h"
 
 extern GP10_class My_GP10;
 extern GR55_class My_GR55;

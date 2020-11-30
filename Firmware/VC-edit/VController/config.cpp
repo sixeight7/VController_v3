@@ -547,6 +547,29 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_SY1000_ASSIGNS, 14, PATCH, SY1000, NEXT, 9}, // ** Switch 14 **
     //{PAGE_SY1000_ASSIGNS, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
     {PAGE_SY1000_ASSIGNS, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
+
+
+    // ******************************* PAGE 227: MG300_patch_bank (8 buttons per page) *************************************************
+    {PAGE_MG300_PATCH_BANK, LABEL, 'P', 'A', 'T', 'C', 'H', ' ', 'B', 'A' },
+    {PAGE_MG300_PATCH_BANK, LABEL, 'N', 'K', ' ', 'M', 'G', '3', '0', '0' },
+    {PAGE_MG300_PATCH_BANK, 1, PATCH, MG300, BANKSELECT, 1, 8}, // ** Switch 01 **
+    {PAGE_MG300_PATCH_BANK, 2, PATCH, MG300, BANKSELECT, 2, 8}, // ** Switch 02 **
+    {PAGE_MG300_PATCH_BANK, 3, PATCH, MG300, BANKSELECT, 3, 8}, // ** Switch 03 **
+    {PAGE_MG300_PATCH_BANK, 4, PATCH, MG300, BANKSELECT, 4, 8}, // ** Switch 04 **
+    {PAGE_MG300_PATCH_BANK, 5, PATCH, MG300, BANKSELECT, 5, 8}, // ** Switch 05 **
+    {PAGE_MG300_PATCH_BANK, 6, PATCH, MG300, BANKSELECT, 6, 8}, // ** Switch 06 **
+    {PAGE_MG300_PATCH_BANK, 7, PATCH, MG300, BANKSELECT, 7, 8}, // ** Switch 07 **
+    {PAGE_MG300_PATCH_BANK, 8, PATCH, MG300, BANKSELECT, 8, 8}, // ** Switch 08 **
+    //{PAGE_MG300_PATCH_BANK, 9, PARAMETER, MG300, 14, STEP, 0, 6, 1}, // ** Switch 09 **
+    //{PAGE_MG300_PATCH_BANK, 10, PAGE, COMMON, SELECT, PAGE_FULL_LOOPER}, // ** Switch 10 **
+    //{PAGE_MG300_PATCH_BANK, 11, PARAMETER, MG300, 1, TOGGLE, 1, 0}, // ** Switch 11 **
+    //{PAGE_MG300_PATCH_BANK, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+    {PAGE_MG300_PATCH_BANK, 13, PATCH, MG300, BANKDOWN, 8}, // ** Switch 13 **
+    {PAGE_MG300_PATCH_BANK, 13 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+    {PAGE_MG300_PATCH_BANK, 14, PATCH, MG300, BANKUP, 8}, // ** Switch 14 **
+    {PAGE_MG300_PATCH_BANK, 14 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
+    //{PAGE_MG300_PATCH_BANK, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+    {PAGE_MG300_PATCH_BANK, 16, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 16 **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = Fixed_commands.size();
@@ -704,7 +727,7 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_SELECT, 1, PAGE, COMMON, SELECT, 1}, // ** Switch 01 **
     {PAGE_SELECT, 2, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 02 **
     {PAGE_SELECT, 3, PAGE, COMMON, SELECT, PAGE_MENU}, // ** Switch 03 **
-    {PAGE_SELECT, 5 | ON_RELEASE, PAGE, COMMON, SELECT, 1}, // ** Enc1 SW **
+    {PAGE_SELECT, 5 | ON_RELEASE, SELECT_NEXT_DEVICE, COMMON}, // ** Enc1 SW **
     {PAGE_SELECT, 7 | ON_RELEASE, PAGE, COMMON, SELECT, PAGE_MENU}, // ** Enc2 SW **
 
     // ******************************* PAGE 204: Pages current device *************************************************
@@ -731,6 +754,7 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_CURRENT_PATCH_BANK, 1 | ON_DUAL_PRESS, PATCH, CURRENT, BANKDOWN, 3}, // ** Switch 01 + 02 **
     {PAGE_CURRENT_PATCH_BANK, 2 | ON_DUAL_PRESS, PATCH, CURRENT, BANKUP, 3}, // ** Switch 02 + 03 **
     {PAGE_CURRENT_PATCH_BANK, 4, PATCH, CURRENT, BANKUP, 3}, // ** Switch 07 - ENC #1 turn **
+    {PAGE_CURRENT_PATCH_BANK, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
 
     // ******************************* PAGE 206: Page up/down tap *************************************************
     {PAGE_UP_DOWN_TAP, LABEL, 'P', 'A', 'T', 'C', 'H', ' ', '+', '/' },
@@ -795,13 +819,13 @@ const QVector<Cmd_struct> Fixed_commands = {
     // ******************************* PAGE 212: KATANA FX CTRL #1  *************************************************
     {PAGE_KTN_FX1, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
     {PAGE_KTN_FX1, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '1'},
-    {PAGE_KTN_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 0, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN_FX1, 1 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 01 **
     {PAGE_KTN_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
     {PAGE_KTN_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX3}, // ** Switch 01 + 02 **
-    {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX1, 2 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 02 **
     {PAGE_KTN_FX1, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
     {PAGE_KTN_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 02 +| 03 **
-    {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 23, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_KTN_FX1, 3 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 03 **
     {PAGE_KTN_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
     {PAGE_KTN_FX1, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
     {PAGE_KTN_FX1, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
@@ -825,10 +849,10 @@ const QVector<Cmd_struct> Fixed_commands = {
     // ******************************* PAGE 214: KATANA FX CTRL #3  *************************************************
     {PAGE_KTN_FX3, LABEL, 'K', 'A', 'T', 'A', 'N', 'A', ' ', 'F'},
     {PAGE_KTN_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
-    {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 70, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_KTN_FX3, 1 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 01 **
     {PAGE_KTN_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
     {PAGE_KTN_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX2}, // ** Switch 01 + 02 **
-    {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 96, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_KTN_FX3, 2 | ON_RELEASE, PARAMETER, KTN, 48, TOGGLE, 1, 0}, // ** Switch 02 **
     {PAGE_KTN_FX3, 2 | ON_LONG_PRESS, SAVE_PATCH, KTN}, // ** Switch 02 long press
     {PAGE_KTN_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, KTN, PAGE_KTN_FX1}, // ** Switch 02 +| 03 **
     {PAGE_KTN_FX3, 3 | ON_RELEASE, PARAMETER, KTN, 106, TOGGLE, 1, 0}, // ** Switch 03 **
@@ -836,7 +860,6 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_KTN_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
     {PAGE_KTN_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
     {PAGE_KTN_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
-
 
     // ******************************* PAGE 215: KATANA4 FX CTRL #1  *************************************************
     {PAGE_KTN4_FX1, LABEL, 'K', 'T', 'N', '_', 'V', '4', ' ', 'F'},
@@ -882,6 +905,48 @@ const QVector<Cmd_struct> Fixed_commands = {
     {PAGE_KTN4_FX3, 4, PAR_BANK_UP, KTN, 1}, // ** Switch 04 - ENC #1 turn **
     {PAGE_KTN4_FX3, 6, PAR_BANK, KTN, 1, 1}, // ** Switch 06 - ENC #2 turn **
     {PAGE_KTN4_FX3, 7, OPEN_PAGE_DEVICE, KTN, KTN_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+    // ******************************* PAGE 218: MG-300 FX CTRL #1  *************************************************
+    {PAGE_MG300_FX1, LABEL, 'M', 'G', '-', '3', '0', '0', ' ', 'F'},
+    {PAGE_MG300_FX1, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '1'},
+    {PAGE_MG300_FX1, 1 | ON_RELEASE, PARAMETER, MG300, 1, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_MG300_FX1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_MG300_FX1, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX3}, // ** Switch 01 + 02 **
+    {PAGE_MG300_FX1, 2 | ON_RELEASE, PARAMETER, MG300, 2, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_MG300_FX1, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX2}, // ** Switch 02 +| 03 **
+    {PAGE_MG300_FX1, 3 | ON_RELEASE, PARAMETER, MG300, 6, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_MG300_FX1, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_MG300_FX1, 4, PATCH, MG300, NEXT}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_MG300_FX1, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_MG300_FX1, 7, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+    // ******************************* PAGE 219: MG-300 FX CTRL #2  *************************************************
+    {PAGE_MG300_FX2, LABEL, 'M', 'G', '-', '3', '0', '0', ' ', 'F'},
+    {PAGE_MG300_FX2, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '2'},
+    {PAGE_MG300_FX2, 1 | ON_RELEASE, PARAMETER, MG300, 7, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_MG300_FX2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_MG300_FX2, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX1}, // ** Switch 01 + 02 **
+    {PAGE_MG300_FX2, 2 | ON_RELEASE, PARAMETER, MG300, 8, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_MG300_FX2, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX3}, // ** Switch 02 +| 03 **
+    {PAGE_MG300_FX2, 3, TAP_TEMPO, COMMON}, // ** Switch 03 **
+    {PAGE_MG300_FX2, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_MG300_FX2, 4, PATCH, MG300, NEXT}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_MG300_FX2, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_MG300_FX2, 7, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+    // ******************************* PAGE 220: MG-300 FX CTRL #3  *************************************************
+    {PAGE_MG300_FX3, LABEL, 'M', 'G', '-', '3', '0', '0', ' ', 'F'},
+    {PAGE_MG300_FX3, LABEL, 'X', ' ', 'C', 'T', 'R', 'L', ' ', '3'},
+    {PAGE_MG300_FX3, 1 | ON_RELEASE, PARAMETER, MG300, 3, TOGGLE, 1, 0}, // ** Switch 01 **
+    {PAGE_MG300_FX3, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+    {PAGE_MG300_FX3, 1 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX2}, // ** Switch 01 + 02 **
+    {PAGE_MG300_FX3, 2 | ON_RELEASE, PARAMETER, MG300, 4, TOGGLE, 1, 0}, // ** Switch 02 **
+    {PAGE_MG300_FX3, 2 | ON_DUAL_PRESS, OPEN_PAGE_DEVICE, MG300, PAGE_MG300_FX1}, // ** Switch 02 +| 03 **
+    {PAGE_MG300_FX3, 3 | ON_RELEASE, PARAMETER, MG300, 5, TOGGLE, 1, 0}, // ** Switch 03 **
+    {PAGE_MG300_FX3, 3 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 03 - on long press **
+    {PAGE_MG300_FX3, 4, PATCH, MG300, NEXT}, // ** Switch 04 - ENC #1 turn **
+    {PAGE_MG300_FX3, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
+    {PAGE_MG300_FX3, 7, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = Fixed_commands.size();

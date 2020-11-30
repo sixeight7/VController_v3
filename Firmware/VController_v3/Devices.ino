@@ -69,9 +69,10 @@ MD_KPA_class My_KPA = MD_KPA_class(KPA);
 MD_SVL_class My_SVL = MD_SVL_class(SVL);
 MD_SY1000_class My_SY1000 = MD_SY1000_class(SY1000);
 MD_GM2_class My_GM2 = MD_GM2_class(GM2);
+MD_MG300_class My_MG300 = MD_MG300_class(MG300);
 
 // Here we create an array for the devices, so we can access them by pointer reference
-MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2};
+MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2, &My_MG300};
 
 void setup_devices() { // Trigger the initialization of  the devices
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {

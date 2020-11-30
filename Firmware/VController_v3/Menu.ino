@@ -173,7 +173,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-#ifdef IS_VCMINI
+#ifndef MENU_ON_INDIVIDUAL_DISPLAYS
   { // Menu 5 - Command select menu for VC-mini
     { "SELECT PG/SW/CMD", NONE }, // Menu title
     { "", CMD_BYTE, 9 }, // Switch 1
@@ -493,7 +493,7 @@ void menu_open() { // Called when the menu is started the first time
 
 void menu_load(uint8_t Sw) {
   uint8_t number = 0;
-#ifndef IS_VCMINI
+#ifdef MENU_ON_INDIVIDUAL_DISPLAYS
   number = SP[Sw].PP_number;
 #else
   if (Sw == MENU_SET_VALUE) { // Coming from expression_pedal
@@ -660,11 +660,39 @@ void menu_load(uint8_t Sw) {
       break;
   }
 
-#ifdef IS_VCMINI
+#ifndef MENU_ON_INDIVIDUAL_DISPLAYS
   // Show data on main display
   if (!popup_title_showing) LCD_main_set_title(menu_title);
   if (!popup_label_showing) LCD_main_set_label_right(menu_label);
   update_main_lcd = true;
+
+  //Show switch function in individual display
+  switch (SP[Sw].PP_number) {
+    case MENU_SELECT:
+      LCD_set_SP_title(Sw, "MENU");
+      LCD_set_SP_label(Sw, menu_title);
+      break;
+    case MENU_BACK:
+      if (current_menu == SELECT_MENU) LCD_set_SP_title(Sw, "Exit menu");
+      else LCD_set_SP_title(Sw, "Return");
+      LCD_clear_SP_label(Sw);
+      break;
+    case MENU_SET_VALUE:
+      LCD_set_SP_title(Sw, "Select");
+      LCD_set_SP_label(Sw, menu_label);
+      update_lcd = Sw;
+      break;
+    case MENU_PREV:
+      LCD_set_SP_title(Sw, "Previous Item");
+      LCD_set_SP_label(Sw, "<==");
+      update_page = REFRESH_PAGE;
+      break;
+    case MENU_NEXT:
+      LCD_set_SP_title(Sw, "Next Item");
+      LCD_set_SP_label(Sw, "==>");
+      update_page = REFRESH_PAGE;
+      break;
+  }
 #else
   // Show data on individual display
   strcpy(SP[Sw].Title, menu_title);
@@ -688,7 +716,7 @@ void menu_set_menu_label(String & lbl) { // Will set the Label string in the SP 
 
 void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is pressed
   uint8_t number = SP[Sw].PP_number;
-  if (number == MENU_BACK) { // The menu back button has limited functionality, allowing the user to go back the menu structure and saving everything
+  if (number == MENU_BACK) {
     if (current_menu == KEYBOARD_MENU) {
       close_edit_name();
       return;
@@ -709,6 +737,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       KTN_save();
       return;
     }
+
     number = current_menu_switch;
     if ((menu[current_menu][number].Type != SAVE_AND_EXIT) && (menu[current_menu][number].Type != EXIT_MENU)) {
       //save current item
@@ -721,14 +750,22 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   }
   if (number == MENU_SET_VALUE) {
     if (current_menu == KEYBOARD_MENU) {
+#ifdef IS_VCMINI
       key_jump_category();
+#else
+      key_encoder_edit_character(true);
+#endif
       return;
     }
     number = current_menu_switch;
   }
   if (number == MENU_PREV) {
     if (current_menu == KEYBOARD_MENU) {
+#ifdef IS_VCMINI
       close_edit_name();
+#else
+      cursor_left_page_name();
+#endif
       return;
     }
     menu_select_prev();
@@ -736,16 +773,24 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   }
   if (number == MENU_NEXT) {
     if (current_menu == KEYBOARD_MENU) {
+#ifdef IS_VCMINI
       close_edit_name();
+#else
+      cursor_right_page_name();
+#endif
       return;
     }
     menu_select_next();
     menu_load(Sw);
   }
+
   uint8_t cmd_byte_no;
   uint8_t *val;
   uint8_t vnumber;
   uint8_t value;
+  signed int delta;
+  if (go_up) delta = 1;
+  else delta = -1;
   no_hold = true;
   Last_set_switch = 0; // Reset last set switch
   switch (menu[current_menu][number].Type) {
@@ -772,14 +817,15 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
     case SET_NO_EXP:
       Last_set_switch = Sw;
       val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-      if (go_up) {
+      /*if (go_up) {
         if (*val < menu[current_menu][number].Max)*val = *val + 1;
         else *val = menu[current_menu][number].Min;
       }
       else {
         if (*val > menu[current_menu][number].Min)*val = *val - 1;
         else *val = menu[current_menu][number].Max;
-      }
+      }*/
+      *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, menu[current_menu][number].Max);
       DEBUGMSG("Menu target " + String(number) + " set to value " + String (*val));
       menu_load(Sw); // Will update the label
       if ((menu[current_menu][number].Sublist == DEVICE_SUBLIST) || (menu[current_menu][number].Sublist == SWITCH_SUBLIST)) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
@@ -791,15 +837,21 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         value = Device[Current_device]->get_setting(vnumber);
-        if (go_up) {
+        /*if (go_up) {
           if (value < menu[current_menu][number].Max) value = value + 1;
           else value = menu[current_menu][number].Min;
         }
         else {
           if (value > menu[current_menu][number].Min) value = value - 1;
           else value = menu[current_menu][number].Max;
+        }*/
+        value = update_encoder_value(delta, value, menu[current_menu][number].Min, menu[current_menu][number].Max);
+        if (menu[current_menu][number].Sublist == PAGE_SUBLIST) { // Hop over gap in pages
+          if ((value > Number_of_pages) && (value < FIRST_SELECTABLE_FIXED_CMD_PAGE)) {
+            if (go_up) value = FIRST_SELECTABLE_FIXED_CMD_PAGE;
+            else value = Number_of_pages;
+          }
         }
-        if ((menu[current_menu][number].Sublist == PAGE_SUBLIST) && (value == Number_of_pages)) value = FIRST_FIXED_CMD_PAGE; // Hop over gap in pages
         Device[Current_device]->set_setting(vnumber, value);
         menu_load(Sw); // Will update the label
         no_hold = false;
@@ -826,14 +878,15 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
               p = &MIDI_switch[Current_MIDI_switch].cc;
               break;
           }
-          if (go_up) {
+          /*if (go_up) {
             if (*p < menu[current_menu][number].Max) *p = *p + 1;
             else *p = menu[current_menu][number].Min;
           }
           else {
             if (*p > menu[current_menu][number].Min) *p = *p - 1;
             else *p = menu[current_menu][number].Max;
-          }
+          }*/
+          *p = update_encoder_value(delta, *p, menu[current_menu][number].Min, menu[current_menu][number].Max);
         }
         menu_load(Sw); // Will update the label
         no_hold = false;
@@ -955,7 +1008,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
     return;
   }
 
-#ifdef IS_VCMINI
+#ifndef MENU_ON_INDIVIDUAL_DISPLAYS
   uint8_t number = current_menu_switch;
   uint8_t lcd_for_bar = 0;
   uint8_t lcd_for_update = MENU_SET_VALUE;
@@ -1048,22 +1101,24 @@ void menu_encoder_turn(uint8_t Sw, signed int value) {
   }
 
   if (type == MENU_SELECT) {
-    if (value < 0) {
+    /*if (value < 0) {
       for (uint8_t i = 0; i < abs(value); i++) {
         menu_select_prev();
       }
-    }
-    if (value > 0) {
+      }
+      if (value > 0) {
       for (uint8_t i = 0; i < value; i++) {
         menu_select_next();
       }
-    }
+      }*/
+    do { // Skip menu items of type NONE
+      current_menu_switch = update_encoder_value(value, current_menu_switch, 1, 12);
+    } while (skip_menu_item_for_encoder());
     menu_load(Sw); // Will update the label
   }
   if (type == MENU_SET_VALUE) {
     if (value < 0) {
       for (uint8_t i = 0; i < abs(value); i++) {
-        // How?
         menu_press(Sw, false);
       }
     }
@@ -1117,7 +1172,7 @@ bool menu_are_you_sure(String line1, String line2) {
   LCD_clear_all_displays();
   LCD_show_are_you_sure(line1, line2);
 
-#ifndef IS_VCMINI
+#ifdef MENU_ON_INDIVIDUAL_DISPLAYS
   LED_show_are_you_sure();
 #endif
   bool sure = SCO_are_you_sure();
@@ -2047,8 +2102,9 @@ void set_default_parameter_values(bool in_edit_mode) {
 void cmdbyte_increase(uint8_t cmd_byte_no) { // Will increase the value of a command byte
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
   if (cmdtype[cmd_type].Max > 0) {
-    cmdbyte[cmd_byte_no].Value++;
-    if (cmdbyte[cmd_byte_no].Value > cmdtype[cmd_type].Max) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Min;
+    /*cmdbyte[cmd_byte_no].Value++;
+    if (cmdbyte[cmd_byte_no].Value > cmdtype[cmd_type].Max) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Min;*/
+    cmdbyte[cmd_byte_no].Value = update_encoder_value(1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
     build_command_structure(cmd_byte_no, cmd_type, true);
   }
 }
@@ -2056,14 +2112,15 @@ void cmdbyte_increase(uint8_t cmd_byte_no) { // Will increase the value of a com
 void cmdbyte_decrease(uint8_t cmd_byte_no) { // Will decrease the value of a command byte
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
   if (cmdtype[cmd_type].Max > 0) {
-    if (cmdbyte[cmd_byte_no].Value <= cmdtype[cmd_type].Min) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Max;
-    else cmdbyte[cmd_byte_no].Value--;
+    //if (cmdbyte[cmd_byte_no].Value <= cmdtype[cmd_type].Min) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Max;
+    //else cmdbyte[cmd_byte_no].Value--;
+    cmdbyte[cmd_byte_no].Value = update_encoder_value(-1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
     build_command_structure(cmd_byte_no, cmd_type, true);
   }
 }
 
 void cmdbyte_from_exp_pedal(uint8_t value, uint8_t lcd_for_bar, uint8_t lcd_for_update) { // Set the value of a command byte from the expression pedal
-#ifdef IS_VCMINI
+#ifndef MENU_ON_INDIVIDUAL_DISPLAYS
   uint8_t cmd_byte_no = menu[current_menu][current_menu_switch].Sublist; // Command number is in the Sublist variable
 #else
   uint8_t cmd_byte_no = menu[current_menu][Last_cmd_number].Sublist; // Command number is in the Sublist variable
@@ -2079,7 +2136,7 @@ void cmdbyte_from_exp_pedal(uint8_t value, uint8_t lcd_for_bar, uint8_t lcd_for_
 }
 
 void menu_set_main_title() { // Called from main_LCD_control() when the main display is updated and it the page is the menu page
-#ifndef IS_VCMINI
+#ifdef MENU_ON_INDIVIDUAL_DISPLAYS
   // Full VController main display screen
   LCD_main_set_title(menu[current_menu][0].Label);
   switch (current_menu) {

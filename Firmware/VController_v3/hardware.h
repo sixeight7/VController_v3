@@ -6,6 +6,12 @@
 // This file contains all the hardware settings for the VController Production Model version 1.
 // Make sure you include this file when updating to new firmware
 
+// Choose which configuration for the switches is chosen in Config.ino
+#define CONFIG_VCONTROLLER
+//#define CONFIG_VCMINI
+//#define CONFIG_CUSTOM
+#define MENU_ON_INDIVIDUAL_DISPLAYS
+
 // Allowable i2c rates:
 // I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200, 
 // I2C_RATE_1500, I2C_RATE_1800, I2C_RATE_2000, I2C_RATE_2400, I2C_RATE_2800, I2C_RATE_3000
@@ -55,17 +61,19 @@
 #define NUMBER_OF_LEDS     12 // Number of neopixel LEDs connected
 #define LED_ORDER          0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11 // The order in which the LEDs are connected
 
-#define NUMBER_OF_BACKLIGHTS     12 // Number of neopixel LEDs connected
-#define BACKLIGHT_ORDER          0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11 // The order in which the LEDs are connected
+#define NUMBER_OF_BACKLIGHTS     12 // Number of WS2811 chips for backlight connected
+#define BACKLIGHT_ORDER          0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11 // The order in which the chips are connected
 
 
 // *** Display settings of the main display - so far it is connected to a regular display board
 #define PRIMARY_MAIN_DISPLAY_ADDRESS 0x3F // If we have a PCF8745AT chip in the i2c expander
 #define SECONDARY_MAIN_DISPLAY_ADDRESS 0x27 // If we have a PCF8745T chip in the i2c expander
+#define MAIN_LCD_DISPLAY_SIZE 16
 
 // *** Individual displays above switches
 #define NUMBER_OF_DISPLAY_BOARDS 4
 #define NUMBER_OF_DISPLAYS 12
+#define LCD_DISPLAY_SIZE 16
 
 // Define the addresses and numbers of the displays using the VController display boards based on an MCP23017. Maximum 15 displays can be defined here. 
 // Make sure the number of displays here matches the NUMBER_OF_DIPLAYS variable.

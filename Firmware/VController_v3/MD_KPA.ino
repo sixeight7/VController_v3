@@ -145,6 +145,10 @@ void MD_KPA_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
           else current_patch_name += ' ';
         }
         update_main_lcd = true;
+        if (popup_patch_name) {
+          LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+          popup_patch_name = false;
+        }
       }
     }
     if (sxdata[6] == KPA_FUNCTION_EXTENDED_STRING_PARAMETER_CHANGE) { // Check for performance/slot name passed as EXTENDED_STRING_PARAMETER_CHANGE

@@ -8,6 +8,7 @@
 // Section 5: Reading/writing titles to EEPROM
 // Section 6: Reading/writing Katana data to EEPROM
 // Section 7: HELIX forward messaging storage
+// Section 8: MG300 effect type storage
 
 #include "globals.h"
 
@@ -23,6 +24,7 @@
 #define CURRENT_EXT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
 #define CURRENT_KATANA_MEMORY_VERSION 2 // Increase this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
 #define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Increase this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION 2 // Increase this value whenever there is an update of the MG300 EEPROM structure - data will be overwritten!!!!
 
 // ************************ Internal EEPROM data addresses ***********************
 // Total size: 2048 bytes (Teensy 3.2), 4096 bytes (Teensy 3.6)
@@ -60,6 +62,7 @@
 // These are writable in pages of 128 bytes = 500 pages
 // Page 0 - 249:  Commands
 // Page 250 - 369 Katana presets
+// Page 370 - 374 MG-300 FX data
 // Page 375 - 390 Helix messages
 
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
@@ -75,12 +78,16 @@ unsigned long WriteDelay = 0;
 #define EXT_EEP_HELIX_MSG_SPACE_ADDR 3
 #define EXT_EEP_VERSION_ADDR 4
 #define EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR 5
+#define EXP_EEP_MG300_EFFECT_TYPE_ADDR 6
 #define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
 
 #define EXT_EEP_KATANA_PRESETS_BASE_ADDRESS 32000 // Katana presets are stored from address 320000 - 47359 (80 presets of 192 bytes)
 #define EXT_MAX_NUMBER_OF_KATANA_PRESETS 80
 
-#define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 48000 // Katana presets are stored from address 48000 - 50047 (128 messages of 16 bytes)
+#define EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS 47360 // MG-300 effect types are stored from address 47360 - 47935 (36 presets of 16 bytes)
+#define EXT_MAX_NUMBER_OF_MG300_PRESETS 36
+
+#define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 48000 // Helix MIDI messages are stored from address 48000 - 50047 (128 messages of 16 bytes)
 #define EXT_MAX_NUMBER_OF_HELIX_MESSAGES 128
 #define MIDI_HLX_MESSAGES 5 // number of messages per patch that are stored
 
@@ -109,6 +116,7 @@ void setup_eeprom()
   if (read_ext_EEPROM(EXT_EEP_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
   if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_update_katana_preset_memory();
   if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEPROM_initialize_HELIX_message_space();
+  if (read_ext_EEPROM(EXP_EEP_MG300_EFFECT_TYPE_ADDR) != CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION) EEPROM_initialize_MG300_message_space();
 
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
@@ -120,7 +128,7 @@ void setup_eeprom()
 
 void main_eeprom()
 {
-  if ((millis() > EEPROM_update_timer) && (EEPROM_update_timer > 0)) EEPROM_update(); 
+  if ((millis() > EEPROM_update_timer) && (EEPROM_update_timer > 0)) EEPROM_update();
 }
 
 void EEPROM_update_when_quiet() {
@@ -904,4 +912,135 @@ void EEPROM_initialize_HELIX_message_space() {
 
 void EEPROM_clear_HLX_message_array() {
   memset(HLX_messages, 0, sizeof(HLX_messages));
+}
+
+// ********************************* Section 8: MG300 effect type storage ********************************************
+// Patch data is stored with a checksum based on the name so we can find the data even when the location is changing
+
+void EEPROM_store_MG300_effect_types(uint8_t number, uint16_t checksum) { // Store MG300 effect types array to location number.
+  if (number >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return; // Exit if number is too large
+  uint16_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
+  const uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
+  uint8_t msgsize = MG300_NUMBER_OF_FX;
+
+  EEPROM_delay();
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+
+  Wire.send((int)(checksum >> 8));   // MSB
+  Wire.send((int)(checksum & 0xFF)); // LSB
+  for (uint8_t c = 0; c < msgsize; c++) {
+    DEBUGMSG("Writing byte " + String(c) + ": " + String(*msg_ptr));
+    Wire.send(*msg_ptr++);
+  }
+  Wire.endTransmission();
+
+  DEBUGMSG("EEPROM: Wrote MG300 program " + String(number) + ", size: " + String(msgsize) + ", checksum: " + String(checksum));
+}
+
+bool EEPROM_load_MG300_effect_types(uint8_t number, uint16_t checksum) {
+  if (number >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return false; // Exit if number is too large
+  uint16_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
+  uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
+  uint8_t msgsize = MG300_NUMBER_OF_FX;
+
+  EEPROM_wait_ready();
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize + 2);
+  uint8_t cs_msb = Wire.receive();
+  uint8_t cs_lsb = Wire.receive();
+  if (checksum != ((cs_msb << 8) | cs_lsb)) return false; // exit when checksum does not match.
+  for (uint8_t c = 0; c < msgsize; c++) {
+    uint8_t newbyte = Wire.receive();
+    *msg_ptr++ = newbyte;
+    DEBUGMSG("Read byte " + String(c) + ": " + String(newbyte));
+  }
+
+  DEBUGMSG("EEPROM: Read MG300 program " + String(number) + ", checksum: " + String(checksum));
+  return true;
+}
+
+void EEPROM_exchange_MG300_patches(uint8_t patch1, uint8_t patch2) {
+  if (patch1 >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return;
+  if (patch2 >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return;
+
+  uint8_t msgsize = MG300_NUMBER_OF_FX + 2;
+  uint8_t temp1[msgsize];
+  uint16_t eeaddress1 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch1 * 16);
+  uint8_t* msg_ptr1 = (uint8_t*)temp1;
+
+  EEPROM_wait_ready();
+  // Read patch 1 into temp1
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress1 >> 8));   // MSB
+  Wire.send((int)(eeaddress1 & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize);
+  for (uint8_t c = 0; c < msgsize; c++) {
+    uint8_t newbyte = Wire.receive();
+    *msg_ptr1++ = newbyte;
+  }
+
+  uint8_t temp2[msgsize];
+  uint16_t eeaddress2 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch2 * 16);
+  uint8_t* msg_ptr2 = (uint8_t*)temp2;
+
+  EEPROM_wait_ready();
+  // Read patch 2 into temp2
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress2 >> 8));   // MSB
+  Wire.send((int)(eeaddress2 & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize);
+  for (uint8_t c = 0; c < msgsize; c++) {
+    uint8_t newbyte = Wire.receive();
+    *msg_ptr2++ = newbyte;
+  }
+
+  EEPROM_delay();
+  // Write temp2 into patch 1
+  msg_ptr2 = (uint8_t*)temp2;
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress1 >> 8));   // MSB
+  Wire.send((int)(eeaddress1 & 0xFF)); // LSB
+
+  for (uint8_t c = 0; c < msgsize; c++) {
+    Wire.send(*msg_ptr2++);
+  }
+  Wire.endTransmission();
+
+  EEPROM_delay();
+  // Write temp1 into patch 2
+  msg_ptr1 = (uint8_t*)temp1;
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress2 >> 8));   // MSB
+  Wire.send((int)(eeaddress2 & 0xFF)); // LSB
+
+  for (uint8_t c = 0; c < msgsize; c++) {
+    Wire.send(*msg_ptr1++);
+  }
+  Wire.endTransmission();
+}
+
+void EEPROM_initialize_MG300_message_space() {
+  LED_show_initializing_data();
+  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  write_ext_EEPROM(EXP_EEP_MG300_EFFECT_TYPE_ADDR, CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION); // Save the current eeprom version
+  EEPROM_clear_MG300_message_array();
+  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_MG300_PRESETS; i++) {
+    EEPROM_store_MG300_effect_types(i, 0);
+  }
+}
+
+void EEPROM_clear_MG300_message_array() {
+  memset(My_MG300.fx_type, 0, MG300_NUMBER_OF_FX);
 }

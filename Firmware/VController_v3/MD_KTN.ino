@@ -21,8 +21,8 @@
 #endif
 #define KTN_PATCH_MAX 88
 
-#define KTN_EXP_CC1 80
-#define KTN_EXP_CC2 81
+#define KTN_EXP_CC1 81
+#define KTN_EXP_CC2 82
 
 // Messages are abbreviated to just the address and the data bytes. Checksum is calculated automatically
 // Example: {0xF0, 0x41, 0x10, 0x00, 0x00, 0x00, 0x33, 0x12, 0x7F, 0x00, 0x00, 0x01, 0x01, 0x7F, 0xF7} is reduced to 0x7F000001, 0x01
@@ -33,22 +33,48 @@
 #define KTN_SELECT_PATCH_ADDRESS 0x00010000
 #define KTN_CURRENT_PATCH_NAME_ADDRESS 0x60000000
 #define KTN_CURRENT_PATCH_NUMBER_ADDRESS 0x00010000
-#define KTN_MOD_TYPE_ADDRESS 0x60000140
-#define KTN_FX_TYPE_ADDRESS 0x6000034C
-#define KTN_EQ_TYPE_ADDRESS 0x60001104
-#define KTN_PEDAL_SW_ADDRESS 0x60000620
-#define KTN_PEDAL_TYPE_ADDRESS 0x60001111
 
-#define KTN_TIME_DELAY1 0x60000562  // Accepts values from 00 00 (0 ms) to 0F 50 (2000 ms)
-#define KTN_TIME_DELAY2 0x60001050  // Accepts values from 00 00 (0 ms) to 0F 50 (2000 ms)
+#define KTN_MOD_BASE_ADDRESS_MK1 0x60000140
+#define KTN_MOD_TYPE_ADDRESS_MK1 0x60000141
+#define KTN_FX_BASE_ADDRESS_MK1 0x6000034C
+#define KTN_FX_TYPE_ADDRESS_MK1 0x6000034D
+#define KTN_EQ_TYPE_ADDRESS_MK1 0x60001104
+#define KTN_GEQ_START_ADDRESS_MK1 0x60000131
+#define KTN_PEQ_START_ADDRESS_MK1 0x60001105
+#define KTN_PEDAL_SW_ADDRESS_MK1 0x60000620
+#define KTN_PEDAL_TYPE_ADDRESS_MK1 0x60001111
+#define KTN_GLOBAL_EQ_TYPE_ADDRESS_MK1 0x0000043F
+#define KTN_GLOBAL_GEQ_START_ADDRESS_MK1 0x00000440
+#define KTN_GLOBAL_PEQ_START_ADDRESS_MK1 0x00000433
+
+#define KTN_MOD_BASE_ADDRESS_MK2 0x60000100
+#define KTN_MOD_TYPE_ADDRESS_MK2 0x60000101
+#define KTN_FX_BASE_ADDRESS_MK2 0x60000300
+#define KTN_FX_TYPE_ADDRESS_MK2 0x60000301
+#define KTN_EQ_TYPE_ADDRESS_MK2 0x60000041
+#define KTN_PEQ_START_ADDRESS_MK2 0x60000042
+#define KTN_GEQ_START_ADDRESS_MK2 0x6000004D
+#define KTN_PEDAL_SW_ADDRESS_MK2 0x60000550
+#define KTN_PEDAL_TYPE_ADDRESS_MK2 0x60000551
+#define KTN_GLOBAL_EQ_TYPE_ADDRESS_MK2 0x00000011
+#define KTN_GLOBAL_PEQ_START_ADDRESS_MK2 0x00000013
+#define KTN_GLOBAL_GEQ_START_ADDRESS_MK2 0x0000001E
+
+#define KTN_TIME_DELAY1_MK1 0x60000562  // Accepts values from 00 00 (0 ms) to 0F 50 (2000 ms)
+#define KTN_TIME_DELAY2_MK1 0x60001050
+#define KTN_TIME_DELAY1_MK2 0x60000502  // Accepts values from 00 00 (0 ms) to 0F 50 (2000 ms)
+#define KTN_TIME_DELAY2_MK2 0x60000522
 
 #define KTN_READ_MIDI_TIMER_LENGTH 1000
+
+#define KTN_DEFAULT_MIDI_DELAY 5
 
 // Called at startup of VController
 void MD_KTN_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Boss KATANA variables:
+  is_mk2 = false;
   version = 4;
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "KTNA");
@@ -56,7 +82,7 @@ void MD_KTN_class::init() { // Default values for variables
   patch_min = KTN_PATCH_MIN;
   patch_max = KTN_PATCH_MAX;
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the KATANA does not have to respond before disconnection
-  sysex_delay_length = 5; // time between sysex messages (in msec).
+  sysex_delay_length = KTN_DEFAULT_MIDI_DELAY; // time between sysex messages (in msec).
   my_LED_colour = 2; // Default value: red
   MIDI_channel = KTN_MIDI_CHANNEL; // Default value
   my_device_page1 = KTN_DEFAULT_PAGE1; // Default value
@@ -65,6 +91,7 @@ void MD_KTN_class::init() { // Default values for variables
   my_device_page4 = KTN_DEFAULT_PAGE4; // Default value
   count_parameter_categories();
   midi_timer = 0;
+  current_global_eq_type = 0;
 }
 
 void MD_KTN_class::update() {
@@ -90,23 +117,66 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
     for (uint8_t i = 8; i < sxlength - 2; i++) sum += sxdata[i];
     bool checksum_ok = (sxdata[sxlength - 2] == calc_Roland_checksum(sum));
 
-    if ((address == KTN_MOD_TYPE_ADDRESS) && (checksum_ok)) {
-      mod_enabled = sxdata[12];
-      current_mod_type = sxdata[13];
+    if ((!is_mk2) && (checksum_ok)) {
+      switch (address) {
+        case KTN_MOD_BASE_ADDRESS_MK1:
+          mod_enabled = sxdata[12];
+          current_mod_type = sxdata[13];
+          break;
+        case KTN_MOD_TYPE_ADDRESS_MK1:
+          current_mod_type = sxdata[12];
+          break;
+        case KTN_FX_BASE_ADDRESS_MK1:
+          fx_enabled = sxdata[12];
+          current_fx_type = sxdata[13];
+          if (last_requested_sysex_address != KTN_FX_BASE_ADDRESS_MK1) update_page = REFRESH_PAGE; // Breaking a circle here
+          break;
+        case KTN_FX_TYPE_ADDRESS_MK1:
+          current_fx_type = sxdata[12];
+          break;
+        case KTN_EQ_TYPE_ADDRESS_MK1:
+          current_eq_type = sxdata[12];
+          break;
+        case KTN_PEDAL_TYPE_ADDRESS_MK1:
+          current_pedal_type = sxdata[12];
+          break;
+        case KTN_GLOBAL_EQ_TYPE_ADDRESS_MK1:
+          current_global_eq_type = sxdata[12];
+          break;
+      }
     }
 
-    if ((address == KTN_FX_TYPE_ADDRESS) && (checksum_ok)) {
-      fx_enabled = sxdata[12];
-      current_fx_type = sxdata[13];
-      if (last_requested_sysex_address != KTN_FX_TYPE_ADDRESS) update_page = REFRESH_PAGE; // Breaking a circle here
-    }
-
-    if ((address == KTN_EQ_TYPE_ADDRESS) && (checksum_ok)) {
-      current_eq_type = sxdata[12];
-    }
-
-    if ((address == KTN_PEDAL_TYPE_ADDRESS) && (checksum_ok)) {
-      current_pedal_type = sxdata[12];
+    if ((is_mk2) && (checksum_ok)) {
+      switch (address) {
+        case KTN_MOD_BASE_ADDRESS_MK2:
+          mod_enabled = sxdata[12];
+          current_mod_type = sxdata[13];
+          break;
+        case KTN_MOD_TYPE_ADDRESS_MK2:
+          current_mod_type = sxdata[12];
+          break;
+        case KTN_FX_BASE_ADDRESS_MK2:
+          fx_enabled = sxdata[12];
+          current_fx_type = sxdata[13];
+          if (last_requested_sysex_address != KTN_FX_BASE_ADDRESS_MK2) update_page = REFRESH_PAGE; // Breaking a circle here
+          break;
+        case KTN_FX_TYPE_ADDRESS_MK2:
+          current_fx_type = sxdata[12];
+          break;
+        case KTN_EQ_TYPE_ADDRESS_MK2:
+          current_eq_type = sxdata[12];
+          break;
+        case KTN_PEDAL_SW_ADDRESS_MK2:
+          current_pedal_type = sxdata[13];
+          break;
+        case KTN_PEDAL_TYPE_ADDRESS_MK2:
+          current_pedal_type = sxdata[12];
+          break;
+        case KTN_GLOBAL_EQ_TYPE_ADDRESS_MK2:
+          current_global_eq_type = sxdata[12];
+          DEBUGMSG("*** Global eq type set to " + String(current_global_eq_type));
+          break;
+      }
     }
 
     // Check if it is the current parameter
@@ -132,8 +202,8 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 
         case REQUEST_PARAMETER_TYPE:
           if (checksum_ok) {
-            if (address != KTN_PEDAL_SW_ADDRESS) read_parameter(last_requested_sysex_switch, sxdata[12], sxdata[13]);
-            else read_parameter(last_requested_sysex_switch, sxdata[12], current_pedal_type);
+            if ((!is_mk2) && (address == KTN_PEDAL_SW_ADDRESS_MK1)) read_parameter(last_requested_sysex_switch, sxdata[12], current_pedal_type); // Fix because current pedal type is stored on different address in MK1
+            else read_parameter(last_requested_sysex_switch, sxdata[12], sxdata[13]);
           }
           PAGE_request_next_switch();
           break;
@@ -147,6 +217,10 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
         current_patch_name += static_cast<char>(sxdata[count]); //Add ascii character to Patch Name String
       }
       update_main_lcd = true;
+      if (popup_patch_name) {
+        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        popup_patch_name = false;
+      }
     }
 
     if ((address == KTN_CURRENT_PATCH_NUMBER_ADDRESS) && (checksum_ok)) { // check if we are reading the current patch number
@@ -159,7 +233,17 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
     if (address == KTN_VERSION_REQUEST) {
       version = sxdata[12] - 1;
       DEBUGMAIN("Katana version is FW" + String(version));
-      LCD_show_popup_label("KTN V" + String(version) + " connected", MESSAGE_TIMER_LENGTH);
+      if (version > 4) {
+        is_mk2 = true;
+        LCD_show_popup_label("KTN MK2 connectd", MESSAGE_TIMER_LENGTH);
+        request_sysex(KTN_GLOBAL_EQ_TYPE_ADDRESS_MK2, 1);
+      }
+      else {
+        is_mk2 = false;
+        LCD_show_popup_label("KTN V" + String(version) + " connected", MESSAGE_TIMER_LENGTH);
+        request_sysex(KTN_GLOBAL_EQ_TYPE_ADDRESS_MK1, 1);
+      }
+      delay(5);
       check_default_page_settings();
     }
 
@@ -178,6 +262,7 @@ void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 
 void MD_KTN_class::forward_MIDI_message(const unsigned char* sxdata, short unsigned int sxlength) { // Forward data from editor to Katana
   if ((connected) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x00) && (sxdata[6] == 0x33)) {
+    editor_connected = true;
     check_sysex_delay();
     MIDI_send_sysex(sxdata, sxlength, MIDI_port);
 
@@ -248,10 +333,14 @@ void MD_KTN_class::identity_check(const unsigned char* sxdata, short unsigned in
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
 
     // Midi forwarding to allow editing via VController
-    if ((MIDI_port != USBMIDI_PORT) && (connected)) { // Forward data from Katana to editor
-      MIDI_send_sysex(sxdata, sxlength, USBMIDI_PORT);
+    for (uint8_t b = 0; b < KTN_IDENTITY_MESSAGE_SIZE; b++) {
+      identity_message[b] = sxdata[b];
     }
   }
+}
+
+void MD_KTN_class::respond_to_identity_request_of_editor() {
+  if (identity_message[0] == 0xF0) MIDI_send_sysex(identity_message, KTN_IDENTITY_MESSAGE_SIZE, USBMIDI_PORT);
 }
 
 void MD_KTN_class::do_after_connect() {
@@ -292,6 +381,7 @@ void MD_KTN_class::write_sysex(uint32_t address, uint8_t value) { // For sending
   uint8_t sysexmessage[15] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x33, 0x12, ad[3], ad[2], ad[1], ad[0], value, checksum, 0xF7};
   check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 15, MIDI_port, 1);
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 15, USBMIDI_PORT); // Forward message to BTS
 }
 
 void MD_KTN_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
@@ -301,6 +391,7 @@ void MD_KTN_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2)
   uint8_t sysexmessage[16] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x33, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, checksum, 0xF7};
   check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 16, MIDI_port, 1);
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 16, USBMIDI_PORT); // Forward message to BTS
 }
 
 void MD_KTN_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
@@ -330,9 +421,18 @@ void MD_KTN_class::write_patch_data(uint32_t address, uint8_t index, uint8_t len
 void MD_KTN_class::set_bpm() {
   if (connected) {
     uint16_t time1 = 60000 / Setting.Bpm;
-    write_sysex(KTN_TIME_DELAY1, time1 >> 7, time1 & 0x7F);
+    uint32_t address_dly1, address_dly2;
+    if (is_mk2) {
+      address_dly1 = KTN_TIME_DELAY1_MK2;
+      address_dly2 = KTN_TIME_DELAY2_MK2;
+    }
+    else {
+      address_dly1 = KTN_TIME_DELAY1_MK1;
+      address_dly2 = KTN_TIME_DELAY2_MK1;
+    }
+    write_sysex(address_dly1, time1 >> 7, time1 & 0x7F);
     uint16_t time2 = 45000 / Setting.Bpm; // Delay 2 is always dotted eights!!!
-    write_sysex(KTN_TIME_DELAY2, time2 >> 7, time2 & 0x7F);
+    write_sysex(address_dly2, time2 >> 7, time2 & 0x7F);
     //DEBUGMSG("Katana: set delay 1 to " + String(time1) + " ms and delay 2 to " + String(time2) + " ms");
   }
 }
@@ -377,8 +477,15 @@ void MD_KTN_class::do_after_patch_selection() {
   Current_patch_number = patch_number;
   update_LEDS = true;
   update_main_lcd = true;
-  request_sysex(KTN_MOD_TYPE_ADDRESS, 2);
-  request_sysex(KTN_FX_TYPE_ADDRESS, 2);
+  if (is_mk2) {
+    request_sysex(KTN_MOD_BASE_ADDRESS_MK2, 2);
+    request_sysex(KTN_FX_BASE_ADDRESS_MK2, 2);
+  }
+  else {
+    request_sysex(KTN_MOD_BASE_ADDRESS_MK1, 2);
+    request_sysex(KTN_FX_BASE_ADDRESS_MK1, 2);
+  }
+  request_current_patch_name();
   reset_exp_pedal_selection();
   //EEPROM_write_patch_number(KTN, patch_number);
   MD_base_class::do_after_patch_selection();
@@ -504,12 +611,16 @@ void MD_KTN_class::direct_select_press(uint8_t number) {
 #define KTN_MOD_INDEX           54  // MOD effect settings for active effect (max 15 parameters)
 #define KTN_FX_BASE_INDEX       69  // FX base (2 parameters: ON/OFF and type)
 #define KTN_FX_INDEX            71  // FX effect settings for active effect (max 15 parameters)
-#define KTN_DELAY1_INDEX        86  // Delay 1 (18 parameters)
+#define KTN_DELAY1_INDEX        86  // Delay 1 (9 parameters)
+#define KTN_DELAY1_MOD_INDEX    95  // Delay 1 MOD (2 parameters)
+#define KTN_SPARE1_BYTES        97  // 7 bytes here
 #define KTN_DELAY1_SDE_INDEX   104  // Delay 1 SDE-3000 settings (5)
-#define KTN_DELAY2_INDEX       109  // Delay 2 (18 parameters)
-#define KTN_DELAY2_SDE_INDEX   127  // Delay 2 SDE-3000 settings (5)// 074 - 084 Reverb (11 parameters)
-#define KTN_REVERB_INDEX       132  // Reverb (11 parameters)
-#define KTN_FOOT_VOL_INDEX     143  // Foot volume (4 parameters)
+#define KTN_DELAY2_INDEX       109  // Delay 2 (9 parameters)
+#define KTN_DELAY2_MOD_INDEX   118  // Delay 2 MOD (2 parameters)
+#define KTN_SPARE2_BYTES       120  // 7 bytes here
+#define KTN_DELAY2_SDE_INDEX   127  // Delay 2 SDE-3000 settings (5)
+#define KTN_REVERB_INDEX       132  // Reverb (12 parameters)
+#define KTN_FOOT_VOL_INDEX     146  // Foot volume (1 parameter)
 #define KTN_S_R_LOOP_INDEX     147  // S/R loop (4 parameters)
 #define KTN_NOISE_GATE_INDEX   151  // Noise gate (4 parameters)
 #define KTN_MASTER_KEY_INDEX   155  // Master key
@@ -518,39 +629,42 @@ void MD_KTN_class::direct_select_press(uint8_t number) {
 #define KTN_PEDAL_SW_INDEX     177  // Pedal sw  (1 parameters: ON/OFF)
 #define KTN_PEDAL_TYPE_INDEX   178  // Pedal type  (1 parameter)
 #define KTN_PEDAL_INDEX        179  // Wah type (6 parameters)
-#define KTN_EXP_ASSIGNS_INDEX  185  // Assignments for the expression pedals (3 bytes)
-#define KTN_SPARE_BYTES        188  // Four bytes left
+#define KTN_EXP_ASSIGNS_INDEX  185  // Assignments for the expression pedals, FS_functions and cabinet resonance (6 bytes)
+#define KTN_SPARE3_BYTES       191  // One byte left
 
 // 192 Total memory size
 
 struct KTN_patch_memory_struct { // Address map for the essential patch data that will be stored
-  uint16_t Address; // The start address of the data on the Katana
+  uint16_t Address_MK1; // The start address of the data on the Katana MK1
+  uint16_t Address_MK2; // The start address of the data on the Katana MK2
   uint8_t Length;   // The Length of the data
   uint8_t Index;    // The index in the KTN_patch_buffer[] array
   uint8_t Supported_in_version;
 };
 
 const PROGMEM KTN_patch_memory_struct KTN_patch_memory[] = {
-  { 0x0720, 20, KTN_FX_CHAIN_INDEX, 1   },  // FX chain
-  { 0x0051, 9, KTN_AMP_INDEX, 1         },  // Amp
-  { 0x0030, 15, KTN_BOOST_INDEX, 1      },  // Boost effect
-  { 0x0130, 1, KTN_EQ_SW_INDEX, 1       },  // Eq
-  { 0x1104, 1, KTN_EQ_TYPE_INDEX, 3     },  // GEQ
-  { 0x0140, 2, KTN_MOD_BASE_INDEX, 1    },  // Mod base
-  { 0x034C, 2, KTN_FX_BASE_INDEX, 1     },  // FX base
-  { 0x0630, 4, KTN_FOOT_VOL_INDEX, 1    },  // Foot volume
-  { 0x0655, 4, KTN_S_R_LOOP_INDEX, 1    },  // S/R loop
-  { 0x0560, 18, KTN_DELAY1_INDEX, 1     },  // Delay 1
-  { 0x0610, 11, KTN_REVERB_INDEX, 1     },  // Reverb
-  { 0x104E, 18, KTN_DELAY2_INDEX, 2     },  // Delay 2
-  { 0x1049, 5, KTN_DELAY1_SDE_INDEX, 2  },  // Delay 1 - SDE3000 settings
-  { 0x1049, 5, KTN_DELAY2_SDE_INDEX, 2  },  // Delay 2 - SDE3000 settings
-  { 0x0620, 1, KTN_PEDAL_SW_INDEX, 4    },  // Pedal SW
-  { 0x1111, 1, KTN_PEDAL_TYPE_INDEX, 4  },  // Pedal type
-  { 0x121F, 3, KTN_EXP_ASSIGNS_INDEX, 3 },  // Assigns for expression pedals
-  { 0x0663, 4, KTN_NOISE_GATE_INDEX, 1  },  // Noise gate
-  { 0x0718, 1, KTN_MASTER_KEY_INDEX, 1  },  // Master key
-  { 0x0000, 16, KTN_PATCH_NAME_INDEX, 1 },  // Patch name (1)
+  { 0x0720, 0x0600, 20, KTN_FX_CHAIN_INDEX, 1   },  // FX chain
+  { 0x0051, 0x0021, 9, KTN_AMP_INDEX, 1         },  // Amp - mk2 solo sw and level !!!
+  { 0x0030, 0x0010, 15, KTN_BOOST_INDEX, 1      },  // Boost effect
+  { 0x0130, 0x0040, 1, KTN_EQ_SW_INDEX, 1       },  // Eq
+  { 0x1104, 0x0041, 1, KTN_EQ_TYPE_INDEX, 3     },  // GEQ
+  { 0x0140, 0x0100, 2, KTN_MOD_BASE_INDEX, 1    },  // Mod base
+  { 0x034C, 0x0300, 2, KTN_FX_BASE_INDEX, 1     },  // FX base
+  { 0x0633, 0x0561, 1, KTN_FOOT_VOL_INDEX, 1    },  // Foot volume
+  { 0x0655, 0x0562, 4, KTN_S_R_LOOP_INDEX, 1    },  // S/R loop
+  { 0x0560, 0x0500, 9, KTN_DELAY1_INDEX, 1      },  // Delay 1
+  { 0x0573, 0x0513, 2, KTN_DELAY1_MOD_INDEX, 1  },  // Delay 1 - MOD settings
+  { 0x0610, 0x0540, 12, KTN_REVERB_INDEX, 1     },  // Reverb
+  { 0x104E, 0x0520, 9, KTN_DELAY2_INDEX, 2      },  // Delay 2
+  { 0x1061, 0x0533, 2, KTN_DELAY2_MOD_INDEX, 1  },  // Delay 2 - MOD settings
+  { 0x1049, 0x0515, 5, KTN_DELAY1_SDE_INDEX, 2  },  // Delay 1 - SDE3000 settings
+  { 0x1049, 0x0535, 5, KTN_DELAY2_SDE_INDEX, 2  },  // Delay 2 - SDE3000 settings
+  { 0x0620, 0x0550, 1, KTN_PEDAL_SW_INDEX, 4    },  // Pedal SW
+  { 0x1111, 0x0551, 1, KTN_PEDAL_TYPE_INDEX, 4  },  // Pedal type
+  { 0x121F, 0x063E, 6, KTN_EXP_ASSIGNS_INDEX, 3 },  // Assigns for expression pedals, FS en Cabinet resonance
+  { 0x0663, 0x0566, 4, KTN_NOISE_GATE_INDEX, 1  },  // Noise gate
+  { 0x0718, 0x0571, 1, KTN_MASTER_KEY_INDEX, 1  },  // Master key
+  { 0x0000, 0x0000, 16, KTN_PATCH_NAME_INDEX, 1 },  // Patch name (1)
 };
 
 const uint8_t KTN_NUMBER_OF_PATCH_MESSAGES = sizeof(KTN_patch_memory) / sizeof(KTN_patch_memory[0]);
@@ -558,67 +672,69 @@ const uint8_t KTN_NUMBER_OF_PATCH_MESSAGES = sizeof(KTN_patch_memory) / sizeof(K
 #define KTN_NUMBER_OF_FX_TYPES 42
 
 struct KTN_fx_memory_struct { // Address map for the essential patch data that will be stored
-  uint16_t Mod_address; // The start address of the mod parameters on the Katana
-  uint16_t FX_address;  // The start address of the fx parameters on the Katana
+  uint16_t Mod_address_MK1; // The start address of the mod parameters on the Katana MK1
+  uint16_t FX_address_MK1;  // The start address of the fx parameters on the Katana MK2
+  uint16_t Mod_address_MK2; // The start address of the Mod parameters on the Katana MK1. FX is the same number + 0x0200
   uint8_t Length;       // The Length of the data
 };
 
 const PROGMEM KTN_fx_memory_struct KTN_fx_memory[KTN_NUMBER_OF_FX_TYPES] = {
-  { 0x014C, 0x0358, 7 },  // TOUCHWAH
-  { 0x0154, 0x0360, 7 },  // AUTO WAH
-  { 0x015C, 0x0368, 6 },  // SUB WAH
-  { 0x0163, 0x036F, 5 },  // COMPRSOR
-  { 0x0169, 0x0375, 6 },  // LIMITER
-  { 0x0142, 0x034E, 8 },  // DIST
-  { 0x0170, 0x037C, 11 }, // GRAPH EQ
-  { 0x017C, 0x0408, 11 }, // PARAM EQ
-  { 0x0208, 0x0414, 5 },  // TONE MOD
-  { 0x020E, 0x041A, 5 },  // GTR SIM",
-  { 0x0214, 0x0420, 3 },  // SLOW GR
-  { 0x0218, 0x0424, 7 },  // DEFRET
-  { 0x0220, 0x042C, 8 },  // WAV SNTH
-  { 0x0229, 0x0435, 7 },  // SITARSIM
-  { 0x0231, 0x043D, 3 },  // OCTAVE
-  { 0x0235, 0x0441, 15 }, // PITCH SH
-  { 0x0245, 0x0451, 11 },  // HARMONST - length is 35 if we were to store user scales as well
-  { 0x0269, 0x0475, 3 },  // SND HOLD
-  { 0x026E, 0x0479, 7 },  // AC. PROC
-  { 0x0275, 0x0501, 8 },  // PHASER",
-  { 0x027E, 0x050A, 8 },  // FLANGER
-  { 0x0307, 0x0513, 4 },  // TREMOLO
-  { 0x030E, 0x051A, 5 },  // ROTARY 1
-  { 0x0314, 0x0520, 3 },  // UNI-V
-  { 0x0318, 0x0524, 6 },  // PAN
-  { 0x031F, 0x052B, 5 },  // SLICER
-  { 0x0325, 0x0531, 5 },  // VIBRATO
-  { 0x032B, 0x0537, 4 },  // RING MOD
-  { 0x0330, 0x053C, 8 },  // HUMANIZR
-  { 0x0339, 0x0545, 9 },  // 2x2 CHOR
-  { 0x0343, 0x054F, 7 },  // SUB DELY
-  { 0x1010, 0x101F, 4 },  // AcGtrSim
-  { 0x1016, 0x1025, 9 },  // ROTARY 2
-  { 0x0000, 0x102F, 7 },  // TeraEcho
-  { 0x0000, 0x1037, 5 },  // OVERTONE
-  { 0x103D, 0x1043, 2 },  // PHAS 90E
-  { 0x103F, 0x1045, 4 },  // FLGR117E
-  { 0x1068, 0x1076, 5 },  // WAH95E
-  { 0x106D, 0x107B, 9 },  // DC30
-  { 0x1117, 0x111A, 3 },  // HEAVY OCTAVE
-  { 0x0000, 0x0000, 4 },  // Pedal pitch
-  { 0x0000, 0x0000, 11 }, // GEQ 12 dB
+  { 0x014C, 0x0358, 0x0102, 7 },  // TOUCHWAH 00
+  { 0x0154, 0x0360, 0x0109, 7 },  // AUTO WAH
+  { 0x015C, 0x0368, 0x0110, 6 },  // SUB WAH
+  { 0x0163, 0x036F, 0x0116, 5 },  // COMPRSOR
+  { 0x0169, 0x0375, 0x011B, 6 },  // LIMITER
+  { 0x0142, 0x034E, 0x0000, 8 }, // DIST
+  { 0x0170, 0x037C, 0x0121, 11 }, // GRAPH EQ
+  { 0x017C, 0x0408, 0x012C, 11 }, // PARAM EQ
+  { 0x0208, 0x0414, 0x0000, 5 }, // TONE MOD
+  { 0x020E, 0x041A, 0x0137, 5 },  // GTR SIM",
+  { 0x0214, 0x0420, 0x013C, 3 },  // SLOW GR 10
+  { 0x0218, 0x0424, 0x0000, 7 }, // DEFRET
+  { 0x0220, 0x042C, 0x013F, 8 },  // WAV SNTH
+  { 0x0229, 0x0435, 0x0000, 7 }, // SITARSIM
+  { 0x0231, 0x043D, 0x0147, 3 },  // OCTAVE
+  { 0x0235, 0x0441, 0x014A, 15 }, // PITCH SH
+  { 0x0245, 0x0451, 0x0159, 11 },  // HARMONST - length is 35 if we were to store user scales as well
+  { 0x0269, 0x0475, 0x0000, 3 }, // SND HOLD
+  { 0x026E, 0x0479, 0x017C, 7 },  // AC. PROC
+  { 0x0275, 0x0501, 0x0203, 8 },  // PHASER",
+  { 0x027E, 0x050A, 0x020B, 8 },  // FLANGER 20
+  { 0x0307, 0x0513, 0x0213, 4 },  // TREMOLO
+  { 0x030E, 0x051A, 0x0219, 5 },  // ROTARY 1
+  { 0x0314, 0x0520, 0x021E, 3 },  // UNI-V
+  { 0x0318, 0x0524, 0x0000, 6 }, // PAN
+  { 0x031F, 0x052B, 0x0221, 5 },  // SLICER
+  { 0x0325, 0x0531, 0x0226, 5 },  // VIBRATO
+  { 0x032B, 0x0537, 0x022B, 4 },  // RING MOD
+  { 0x0330, 0x053C, 0x022F, 8 },  // HUMANIZR
+  { 0x0339, 0x0545, 0x0237, 9 },  // 2x2 CHOR
+  { 0x0343, 0x054F, 0x0000, 7 }, // SUB DELAY 30
+  { 0x1010, 0x101F, 0x0241, 5 },  // AcGtrSim
+  { 0x1016, 0x1025, 0x0000, 9 }, // ROTARY 2
+  { 0x0000, 0x102F, 0x0000, 7 }, // TeraEcho
+  { 0x0000, 0x1037, 0x0000, 5 }, // OVERTONE
+  { 0x103D, 0x1043, 0x0246, 2 },  // PHAS 90E
+  { 0x103F, 0x1045, 0x0248, 4 },  // FLGR117E
+  { 0x1068, 0x1076, 0x024C, 5 },  // WAH95E
+  { 0x106D, 0x107B, 0x0251, 9 },  // DC30
+  { 0x1117, 0x111A, 0x025A, 3 },  // HEAVY OCTAVE
+  { 0x0000, 0x0000, 0x0000, 4 }, // Pedal pitch 40
+  { 0x0000, 0x0000, 0x0000, 11 }, // GEQ 12 dB
 };
 
 struct KTN_pedal_memory_struct { // Address map for the essential patch data that will be stored
-  uint16_t Address; // The start address of the mod parameters on the Katana
+  uint16_t Address_MK1; // The start address of the mod parameters on the Katana
+  uint16_t Address_MK2;
   uint8_t Length;       // The Length of the data
 };
 
 #define KTN_NUMBER_OF_PEDAL_TYPES 3
 
 const PROGMEM KTN_pedal_memory_struct KTN_pedal_memory[KTN_NUMBER_OF_PEDAL_TYPES] = {
-  { 0x0626, 6 },
-  { 0x0622, 4 },
-  { 0x1112, 5 },
+  { 0x0626, 0x0552, 6 },
+  { 0x0622, 0x0558, 4 },
+  { 0x1112, 0x055C, 5 },
 };
 
 // Here is how I made the default patch: When a patch is saved, the contents of the current patch memory are shown in the Serial Monitor when DEBUG_NORMAL is on.
@@ -642,31 +758,55 @@ void MD_KTN_class::load_patch_buffer_with_default_patch() {
 }
 
 void MD_KTN_class::load_patch(uint8_t number) {
+  uint16_t address, mod_address, fx_address, pedal_address;
+  uint32_t geq_address, peq_address;
 
   // Load patch from EEPROM in KTN_patch_memory
   EEPROM_load_KTN_patch(number, KTN_patch_buffer, KTN_PATCH_SIZE);
 
+  sysex_delay_length = 0; //Speed up the MIDI data
   // Write the patch from KTN_patch_memory to the Katana
   current_mod_type = KTN_patch_buffer[KTN_MOD_BASE_INDEX + 1];
-  if (KTN_fx_memory[current_mod_type].Mod_address > 0x0000) write_patch_data(0x60000000 + KTN_fx_memory[current_mod_type].Mod_address, KTN_MOD_INDEX, KTN_fx_memory[current_mod_type].Length);
+  if (is_mk2) mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK2;
+  else mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK1;
+  if (mod_address > 0x0000) write_patch_data(0x60000000 + mod_address, KTN_MOD_INDEX, KTN_fx_memory[current_mod_type].Length);
 
   current_fx_type = KTN_patch_buffer[KTN_FX_BASE_INDEX + 1];
-  if (KTN_fx_memory[current_fx_type].FX_address > 0x0000) write_patch_data(0x60000000 + KTN_fx_memory[current_fx_type].FX_address, KTN_FX_INDEX, KTN_fx_memory[current_fx_type].Length);
+  if (is_mk2) fx_address = KTN_fx_memory[current_fx_type].Mod_address_MK2 + 0x0200;
+  else fx_address = KTN_fx_memory[current_fx_type].FX_address_MK1;
+  if (fx_address > 0x0000) write_patch_data(0x60000000 + fx_address, KTN_FX_INDEX, KTN_fx_memory[current_fx_type].Length);
 
   current_eq_type = KTN_patch_buffer[KTN_EQ_TYPE_INDEX];
-  if ((current_eq_type == 0) || (version < 3)) write_patch_data(0x60000131, KTN_EQ_GEQ_INDEX, 11); // write to parametric eq space on Katana
-  else write_patch_data(0x60001105, KTN_EQ_GEQ_INDEX, 11); // write to graphic eq space on Katana
+  if (is_mk2) {
+    peq_address = KTN_PEQ_START_ADDRESS_MK2;
+    geq_address = KTN_PEQ_START_ADDRESS_MK2;
+  }
+  else {
+    peq_address = KTN_GEQ_START_ADDRESS_MK1;
+    geq_address = KTN_PEQ_START_ADDRESS_MK1;
+  }
+  if ((current_eq_type == 0) || (version < 3)) write_patch_data(peq_address, KTN_EQ_GEQ_INDEX, 11); // write to parametric eq space on Katana
+  else write_patch_data(geq_address, KTN_EQ_GEQ_INDEX, 11); // write to graphic eq space on Katana
 
   current_pedal_type = KTN_patch_buffer[KTN_PEDAL_TYPE_INDEX];
-  if ((version >= 4) && (current_pedal_type < KTN_NUMBER_OF_PEDAL_TYPES)) write_patch_data(0x60000000 + KTN_pedal_memory[current_pedal_type].Address, KTN_PEDAL_INDEX, KTN_pedal_memory[current_pedal_type].Length);
+  if (is_mk2) pedal_address = KTN_pedal_memory[current_pedal_type].Address_MK2;
+  else pedal_address = KTN_pedal_memory[current_pedal_type].Address_MK1;
+  if ((version >= 4) && (current_pedal_type < KTN_NUMBER_OF_PEDAL_TYPES)) write_patch_data(0x60000000 + pedal_address, KTN_PEDAL_INDEX, KTN_pedal_memory[current_pedal_type].Length);
 
-  if (FX_chain_changed()) write_patch_data(0x60000000 + KTN_patch_memory[0].Address, KTN_patch_memory[0].Index, KTN_patch_memory[0].Length); // Write FX chain only when it is different to avoid gap
+  if (FX_chain_changed()) {
+    if (is_mk2) address = KTN_patch_memory[0].Address_MK2;
+    else address = KTN_patch_memory[0].Address_MK1;
+    write_patch_data(0x60000000 + address, KTN_patch_memory[0].Index, KTN_patch_memory[0].Length); // Write FX chain only when it is different to avoid gap
+  }
 
   for (uint8_t i = 1; i < KTN_NUMBER_OF_PATCH_MESSAGES; i++) {
     if (version >= KTN_patch_memory[i].Supported_in_version) {
-      write_patch_data(0x60000000 + KTN_patch_memory[i].Address, KTN_patch_memory[i].Index, KTN_patch_memory[i].Length);
+      if (is_mk2) address = KTN_patch_memory[i].Address_MK2;
+      else address = KTN_patch_memory[i].Address_MK1;
+      write_patch_data(0x60000000 + address, KTN_patch_memory[i].Index, KTN_patch_memory[i].Length);
     }
   }
+  sysex_delay_length = KTN_DEFAULT_MIDI_DELAY;
 
   save_patch_number = number; // Remember memory number for the next time we save a patch
 }
@@ -702,6 +842,22 @@ void MD_KTN_class::save_patch() {
 }
 
 void MD_KTN_class::request_patch_message(uint8_t number) {
+  uint16_t mod_address, fx_address, pedal_address;
+  uint32_t geq_address, peq_address;
+  if (is_mk2) {
+    mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK2;
+    fx_address = KTN_fx_memory[current_fx_type].Mod_address_MK2 + 0x0200;
+    pedal_address = KTN_pedal_memory[current_pedal_type].Address_MK2;
+    peq_address = KTN_PEQ_START_ADDRESS_MK2;
+    geq_address = KTN_PEQ_START_ADDRESS_MK2;
+  }
+  else {
+    mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK1;
+    fx_address = KTN_fx_memory[current_fx_type].FX_address_MK1;
+    pedal_address = KTN_pedal_memory[current_pedal_type].Address_MK1;
+    peq_address = KTN_GEQ_START_ADDRESS_MK1;
+    geq_address = KTN_PEQ_START_ADDRESS_MK1;
+  }
   current_midi_message = number;
   midi_timer = millis() + KTN_READ_MIDI_TIMER_LENGTH; // Set the timer
   if ((number > 0) && (number <= KTN_NUMBER_OF_PATCH_MESSAGES)) {
@@ -710,13 +866,14 @@ void MD_KTN_class::request_patch_message(uint8_t number) {
       return;
     }
     DEBUGMSG("Request patch message " + String(current_midi_message));
-    current_midi_message_address = 0x60000000 + KTN_patch_memory[number - 1].Address;
+    if (is_mk2) current_midi_message_address = 0x60000000 +  KTN_patch_memory[number - 1].Address_MK2;
+    else current_midi_message_address = 0x60000000 + KTN_patch_memory[number - 1].Address_MK1;
     request_sysex(current_midi_message_address, KTN_patch_memory[number - 1].Length);
   }
   if (number == KTN_NUMBER_OF_PATCH_MESSAGES + 1) { // Selected MOD data
-    if (KTN_fx_memory[current_mod_type].Mod_address > 0x0000) {
+    if (mod_address > 0x0000) {
       DEBUGMSG("Request MOD data " + String(current_mod_type));
-      current_midi_message_address = 0x60000000 + KTN_fx_memory[current_mod_type].Mod_address;
+      current_midi_message_address = 0x60000000 + mod_address;
       request_sysex(current_midi_message_address, KTN_fx_memory[current_mod_type].Length);
     }
     else {
@@ -725,9 +882,9 @@ void MD_KTN_class::request_patch_message(uint8_t number) {
     }
   }
   if (number == KTN_NUMBER_OF_PATCH_MESSAGES + 2) { // Selected FX data
-    if (KTN_fx_memory[current_fx_type].FX_address > 0x0000) {
+    if (fx_address > 0x0000) {
       DEBUGMSG("Request FX data " + String(current_fx_type));
-      current_midi_message_address = 0x60000000 + KTN_fx_memory[current_fx_type].FX_address;
+      current_midi_message_address = 0x60000000 + fx_address;
       request_sysex(current_midi_message_address, KTN_fx_memory[current_fx_type].Length);
     }
     else {
@@ -740,13 +897,13 @@ void MD_KTN_class::request_patch_message(uint8_t number) {
       skip_patch_message(number, KTN_PEDAL_INDEX, KTN_pedal_memory[0].Length);
       return;
     }
-    current_midi_message_address = 0x60000000 + KTN_pedal_memory[current_pedal_type].Address;
+    current_midi_message_address = 0x60000000 + pedal_address;
     request_sysex(current_midi_message_address, KTN_pedal_memory[current_pedal_type].Length);
   }
 
   if (number == KTN_NUMBER_OF_PATCH_MESSAGES + 4) { // Selected EQ data
-    if (current_eq_type == 0) current_midi_message_address = 0x60000131;
-    else current_midi_message_address = 0x60001105;
+    if (current_eq_type == 0) current_midi_message_address = peq_address;
+    else current_midi_message_address = geq_address;
     request_sysex(current_midi_message_address, 11);
   }
 }
@@ -800,20 +957,39 @@ void MD_KTN_class::read_patch_message(uint8_t number, const unsigned char* sxdat
       return;
     }
 
-    if (address == 0x0140) { // Mod base - save the correct mod_type
-      current_mod_type = sxdata[13];
-    }
+    if (is_mk2) {
+      if (address == 0x0100) { // Mod base - save the correct mod_type
+        current_mod_type = sxdata[13];
+      }
 
-    if (address == 0x034C) { // FX base - save the correct fx_type
-      current_fx_type = sxdata[13];
-    }
+      if (address == 0x0300) { // FX base - save the correct fx_type
+        current_fx_type = sxdata[13];
+      }
 
-    if (address == 0x1104) { // EQ type - save the correct eq_type
-      current_eq_type = sxdata[12];
-    }
+      if (address == 0x0041) { // EQ type - save the correct eq_type
+        current_eq_type = sxdata[12];
+      }
 
-    if (address == 0x1111) { // pedal type - save the correct eq_type
-      current_pedal_type = sxdata[12];
+      if (address == 0x0551) { // pedal type - save the correct pedal_type
+        current_pedal_type = sxdata[12];
+      }
+    }
+    else {
+      if (address == 0x0140) { // Mod base - save the correct mod_type
+        current_mod_type = sxdata[13];
+      }
+
+      if (address == 0x034C) { // FX base - save the correct fx_type
+        current_fx_type = sxdata[13];
+      }
+
+      if (address == 0x1104) { // EQ type - save the correct eq_type
+        current_eq_type = sxdata[12];
+      }
+
+      if (address == 0x1111) { // pedal type - save the correct pedal_type
+        current_pedal_type = sxdata[12];
+      }
     }
 
     // Request next message
@@ -916,8 +1092,8 @@ const PROGMEM KTN_parameter_category_struct KTN_parameter_category[KTN_NUMBER_OF
 };
 
 struct KTN_parameter_struct { // Combines all the data we need for controlling a parameter in a device
-  //uint16_t Target; // Target of the assign as given in the assignments of the KTN / GR55
-  uint16_t Address; // The address of the parameter
+  uint16_t Address_MK1; // The address of the parameter
+  uint16_t Address_MK2;
   uint8_t NumVals; // The number of values for this parameter
   char Name[17]; // The name for the label
   uint16_t Sublist; // Which sublist to read for the FX or amp type - 0 if second byte does not contain the type or if there is no sublist +100 Show value from sublist.
@@ -946,147 +1122,149 @@ struct KTN_parameter_struct { // Combines all the data we need for controlling a
 #define SHOW_CUT_BOOST_12DB 31758 // GEQ in EQ block has a different scale -12dB  - +24dB
 
 const PROGMEM KTN_parameter_struct KTN_parameters[] = {
-  {0x0620, 2, "PEDAL SW", 290 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4}, //00
-  {0x1111, 3, "PEDAL TYPE", 290, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4 },
-  {0xB000, 101, "PDL PAR 01", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0xB001, 101, "PDL PAR 02", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0xB002, 101, "PDL PAR 03", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0xB003, 101, "PDL PAR 04", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0x0030, 2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0031, 22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0032, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
-  {0x0033, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0034, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0035, 2, "BST SOLO SW", 0, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0036, 101, "BST SOLO LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0037, 101, "BST FX LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0038, 101, "BST DIR LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0039, 8,   "BST CUST.TP", 276, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x003A, 101, "BST CUST.BTM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x003B, 101, "BST CUST.TOP", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x003C, 101, "BST CUST.LOW", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 }, //20
-  {0x003D, 101, "BST CUST.HI", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x003E, 101, "BST CUST.CHAR", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0140, 2, "MOD", 23 | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_MOD, 1 },
-  {0x0141, 40, "MOD TP", 23, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8000, 101, "MOD PAR 01", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8001, 101, "MOD PAR 02", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8002, 101, "MOD PAR 03", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8003, 101, "MOD PAR 04", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8004, 101, "MOD PAR 05", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8005, 101, "MOD PAR 06", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 }, // 30
-  {0x8006, 101, "MOD PAR 07", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8007, 101, "MOD PAR 08", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8008, 101, "MOD PAR 09", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x8009, 101, "MOD PAR 10", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x800A, 101, "MOD PAR 11", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x800B, 101, "MOD PAR 12", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x800C, 101, "MOD PAR 13", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x800D, 101, "MOD PAR 14", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x800E, 101, "MOD PAR 15", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x0051, 28, "AMP TP", 63, FX_AMP_TYPE, KTN_CAT_AMP, 1 },              // 40
-  {0x0052, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0054, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0055, 101, "AMP MIDDLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0056, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0057, 101, "AMP PRESCENCE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0059, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0058, 101, "AMP LEVEL", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0130, 2, "EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0x1104, 2, "EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_EQ, 3 },
-  {0xA000, 101, "EQ PAR 01", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //50
-  {0xA001, 101, "EQ PAR 02", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA002, 101, "EQ PAR 03", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA003, 101, "EQ PAR 04", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA004, 101, "EQ PAR 05", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA005, 101, "EQ PAR 06", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA006, 101, "EQ PAR 07", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA007, 101, "EQ PAR 08", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA008, 101, "EQ PAR 09", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA009, 101, "EQ PAR 10", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0xA00A, 101, "EQ PAR 11", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //60
-  {0x0560, 2, "DLY1", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0561, 11, "DLY1 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0562, TIME_2000, "DLY1 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0564, 101, "DLY1 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0565, 15, "DLY1 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0566, 101, "DLY1 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0567, 101, "DLY1 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0573, 101, "DLY1 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0574, 101, "DLY1 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x034C, 2, "FX", 23  | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_FX, 1 }, // 70
-  {0x034D, 40, "FX TYPE", 23, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9000, 101, "FX PAR 01", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9001, 101, "FX PAR 02", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9002, 101, "FX PAR 03", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9003, 101, "FX PAR 04", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9004, 101, "FX PAR 05", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9005, 101, "FX PAR 06", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9006, 101, "FX PAR 07", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9007, 101, "FX PAR 08", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x9008, 101, "FX PAR 09", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 }, //80
-  {0x9009, 101, "FX PAR 10", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x900A, 101, "FX PAR 11", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x900B, 101, "FX PAR 12", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x900C, 101, "FX PAR 13", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x900D, 101, "FX PAR 14", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x900E, 101, "FX PAR 15", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x104E, 2, "DLY2", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x104F, 11, "DLY2 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1050, TIME_2000, "DLY2 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1052, 101, "DLY2 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 }, // 90
-  {0x1053, 15, "DLY2 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1054, 101, "DLY2 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1055, 101, "DLY2 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1061, 101, "DLY2 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x1062, 101, "DLY2 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x0610, 2, "RVB SW", 102  | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0611, 7, "RVB TP", 102, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0612, 100, "RVB TIME", SHOW_RVB_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0613, TIME_500, "RVB PRE", SHOW_DELAY_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0615, 18, "RVB L.CUT", 112, FX_REVERB_TYPE, KTN_CAT_RVB, 1 }, // 100
-  {0x0616, 15, "RVB H.CUT", 128, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0617, 11, "RVB DENS", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0618, 101, "FX LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0619, 101, "DIR LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x061A, 101, "SPRING SENS", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0655, 2, "S/R LOOP", 0, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0656, 2, "S/R MODE", 149, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0657, 101, "S/R SEND LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0658, 101, "S/R RET. LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0663, 2, "N/S SW", 0, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 }, // 110
-  {0x0664, 101, "N/S THRESH", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
-  {0x0665, 101, "N/S RLEASE", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
-  {0x121F, 9, "EXP ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
-  {0x1220, 9, "GAFC EXP1 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
-  {0x1221, 9, "GAFC EXP2 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
-  {0x0633, 101, "FOOT VOL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x1210, 3, "BOOST COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1211, 3, "MOD COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1212, 3, "DLY1 COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1213, 3, "FX COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },  // 120
-  {0x1214, 3, "RVB COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x7430, 3, "L/OUT AIR", 268, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 }, // Address 0x7xxx is translated to 0x00000xxx
-  {0x7431, 3, "CAB RESO", 271, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7432, 2, "GLBL EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743E, 2, "GL EQ POS", 273, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7433, 18, "GEQ LOW CUT", 112, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7434, 41, "GEQ LOW LVL", SHOW_CUT_BOOST_20DB, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7435, 26, "GEQ L-M F", 113, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7436, 6, "GEQ L-M Q", 143, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7437, 41, "GEQ L-M LVL", SHOW_CUT_BOOST_20DB, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 }, // 130
-  {0x7438, 26, "GEQ H-M F", 113, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7439, 6, "GEQ H-M Q", 143, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743A, 41, "GEQ H-M LVL", SHOW_CUT_BOOST_20DB, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743B, 15, "GEQ HI CUT", 128, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743C, 41, "GEQ HI LVL", SHOW_CUT_BOOST_20DB, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743D, 101, "GEQ LEVEL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x0620, 0x0550, 2, "PEDAL SW", 290 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4}, //00
+  {0x1111, 0x0551, 3, "PEDAL TYPE", 290, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4 },
+  {0xB000, 0xB000, 101, "PDL PAR 01", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0xB001, 0xB001, 101, "PDL PAR 02", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0xB002, 0xB002, 101, "PDL PAR 03", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0xB003, 0xB003, 101, "PDL PAR 04", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0xB004, 0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0xB005, 0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
+  {0x0030, 0x0010, 2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0031, 0x0011, 22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0032, 0x0012, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
+  {0x0033, 0x0013, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0034, 0x0014, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0035, 0x0015, 2, "BST SOLO SW", 0, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0036, 0x0016, 101, "BST SOLO LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0037, 0x0017, 101, "BST FX LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0038, 0x0018, 101, "BST DIR LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0039, 0x0019, 8,   "BST CUST.TP", 276, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x003A, 0x001A, 101, "BST CUST.BTM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x003B, 0x001B, 101, "BST CUST.TOP", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x003C, 0x001C, 101, "BST CUST.LOW", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 }, //20
+  {0x003D, 0x001D, 101, "BST CUST.HI", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x003E, 0x001E, 101, "BST CUST.CHAR", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0140, 0x0100, 2, "MOD", 23 | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_MOD, 1 },
+  {0x0141, 0x0101, 40, "MOD TP", 23, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8000, 0x8000, 101, "MOD PAR 01", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8001, 0x8001, 101, "MOD PAR 02", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8002, 0x8002, 101, "MOD PAR 03", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8003, 0x8003, 101, "MOD PAR 04", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8004, 0x8004, 101, "MOD PAR 05", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8005, 0x8005, 101, "MOD PAR 06", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 }, // 30
+  {0x8006, 0x8006, 101, "MOD PAR 07", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8007, 0x8007, 101, "MOD PAR 08", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8008, 0x8008, 101, "MOD PAR 09", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x8009, 0x8009, 101, "MOD PAR 10", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x800A, 0x800A, 101, "MOD PAR 11", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x800B, 0x800B, 101, "MOD PAR 12", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x800C, 0x800C, 101, "MOD PAR 13", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x800D, 0x800D, 101, "MOD PAR 14", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x800E, 0x800E, 101, "MOD PAR 15", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x0051, 0x0021, 28, "AMP TP", 63, FX_AMP_TYPE, KTN_CAT_AMP, 1 },              // 40
+  {0x0052, 0x0022, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0054, 0x0024, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0055, 0x0025, 101, "AMP MIDDLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0056, 0x0026, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0057, 0x0027, 101, "AMP PRESCENCE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0059, 0x0029, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0058, 0x0028, 101, "AMP LEVEL", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0130, 0x0040, 2, "EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0x1104, 0x0041, 2, "EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_EQ, 3 },
+  {0xA000, 0xA000, 101, "L.Cut  /  31 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //50
+  {0xA001, 0xA001, 101, "L.Lvl  /  62 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA002, 0xA002, 101, "LM.Freq/ 125 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA003, 0xA003, 101, "LM Q   / 250 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA004, 0xA004, 101, "LM LVL / 500 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA005, 0xA005, 101, "HM Freq/  1 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA006, 0xA006, 101, "HM Q   /  2 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA007, 0xA007, 101, "HM Lvl /  4 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA008, 0xA008, 101, "H Lvl  /  8 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA009, 0xA009, 101, "H.Cut  / 16 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0xA00A, 0xA00A, 101, "EQ LEVEL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //60
+  {0x0560, 0x0500, 2, "DLY1", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0561, 0x0501, 11, "DLY1 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0562, 0x0502, TIME_2000, "DLY1 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0564, 0x0504, 101, "DLY1 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0565, 0x0505, 15, "DLY1 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0566, 0x0506, 101, "DLY1 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0567, 0x0507, 101, "DLY1 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0573, 0x0513, 101, "DLY1 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0574, 0x0514, 101, "DLY1 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x034C, 0x0300, 2, "FX", 23  | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_FX, 1 }, // 70
+  {0x034D, 0x0301, 40, "FX TYPE", 23, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9000, 0x9000, 101, "FX PAR 01", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9001, 0x9001, 101, "FX PAR 02", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9002, 0x9002, 101, "FX PAR 03", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9003, 0x9003, 101, "FX PAR 04", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9004, 0x9004, 101, "FX PAR 05", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9005, 0x9005, 101, "FX PAR 06", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9006, 0x9006, 101, "FX PAR 07", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9007, 0x9007, 101, "FX PAR 08", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x9008, 0x9008, 101, "FX PAR 09", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 }, //80
+  {0x9009, 0x9009, 101, "FX PAR 10", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x900A, 0x900A, 101, "FX PAR 11", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x900B, 0x900B, 101, "FX PAR 12", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x900C, 0x900C, 101, "FX PAR 13", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x900D, 0x900D, 101, "FX PAR 14", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x900E, 0x900E, 101, "FX PAR 15", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x104E, 0x0520, 2, "DLY2", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x104F, 0x0521, 11, "DLY2 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1050, 0x0522, TIME_2000, "DLY2 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1052, 0x0524, 101, "DLY2 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 }, // 90
+  {0x1053, 0x0525, 15, "DLY2 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1054, 0x0526, 101, "DLY2 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1055, 0x0527, 101, "DLY2 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1061, 0x0533, 101, "DLY2 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1062, 0x0534, 101, "DLY2 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x0610, 0x0540, 2, "RVB SW", 102  | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0611, 0x0541, 7, "RVB TP", 102, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0612, 0x0542, 100, "RVB TIME", SHOW_RVB_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0613, 0x0543, TIME_500, "RVB PRE", SHOW_DELAY_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0615, 0x0545, 18, "RVB L.CUT", 112, FX_REVERB_TYPE, KTN_CAT_RVB, 1 }, // 100
+  {0x0616, 0x0546, 15, "RVB H.CUT", 128, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0617, 0x0547, 11, "RVB DENS", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0618, 0x0548, 101, "FX LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0619, 0x0549, 101, "DIR LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x061B, 0x054B, 101, "SPRING COLOR", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0655, 0x0562, 2, "S/R LOOP", 0, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0656, 0x0563, 2, "S/R MODE", 149, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0657, 0x0564, 101, "S/R SEND LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0658, 0x0565, 101, "S/R RET. LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0663, 0x0566, 2, "N/S SW", 0, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 }, // 110
+  {0x0664, 0x0567, 101, "N/S THRESH", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
+  {0x0665, 0x0568, 101, "N/S RLEASE", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
+  {0x121F, 0x063E, 9, "EXP ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x1220, 0x063F, 9, "FC E1 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x1221, 0x0640, 9, "FC E2 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x0633, 0x0561, 101, "FOOT VOL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x1210, 0x0639, 3, "BOOST COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1211, 0x063A, 3, "MOD COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1213, 0x063B, 3, "FX COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },  // 120
+  {0x1212, 0x063C, 3, "DLY1 COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1214, 0x063D, 3, "RVB COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x7430, 0x7029, 3, "L/OUT AIR", 268, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 }, // Address 0x7xxx is translated to 0x00000xxx
+  {0x7431, 0x0643, 3, "CAB RESO", 271, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x7432, 0x7010, 2, "GLBL EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x743E, 0x7012, 2, "GL EQ POS", 274, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x743F, 0x7011, 2, "GL EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 3 },
+  {0xC000, 0xC000, 101, "GEQ L.Cut/31 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC001, 0xC001, 101, "GEQ L.Lvl/62 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC002, 0xC002, 101, "GEQ LM.F/125 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC003, 0xC003, 101, "GEQ LM Q/250 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 }, // 130
+  {0xC004, 0xC004, 101, "GEQ LM L/500 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC005, 0xC005, 101, "GEQ HM F/ 1 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC006, 0xC006, 101, "GEQ HM Q/ 2 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC007, 0xC007, 101, "GEQ HM L/ 4 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC008, 0xC008, 101, "GEQ H Lvl/8 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC009, 0xC009, 101, "GEQ HCut/16 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0xC00A, 0xC00A, 101, "GLOBAL EQ LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
 };
 
 const uint16_t KTN_NUMBER_OF_PARAMETERS = sizeof(KTN_parameters) / sizeof(KTN_parameters[0]);
 
+#define KTN_AMP_TYPE_PARAMETER 40
 #define KTN_FOOTVOL_PARAMETER 116
 #define KTN_GAFC1_ASGN_PARAMETER 114
 #define KTN_GAFC2_ASGN_PARAMETER 115
@@ -1095,6 +1273,7 @@ const uint16_t KTN_NUMBER_OF_PARAMETERS = sizeof(KTN_parameters) / sizeof(KTN_pa
 #define KTN_FX_SW_PARAMETER 70
 #define KTN_FX_TYPE_PARAMETER 71
 #define KTN_PEDAL_SW_PARAMETER 0
+#define KTN_PEDAL_TYPE_PARAMETER 1
 
 struct KTN_fx_parameter_struct { // Combines all the data we need for controlling a parameter in a device
   uint8_t FX_no; // The number of the effect
@@ -1147,17 +1326,17 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {5, 101, "D SLO LVL", SHOW_NUMBER},
   {5, 101, "DS FX LVL", SHOW_NUMBER},
   {5, 101, "DIR LVL", SHOW_NUMBER},
-  {6, 42,  "GEQ 31 Hz", SHOW_CUT_BOOST_20DB}, // "GRAPHIC EQ"
-  {6, 42,  "GEQ 62 Hz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 125Hz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 250Hz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 500Hz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 1 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 2 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 4 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 8 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 42,  "GEQ 16kHz", SHOW_CUT_BOOST_20DB},
-  {6, 101, "GEQ LEVEL", SHOW_NUMBER},
+  {6, 41,  "GEQ 31 Hz", SHOW_CUT_BOOST_20DB}, // "GRAPHIC EQ"
+  {6, 41,  "GEQ 62 Hz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 125Hz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 250Hz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 500Hz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 1 kHz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 2 kHz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 4 kHz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 8 kHz", SHOW_CUT_BOOST_20DB},
+  {6, 41,  "GEQ 16kHz", SHOW_CUT_BOOST_20DB},
+  {6, 41, "GEQ LEVEL", SHOW_CUT_BOOST_20DB},
   {7, 18,  "PEQ L.CUT", 112, }, // "PARAMETRIC EQ"
   {7, 41,  "PEQ L.LVL", SHOW_CUT_BOOST_20DB, },
   {7, 26,  "PE LM FRQ", 113, },
@@ -1166,9 +1345,9 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {7, 26,  "PE HM FRQ", 113, },
   {7, 6,   "PEQ HM Q", 143, },
   {7, 41,  "PE HM LVL", SHOW_CUT_BOOST_20DB, },
-  {7, 15,  "PEQ HICUT", 128, },
   {7, 41,  "PEQ HILVL", SHOW_CUT_BOOST_20DB, },
-  {7, 101, "PEQ LEVEL", SHOW_NUMBER },
+  {7, 15,  "PEQ HICUT", 128, },
+  {7, 41, "PEQ LEVEL", SHOW_CUT_BOOST_20DB },
   {8, 8,   "TM TYPE", 172}, // "TONE MOD"
   {8, 101, "TM RESO", SHOW_NUMBER},
   {8, 101, "TM LOW", SHOW_TONE_NUMBER},
@@ -1226,7 +1405,7 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {16, 2, "H VOICE", 194}, // HARMONIST
   {16, 30, "H HARM 1", 200},
   {16, TIME_300, "H PRE-DLY", SHOW_DELAY_TIME},
-  {16, 12, "H KEY", 255}, // Is translated to master key!
+  {16, 12, "H KEY", 256}, // Is translated to master key!
   {16, 101, "H LEVEL 1", SHOW_NUMBER},
   {16, 30, "H HARM 2", 200},
   {16, TIME_300, "H PRE-DLY", SHOW_DELAY_TIME},
@@ -1342,10 +1521,10 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {34, 101, "OT DIRECT", SHOW_NUMBER },
   {35, 2, "90 SCRIPT", 0 }, // PHASER 90E
   {35, 101, "90E SPEED", SHOW_NUMBER },
-  {36, 101, "119MANUAL", SHOW_NUMBER }, // FLANGER 119E
-  {36, 101, "119WIDTH", SHOW_NUMBER },
-  {36, 101, "119SPEED", SHOW_NUMBER },
-  {36, 101, "119REGEN.", SHOW_NUMBER },
+  {36, 101, "117MANUAL", SHOW_NUMBER }, // FLANGER 119E
+  {36, 101, "117WIDTH", SHOW_NUMBER },
+  {36, 101, "117SPEED", SHOW_NUMBER },
+  {36, 101, "117REGEN.", SHOW_NUMBER },
   {37, 101, "95E P.POS", SHOW_NUMBER },  // WAH 95E
   {37, 101, "95E P.MIN", SHOW_NUMBER },
   {37, 101, "95E P.MAX", SHOW_NUMBER },
@@ -1377,7 +1556,7 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {41, 49,  "GEQ 4 kHz", SHOW_CUT_BOOST_12DB},
   {41, 49,  "GEQ 8 kHz", SHOW_CUT_BOOST_12DB},
   {41, 49,  "GEQ 16kHz", SHOW_CUT_BOOST_12DB},
-  {41, 101, "GEQ LEVEL", SHOW_NUMBER},
+  {41, 49, "GEQ LEVEL", SHOW_CUT_BOOST_12DB},
 };
 
 const uint16_t KTN_NUMBER_OF_FX_PARAMETERS = sizeof(KTN_fx_parameters) / sizeof(KTN_fx_parameters[0]);
@@ -1620,7 +1799,9 @@ uint16_t MD_KTN_class::get_fx_table_index(uint16_t number) {
   uint8_t fx_type;
   if (number >= KTN_NUMBER_OF_PARAMETERS) return NO_FX_PARAMETER;
 
-  uint32_t address = KTN_parameters[number].Address;
+  uint16_t address;
+  if (is_mk2) address = KTN_parameters[number].Address_MK2;
+  else address = KTN_parameters[number].Address_MK1;
 
   switch (address & 0xF000) {
     case 0x8000:
@@ -1637,6 +1818,10 @@ uint16_t MD_KTN_class::get_fx_table_index(uint16_t number) {
       if (current_pedal_type == 0) fx_type = 2; // Sub wah
       else if (current_pedal_type == 1) fx_type = 40; // Pedal pitch
       else fx_type = 37; // WAH 95e
+      break;
+    case 0xC000:
+      if (current_global_eq_type == 1) fx_type = 41; // FX type graphic eq
+      else fx_type = 7; // FX type for parametric eq
       break;
     default:
       return NO_FX_PARAMETER;
@@ -1656,7 +1841,10 @@ void MD_KTN_class::read_parameter_name(uint16_t number, String &Output) { // Cal
       Output = KTN_parameters[number].Name;
     }
     else { // Mod, FX, EQ or PEDAL parameter
-      switch (KTN_parameters[number].Address & 0xF000) {
+      uint16_t address;
+      if (is_mk2) address = KTN_parameters[number].Address_MK2;
+      else address = KTN_parameters[number].Address_MK1;
+      switch (address & 0xF000) {
         case 0x8000:
           Output = "MOD ";
           fx_no = current_mod_type;
@@ -1674,8 +1862,14 @@ void MD_KTN_class::read_parameter_name(uint16_t number, String &Output) { // Cal
           else if (current_pedal_type == 1) fx_no = 40; // Pedal pitch
           else fx_no = 37; // WAH 95e
           break;
+        case 0xC000:
+          if (current_global_eq_type == 1) fx_no = 41; // FX type graphic eq
+          else fx_no = 7; // FX type for parametric eq
+          break;
       };
-      if (KTN_fx_parameters[fx_index].FX_no == fx_no) Output += KTN_fx_parameters[fx_index].Name;
+      if (KTN_fx_parameters[fx_index].FX_no == fx_no) {
+        Output += KTN_fx_parameters[fx_index].Name;
+      }
       else Output += "--";
     }
   }
@@ -1695,8 +1889,11 @@ void MD_KTN_class::read_parameter_value_name(uint16_t number, uint16_t value, St
     if ((sublist > 0) && !(sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
       switch (sublist) {
         case SHOW_NUMBER:
+          Output += String(value);
+          break;
         case SHOW_DELAY_TIME:
           Output += String(value);
+          Output += "ms";
           break;
         case SHOW_TONE_NUMBER:
           if (value > 50) Output += "+";
@@ -1752,35 +1949,67 @@ void MD_KTN_class::read_parameter_value_name(uint16_t number, uint16_t value, St
 }
 
 uint32_t MD_KTN_class::parameter_address(uint8_t number) {
+  uint16_t mod_address, fx_address;
+  uint32_t peq_address, geq_address, global_peq_address, global_geq_address;
   if (number >= KTN_NUMBER_OF_PARAMETERS) return 0;
   if (KTN_parameters[number].Supported_in_version > version) return 0;
-  uint32_t my_address = KTN_parameters[number].Address;
-  switch (my_address & 0xF000) {
-    case 0x7000:
-      return (my_address & 0xFFF); // For global settings
-    case 0x8000:
+
+  uint16_t my_address;
+  if (is_mk2) my_address = KTN_parameters[number].Address_MK2;
+  else my_address = KTN_parameters[number].Address_MK1;
+
+  switch (my_address & 0xF000) { // Check for special settings
+    case 0x7000: // Global setting
+      return (my_address & 0xFFF);
+    case 0x8000: // Mod parameter
+      if (is_mk2) mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK2;
+      else mod_address = KTN_fx_memory[current_mod_type].Mod_address_MK1;
       if ((uint8_t)(my_address & 0x000F) >= (KTN_fx_memory[current_mod_type].Length)) return 0;
-      my_address = (my_address & 0x000F) + KTN_fx_memory[current_mod_type].Mod_address;
+      my_address = (my_address & 0x000F) + mod_address;
       if (my_address & 0x0080) my_address = (my_address & 0x7F7F) + 0x0100; // Fix 7 bit calculation error
-      if (my_address == 0x0248) my_address = 0x0718; // Show master key parameter in harmonizer fx parameters.
-      DEBUGMSG("MOD PARAMETER ADDRESS: " + String(KTN_parameters[number].Address & 0x000F) + "+" + String(KTN_fx_memory[current_mod_type].Mod_address) + "=" + String(my_address) );
+      if ((!is_mk2) && (my_address == 0x0248)) my_address = 0x0718; // Show master key parameter in harmonizer mod parameters (MK1)
+      if ((is_mk2) && (my_address == 0x015C)) my_address = 0x0571; // Show master key parameter in harmonizer mod parameters (MK2)
+      DEBUGMSG("MOD PARAMETER ADDRESS: " + String(my_address) + "+" + String(mod_address) + "=" + String(my_address) );
       return my_address + 0x60000000;
-    case 0x9000:
+    case 0x9000: // FX parameter
+      if (is_mk2) fx_address = KTN_fx_memory[current_fx_type].Mod_address_MK2 + 0x0200;
+      else fx_address = KTN_fx_memory[current_fx_type].FX_address_MK1;
       if ((uint8_t)(my_address & 0x007F) >= (KTN_fx_memory[current_fx_type].Length)) return 0;
-      my_address = (my_address & 0x007F) + KTN_fx_memory[current_fx_type].FX_address;
+      my_address = (my_address & 0x007F) + fx_address;
       if (my_address & 0x0080) my_address = (my_address & 0x7F7F) + 0x0100; // Fix 7 bit calculation error
-      if (my_address == 0x0454) my_address = 0x0718; // Show master key parameter in harmonizer mod parameters.
+      if ((!is_mk2) && (my_address == 0x0454)) my_address = 0x0718; // Show master key parameter in harmonizer fx parameters (MK1)
+      if ((is_mk2) && (my_address == 0x035C)) my_address = 0x0571; // Show master key parameter in harmonizer fx parameters (MK2)
       DEBUGMSG("FX PARAMETER ADDRESS: " + String(my_address) );
       return my_address + 0x60000000;
-    case 0xA000:
-      if ((current_eq_type == 0) || (version < 3)) return 0x60000131 + (my_address & 0x000F);
-      if (current_eq_type == 1) return 0x60001105 + (my_address & 0x000F);
+    case 0xA000: // EQ parameter
+      if (is_mk2) {
+        peq_address = KTN_PEQ_START_ADDRESS_MK2;
+        geq_address = KTN_GEQ_START_ADDRESS_MK2;
+      }
+      else {
+        peq_address = KTN_GEQ_START_ADDRESS_MK1;
+        geq_address = KTN_PEQ_START_ADDRESS_MK1;
+      }
+      if ((current_eq_type == 0) || (version < 3)) return peq_address + (my_address & 0x000F);
+      if (current_eq_type == 1) return geq_address + (my_address & 0x000F);
       return 0;
-    case 0xB000:
+    case 0xB000: // Pedal parameter
       if ((uint8_t)(my_address & 0x000F) >= (KTN_pedal_memory[current_pedal_type].Length)) return 0;
-      if (current_pedal_type == 0) return 0x60000626 + (my_address & 0x000F);
-      if (current_pedal_type == 1) return 0x60000622 + (my_address & 0x000F);
-      if (current_pedal_type == 2) return 0x60001112 + (my_address & 0x000F);
+      if (is_mk2) return 0x60000000 + KTN_pedal_memory[current_pedal_type].Address_MK2 + (my_address & 0x000F);
+      else return 0x60000000 + KTN_pedal_memory[current_pedal_type].Address_MK1 + (my_address & 0x000F);
+    case 0xC000: // Global eq parameter
+      if (is_mk2) {
+        global_peq_address = KTN_GLOBAL_PEQ_START_ADDRESS_MK2;
+        global_geq_address = KTN_GLOBAL_GEQ_START_ADDRESS_MK2;
+      }
+      else {
+        global_peq_address = KTN_GLOBAL_PEQ_START_ADDRESS_MK1;
+        global_geq_address = KTN_GLOBAL_GEQ_START_ADDRESS_MK1;
+      }
+      if ((current_global_eq_type == 0) || (version < 3)) return global_peq_address + (my_address & 0x000F);
+      if (current_global_eq_type == 1) {
+        return global_geq_address + (my_address & 0x000F);
+      }
       return 0;
     default:
       return my_address + 0x60000000;
@@ -1797,7 +2026,7 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
 
   // Skip non implemented FX types for version 4 (Tone mod, sound hold, Tera echo and Overtone)
   if (version >= 4) {
-    if ((KTN_parameters[number].Address == 0x0141) || (KTN_parameters[number].Address == 0x034D)) {
+    if ((number == KTN_MOD_TYPE_PARAMETER) || (number == KTN_FX_TYPE_PARAMETER)) {
       signed int delta;
       if (SC_switch_is_encoder()) delta = Enc_value;
       else delta = 1;
@@ -1808,10 +2037,12 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
   else {
     // Skip non implemented mod types for the versions before 4 (Tera echo and Overtone)
-    if ((KTN_parameters[number].Address == 0x0141) && (value == 33)) value += 2;
-    else if ((KTN_parameters[number].Address == 0x0141) && (value == 34)) value -= 2;
+    if (number == KTN_MOD_TYPE_PARAMETER) {
+      if (value == 33) value += 2;
+      if (value == 34) value -= 2;
+    }
 
-    if ((KTN_parameters[number].Address == 0x0141) || (KTN_parameters[number].Address == 0x034D)) { // Skip Heavy octave
+    if ((number == KTN_MOD_TYPE_PARAMETER) || (number == KTN_FX_TYPE_PARAMETER)) { // Skip Heavy octave
       if (value > 38) {
         if ((SC_switch_is_encoder()) && (Enc_value == -1)) value = 38;
         else value = 0;
@@ -1820,14 +2051,14 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
 
   if (version > 2) {
-    if ((KTN_parameters[number].Address == 0x0051) && (value > 25)) { // Skip non implemented amp types
+    if ((number == KTN_AMP_TYPE_PARAMETER) && (value > 25)) { // Skip non implemented amp types
       if ((SC_switch_is_encoder()) && (Enc_value == -1)) value = 25;
       else value = 0;
     }
   }
 
   if (version == 2) {
-    if ((KTN_parameters[number].Address == 0x0141) || (KTN_parameters[number].Address == 0x034D)) { // Skip non implemented mod/fx types
+    if ((number == KTN_MOD_TYPE_PARAMETER) || (number == KTN_FX_TYPE_PARAMETER)) { // Skip non implemented mod/fx types
       if (value > 36) {
         if ((SC_switch_is_encoder()) && (Enc_value == -1)) value = 36;
         else value = 0;
@@ -1836,12 +2067,18 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
 
   if (SP[Sw].Latch != TGL_OFF) {
-    if (number_of_values(number) < 128) write_sysex(parameter_address(number), value); // Writing single value
-    else write_sysex(parameter_address(number), SP[Sw].Target_byte1, SP[Sw].Target_byte2); // Writing double value (used for delay times)
+    if (number_of_values(number) < 128) {
+      write_sysex(parameter_address(number), value); // Writing single value
+      check_update_label(Sw, value);
+
+    }
+    else {
+      write_sysex(parameter_address(number), SP[Sw].Target_byte1, SP[Sw].Target_byte2); // Writing double value (used for delay times)
+      check_update_label(Sw, (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2);
+    }
     SP[Sw].Offline_value = value;
 
-    // Show message
-    check_update_label(Sw, value);
+    // Show popup message
     String msg = "";
     if (SP[Sw].Type != ASSIGN) {
       //msg = KTN_parameters[number].Name;
@@ -1858,6 +2095,14 @@ void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
         else msg += "OFF";
       }
       LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+
+      // Show category title
+      if ((SP[Sw].Type == PAR_BANK) && (SP[Sw].Bank_size == 1)) {
+        if (SP[Sw].PP_number == KTN_PEDAL_TYPE_PARAMETER) current_pedal_type = value;
+        if (SP[Sw].PP_number == KTN_MOD_TYPE_PARAMETER) current_mod_type = value;
+        if (SP[Sw].PP_number == KTN_FX_TYPE_PARAMETER) current_fx_type = value;
+        show_popup_category(number);
+      }
     }
 
     // Update Expr pedal selection if neccesary
@@ -1914,7 +2159,8 @@ bool MD_KTN_class::request_parameter(uint8_t sw, uint16_t number) {
     last_requested_sysex_address = my_address;
     last_requested_sysex_type = REQUEST_PARAMETER_TYPE;
     last_requested_sysex_switch = sw;
-    if (my_address == KTN_PEDAL_SW_ADDRESS) request_sysex(KTN_PEDAL_TYPE_ADDRESS, 2);
+    if ((!is_mk2) && (my_address == KTN_PEDAL_SW_ADDRESS_MK1)) request_sysex(KTN_PEDAL_TYPE_ADDRESS_MK1, 2);
+    if ((is_mk2) && (my_address == KTN_PEDAL_SW_ADDRESS_MK2)) request_sysex(KTN_PEDAL_TYPE_ADDRESS_MK2, 2);
     request_sysex(my_address, 2); // Request the parameter state data
     return false; // Move to next switch is false. We need to read the parameter first
   }
@@ -1956,12 +2202,10 @@ void MD_KTN_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //
   }
 
   if (sublist > SUBLIST_FROM_BYTE2) { // Check if a sublist exists
-    //msg.remove(msg.length() - 1); // Remove the last character (semicolon)
     String type_name = KTN_sublists[sublist - SUBLIST_FROM_BYTE2 + byte2 - 1];
     msg += '(' + type_name + ')';
   }
   if (sublist == SHOW_DELAY_TIME) {
-    //msg += ':';
     read_parameter_value_name(index, (128 * byte1) + byte2 , msg);
   }
   else if ((sublist > 0) && !(sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -2030,7 +2274,7 @@ uint8_t MD_KTN_class::number_of_values(uint16_t index) {
   if (KTN_parameters[index].Supported_in_version > version) return 0;
   uint16_t fx_index = get_fx_table_index(index);
   if (fx_index == NO_FX_PARAMETER) {
-    if ((KTN_parameters[index].Address == 0x0051) and (version > 2)) return 26; // Only 26 amp types in firmware 3 and higher
+    if ((index == KTN_AMP_TYPE_PARAMETER) and (version > 2)) return 26; // Only 26 amp types in firmware 3 and higher
     if ((index == KTN_MOD_TYPE_PARAMETER) || (index == KTN_FX_TYPE_PARAMETER)) {
       if (version < 2) return 36;
       if (version < 3) return 37;
@@ -2051,53 +2295,67 @@ void MD_KTN_class::par_bank_updown(signed int delta, uint8_t my_bank_size) {
     MD_base_class::par_bank_updown(delta, my_bank_size); // Perform the base class version
     return;
   }
+  // Editing on VC-mini with encoders:
+  uint16_t max_bank = (number_of_parbank_parameters() - 1) / my_bank_size;
 
-  // Perform bank up:
-  if (delta > 0) {
-    for (uint8_t i = 0; i < delta; i++) {
-      do {
-        if (parameter_bank_number >= (number_of_parbank_parameters() - 1) / my_bank_size) parameter_bank_number = 0; // Check if we've reached the top
-        else parameter_bank_number++; //Otherwise move bank up
-      } while (check_parameter_empty(parameter_bank_number));
-    }
-  }
-  // Perform bank down:
-  if (delta < 0) {
-    for (uint8_t i = 0; i < abs(delta); i++) {
-      do {
-        if (parameter_bank_number <= 0) parameter_bank_number = (number_of_parbank_parameters() - 1) / my_bank_size; // Check if we've reached the bottom
-        else parameter_bank_number--; //Otherwise move bank down
-      } while (check_parameter_empty(parameter_bank_number));
-    }
-  }
+  do {
+    parameter_bank_number = update_encoder_value(delta, parameter_bank_number, 0, max_bank);
+  } while (check_parameter_empty(parameter_bank_number));
 
-  String msg = "";
-  read_parameter_name(parameter_bank_number, msg);
-  if (parameter_bank_number == KTN_MOD_SW_PARAMETER) {
-    msg += " (";
-    msg += KTN_sublists[current_mod_type + KTN_FX_TYPE_SUBLIST - 1];
-    msg += ')';
-  }
-  if (parameter_bank_number == KTN_MOD_TYPE_PARAMETER) {
-    msg += ':';
-    msg += KTN_sublists[current_mod_type + KTN_FX_TYPE_SUBLIST - 1];
-  }
-  if (parameter_bank_number == KTN_FX_SW_PARAMETER) {
-    msg += " (";
-    msg += KTN_sublists[current_fx_type + KTN_FX_TYPE_SUBLIST - 1];
-    msg += ')';
-  }
-  if (parameter_bank_number == KTN_FX_TYPE_PARAMETER) {
-    msg += ':';
-    msg += KTN_sublists[current_fx_type + KTN_FX_TYPE_SUBLIST - 1];
-  }
-  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  show_popup_category(parameter_bank_number);
+  show_popup_parameter(parameter_bank_number);
 
   update_page = REFRESH_PAGE; //Re-read the patchnames for this bank
 }
 
+void MD_KTN_class::show_popup_category(uint16_t number) {
+  uint8_t cat = KTN_parameters[number].Category;
+  String title = "";
+  if (cat > 0) title += KTN_parameter_category[cat - 1].Name;
+  if (cat == KTN_CAT_MOD) {
+    title += ":";
+    title += KTN_sublists[current_mod_type + KTN_FX_TYPE_SUBLIST - 1];
+  }
+  if (cat == KTN_CAT_FX) {
+    title += ":";
+    title += KTN_sublists[current_fx_type + KTN_FX_TYPE_SUBLIST - 1];
+  }
+  if (cat == KTN_CAT_PEDAL) {
+    title += ":";
+    title += KTN_sublists[current_pedal_type + KTN_PEDAL_TYPE_SUBLIST - 1];
+  }
+  LCD_show_popup_title(title, ACTION_TIMER_LENGTH);
+}
+
+void MD_KTN_class::show_popup_parameter(uint16_t number) {
+  // Set label for editing with encoders
+  String lbl = "";
+  read_parameter_name(number, lbl);
+  if (number == KTN_MOD_SW_PARAMETER) {
+    lbl += " (";
+    lbl += KTN_sublists[current_mod_type + KTN_FX_TYPE_SUBLIST - 1];
+    lbl += ')';
+  }
+  if (number == KTN_MOD_TYPE_PARAMETER) {
+    lbl += ':';
+    lbl += KTN_sublists[current_mod_type + KTN_FX_TYPE_SUBLIST - 1];
+  }
+  if (number == KTN_FX_SW_PARAMETER) {
+    lbl += " (";
+    lbl += KTN_sublists[current_fx_type + KTN_FX_TYPE_SUBLIST - 1];
+    lbl += ')';
+  }
+  if (number == KTN_FX_TYPE_PARAMETER) {
+    lbl += ':';
+    lbl += KTN_sublists[current_fx_type + KTN_FX_TYPE_SUBLIST - 1];
+  }
+  LCD_show_popup_label(lbl, MESSAGE_TIMER_LENGTH);
+}
+
 bool MD_KTN_class::check_parameter_empty(uint16_t number) {
-  uint32_t my_address = KTN_parameters[number].Address;
+  uint16_t my_address;
+  if (is_mk2) my_address = KTN_parameters[number].Address_MK2;
+  else my_address = KTN_parameters[number].Address_MK1;
   if ((my_address & 0xF000) == 0x8000) { // Check if this is a MOD block
     if ((uint8_t)(my_address & 0x000F) >= (KTN_fx_memory[current_mod_type].Length)) return true;
   }
@@ -2195,7 +2453,7 @@ void MD_KTN_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
       break;
     case KTN_EXP_PEDAL:
       if (current_pedal_type < 2) par_index = 3;
-      else par_index = 1;
+      else par_index = 2;
       max = 127;
       break;
     case KTN_EXP_MOD:
@@ -2225,8 +2483,6 @@ void MD_KTN_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   }
   uint8_t new_value = map(value, 0, 127, 0, max);
   write_sysex(parameter_address(par_index), new_value);
-  //check_update_label(sw, value);
-  //request_exp_pedal(sw, exp_pedal);
   LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }

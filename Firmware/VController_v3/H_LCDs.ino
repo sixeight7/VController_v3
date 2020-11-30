@@ -154,8 +154,8 @@ String Current_device_name = "";
 //String Main_menu_line1 = ""; // Text that is show on the main display from the menu on line 1
 //String Main_menu_line2 = ""; // Text that is show on the main display from the menu on line 2
 //String topline;
-char main_lcd_title[LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 1
-char main_lcd_label[LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 2
+char main_lcd_title[MAIN_LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 1
+char main_lcd_label[MAIN_LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 2
 uint8_t Main_menu_cursor = 0; // Position of main menu cursor. Zero = off.
 char lcd_title[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display titles
 char lcd_label[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display labels
@@ -309,7 +309,7 @@ void main_LCD_control()
 void LCD_update_main_display() {
 
   if (!popup_title_showing) {
-    for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
       main_lcd_title[i] = ' ';
     }
 
@@ -337,7 +337,7 @@ void LCD_update_main_display() {
     LCD_set_combined_patch_number_and_name();
 
     uint8_t ps_length = Current_patch_number_string.length();
-    if (ps_length > LCD_DISPLAY_SIZE) ps_length = LCD_DISPLAY_SIZE;
+    if (ps_length > MAIN_LCD_DISPLAY_SIZE) ps_length = MAIN_LCD_DISPLAY_SIZE;
     for (uint8_t i = 0; i < ps_length; i++) {
       main_lcd_title[i] = Current_patch_number_string[i];
     }
@@ -357,16 +357,16 @@ void LCD_update_main_display() {
     }
 
     uint8_t name_length = top_right.length();
-    if (ps_length < (LCD_DISPLAY_SIZE - name_length)) { // Only show current device if it fits
+    if (ps_length < (MAIN_LCD_DISPLAY_SIZE - name_length)) { // Only show current device if it fits
       for (uint8_t i = 0; i < name_length; i++) {
-        main_lcd_title[LCD_DISPLAY_SIZE - name_length + i] = top_right[i];
+        main_lcd_title[MAIN_LCD_DISPLAY_SIZE - name_length + i] = top_right[i];
       }
     }
   }
 
   // Show current page name, current patch or patches combined on second line
   if (!popup_label_showing) {
-    for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+    for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
       main_lcd_label[i] = ' ';
     }
     uint8_t main_display_mode = Setting.Main_display_mode;
@@ -446,15 +446,18 @@ void LCD_set_combined_patch_number_and_name() {
 
 void LCD_show_3_switch_labels() {
   String msg, outmsg;
+  uint8_t l3 = (MAIN_LCD_DISPLAY_SIZE - 2) / 3;
+  uint8_t l2 = (MAIN_LCD_DISPLAY_SIZE - l3 - 2) / 2;
+  uint8_t l1 = MAIN_LCD_DISPLAY_SIZE - l3 - l2 - 2;
   LCD_load_short_message(1, outmsg);
-  LCD_set_length(outmsg, 5);
+  LCD_set_length(outmsg, l1);
   outmsg += '|';
   LCD_load_short_message(2, msg);
-  LCD_set_length(msg, 5);
+  LCD_set_length(msg, l2);
   outmsg += msg;
   outmsg += '|';
   LCD_load_short_message(3, msg);
-  LCD_set_length(msg, 4);
+  LCD_set_length(msg, l3);
   outmsg += msg;
   LCD_main_set_label(outmsg);
 }
@@ -542,7 +545,7 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         msg = "MUTE ";
         break;
       case TOGGLE_EXP_PEDAL:
-        msg = "TOGGL";
+        msg = "M EXP";
         break;
       case SNAPSCENE:
         msg = "[S";
@@ -654,7 +657,7 @@ void LCD_show_startup_credits() {
 }
 
 void LCD_clear_main_lcd_txt() {
-  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) {
+  for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
     main_lcd_title[i] = ' ';
     main_lcd_label[i] = ' ';
   }
@@ -663,11 +666,11 @@ void LCD_clear_main_lcd_txt() {
 void LCD_main_set_title(const String & msg) { // Will set the Title string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
-  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  if (msg_length > MAIN_LCD_DISPLAY_SIZE) msg_length = MAIN_LCD_DISPLAY_SIZE;
   for (uint8_t i = 0; i < msg_length; i++) {
     main_lcd_title[i] = msg[i];
   }
-  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+  for (uint8_t i = msg_length; i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
     main_lcd_title[i] = ' ';
   }
 }
@@ -675,11 +678,11 @@ void LCD_main_set_title(const String & msg) { // Will set the Title string in th
 void LCD_main_set_label(const String & msg) { // Will set the Title string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
-  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  if (msg_length > MAIN_LCD_DISPLAY_SIZE) msg_length = MAIN_LCD_DISPLAY_SIZE;
   for (uint8_t i = 0; i < msg_length; i++) {
     main_lcd_label[i] = msg[i];
   }
-  for (uint8_t i = msg_length; i < LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+  for (uint8_t i = msg_length; i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
     main_lcd_label[i] = ' ';
   }
 }
@@ -689,13 +692,13 @@ void LCD_main_set_label_right(const String & msg) { // Will set the Title string
   //String msg = msgi;
   //msg.trim();
   uint8_t msg_length = msg.length();
-  if (msg_length > LCD_DISPLAY_SIZE) msg_length = LCD_DISPLAY_SIZE;
+  if (msg_length > MAIN_LCD_DISPLAY_SIZE) msg_length = MAIN_LCD_DISPLAY_SIZE;
   if (msg_length > 1) while (msg[msg_length - 1] == ' ') msg_length--; // Do not count any spaces on the right of the string.
-  for (uint8_t i = 0; i < (LCD_DISPLAY_SIZE - msg_length); i++) { // Fill the left chars with spaces
+  for (uint8_t i = 0; i < (MAIN_LCD_DISPLAY_SIZE - msg_length); i++) { // Fill the left chars with spaces
     main_lcd_label[i] = ' ';
   }
   for (uint8_t i = 0; i < msg_length; i++) { // Put the string on the right
-    main_lcd_label[(LCD_DISPLAY_SIZE - msg_length) + i] = msg[i];
+    main_lcd_label[(MAIN_LCD_DISPLAY_SIZE - msg_length) + i] = msg[i];
   }
 }
 
@@ -1084,6 +1087,7 @@ void LCD_parameter_title(uint8_t sw, uint8_t Dev, String & msg) { // Will print 
 void LCD_parameter_label(uint8_t sw, uint8_t Dev, String & msg) { // Will print the right parameter message depending on the TOGGLE state
   if (Dev < NUMBER_OF_DEVICES) {
     String lbl_trimmed = SP[sw].Label;
+    uint8_t step;
     lbl_trimmed.trim();
     switch (SP[sw].Latch) {
       case TRISTATE:
@@ -1109,7 +1113,16 @@ void LCD_parameter_label(uint8_t sw, uint8_t Dev, String & msg) { // Will print 
         if (SP[sw].Direction) msg += char(CHAR_ARROW_UP);
         else msg += char(CHAR_ARROW_DOWN);
         break;
-      case STEP: // STEP and RANGE
+      case STEP:
+        step = SP[sw].Value3;
+        if (step == 0) step = 1;
+        msg = lbl_trimmed;
+        msg += " (";
+        msg += String((SP[sw].Target_byte1 / step) + 1);
+        msg += '/';
+        msg += String(((SP[sw].Assign_max - 1) / step) + 1);
+        msg += ')';
+        break;
       case RANGE:
         msg = lbl_trimmed;
         msg += " (";

@@ -169,6 +169,10 @@ uint32_t Extra_long_press_timer = 0;
 uint8_t Current_board = 0; // The current display board that is read for switches pressed
 uint32_t time_switch_pressed;
 
+#define ENCODER_TURN_TIME 1000 // The time that needs to pass before an encoder is allowed to go from max to min or visa versa
+uint32_t encoder_timer = 0;
+
+
 // ********************************* Section 2: Internal Switch Reading ********************************************
 
 void inta_pin_interrupt() {
@@ -249,7 +253,7 @@ void setup_switch_check() {
 #endif
 
   // Check for reset settings
-#if defined IS_VCMINI && defined SWITCH1_PIN && defined SWITCH3_PIN
+#if defined SWITCH1_PIN && defined SWITCH3_PIN
   if ((digitalRead(SWITCH1_PIN) == LOW) && (digitalRead(SWITCH3_PIN) == LOW)) EEP_initialize_internal_eeprom_data(); // Initialize settings on pressing switch 1 and 3
 #endif
 }
@@ -600,10 +604,10 @@ void SC_update_long_presses_and_hold() {
         DEBUGMAIN("Switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
         break;
       case SW_TYPE_EXPRESSION_PEDAL:
-        DEBUGMAIN("Expression pedal " + String(switch_pressed) + ": " + String(Expr_ped_value));
+        DEBUGMAIN("Expression pedal: " + String(switch_pressed) + ": " + String(Expr_ped_value));
         break;
       case SW_TYPE_ENCODER:
-        DEBUGMAIN("Encoder changel " + String(switch_pressed) + ": " + String(Enc_value));
+        DEBUGMAIN("Encoder turned: " + String(switch_pressed) + ": " + String(Enc_value));
         break;
       case SW_TYPE_MIDI_CC:
         DEBUGMAIN("MIDI CC switch pressed: " + String(switch_pressed) + " at " + String(micros() - time_switch_pressed));
@@ -717,5 +721,41 @@ void SC_skip_release_and_hold_until_next_press(uint8_t val) { // Called from SCO
 void SC_set_enc1_acceleration(bool state) {
 #ifdef ENCODER1_A_PIN
   enc1.setAccelerationEnabled(state);
+#endif
+}
+
+
+#define ACCELERATION_TIME 50
+
+uint16_t update_encoder_value(signed int delta, uint16_t value, uint16_t min, uint16_t max) {
+  setAccelerationRange(max - min);
+
+  if (delta > 0) {
+    for (uint16_t i = 0; i < delta; i++) {
+      if (value >= max) { // Check if we've reached the top
+        if ((encoder_timer + ENCODER_TURN_TIME > millis()) || (delta > 1)) value = max;
+        else value = min;
+      }
+      else value++;
+    }
+  }
+  // Perform bank down:
+  if (delta < 0) {
+    for (uint16_t i = 0; i < abs(delta); i++) {
+      if (value <= min) { // Check if we've reached the bottom
+        if ((encoder_timer + ENCODER_TURN_TIME > millis()) || (delta < -1)) value = min;
+        else value = max;
+      }
+      else value--;
+    }
+  }
+  encoder_timer = millis();
+  return value;
+}
+
+void setAccelerationRange(uint16_t range) {
+#ifdef ENCODER1_A_PIN
+  enc1.setAccelerationRange(range);
+  enc2.setAccelerationRange(range);
 #endif
 }

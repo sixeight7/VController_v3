@@ -8,6 +8,12 @@
 
 #define IS_VCMINI // Will give the alternative configuration as defined in Config.ino
 
+// Choose which configuration for the switches is chosen in Config.ino
+//#define CONFIG_VCONTROLLER
+#define CONFIG_VCMINI
+//#define CONFIG_CUSTOM
+//#define MENU_ON_INDIVIDUAL_DISPLAYS
+
 // Allowable i2c rates:
 // I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200, 
 // I2C_RATE_1500, I2C_RATE_1800, I2C_RATE_2000, I2C_RATE_2400, I2C_RATE_2800, I2C_RATE_3000
@@ -86,10 +92,13 @@
 //#define PRIMARY_MAIN_DISPLAY_ADDRESS 0x3F // If we have a PCF8745AT chip in the i2c expander
 //#define SECONDARY_MAIN_DISPLAY_ADDRESS 0x27 // If we have a PCF8745T chip in the i2c expander
 #define MAIN_DISPLAY_TEENSY_PINS 3, 4, 5, 6, 7, 8 
+#define MAIN_LCD_DISPLAY_SIZE 16
+//#define MAIN_DISPLAY_HAS_FOUR_LINES
 
 // *** Individual displays above switches
 //#define NUMBER_OF_DISPLAY_BOARDS 4
 #define NUMBER_OF_DISPLAYS 3
+#define LCD_DISPLAY_SIZE 16
 #define VCMINI_DISPLAYS
 
 // Define the addresses and numbers of the displays using the VController display boards based on an MCP23017. Maximum 15 displays can be defined here. 

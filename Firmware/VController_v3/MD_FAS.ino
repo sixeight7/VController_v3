@@ -163,6 +163,10 @@ void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
             else current_patch_name += ' ';
           }
           update_main_lcd = true;
+          if (popup_patch_name) {
+            LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+            popup_patch_name = false;
+          }
           break;
 
 

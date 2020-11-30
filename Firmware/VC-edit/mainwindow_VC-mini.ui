@@ -19,10 +19,11 @@
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
     <string notr="true">QMainWindow &gt; QWidget { background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
-QWidget#tab {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
-QWidget#tab_2 {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
-QWidget#tab_3 {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
-QWidget#tab_4 {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
+QWidget#tab_PageCommands {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
+QWidget#tab_ExternalSwitchCommands {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
+QWidget#tab_KatanaPatches {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
+QWidget#tab_Settings {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
+QWidget#tab_RemoteControl {background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 rgb(25, 59, 133), stop: 1 rgb(6, 31, 83)); }
 QLabel { color : white; background-color: rgb(0 ,0 ,100)}
 </string>
    </property>
@@ -36,7 +37,7 @@ QLabel { color : white; background-color: rgb(0 ,0 ,100)}
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_PageCommands">
        <attribute name="title">
@@ -1562,7 +1563,7 @@ border-radius: 10px;</string>
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_4">
+      <widget class="QWidget" name="tab_RemoteControl">
        <attribute name="title">
         <string>Remote control</string>
        </attribute>
@@ -1940,7 +1941,7 @@ border-radius: 10px;</string>
      <x>0</x>
      <y>0</y>
      <width>962</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <property name="styleSheet">

@@ -319,8 +319,7 @@ void MD_SVL_class::update_parameter_state_through_cc(uint8_t control, uint8_t va
 // ********************************* Section 6: SVL expression pedal control ********************************************
 
 void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
-  uint8_t number;
-  number = SVL_EXP;
+  uint8_t number = SVL_EXP;
   LCD_show_bar(0, value); // Show it on the main display
   MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_port);
   check_update_label(sw, value);

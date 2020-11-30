@@ -62,15 +62,12 @@ void setup_debug() {
 //Debug sysex messages by sending them to the serial monitor
 void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port, bool is_out) {
 
-#if defined(DEBUG_NORMAL) || defined(DEBUG_MAIN) || defined(DEBUG_MIDI) || defined(DEBUG_SYSEX)
-  //Serial.print((char)0); // Hack to keep serial running together with midi, char 0 prints as nothing, but it does keep the serial monitor from freezing
-#endif
-
 #ifndef DEBUG_SYSEX_UNIVERSAL
   if (sxdata[1] == 0x7D) return; // Quit if we have a universal midi message
   if (sxdata[1] == 0x7E) return; // Quit if we have a universal midi message
   if (sxdata[2] == 0x7F) return; // Quit if we have an FC300 bloat message
   if ((sxdata[3] == 0x74) && (sxdata[4] == 0x7F)) return; // Quit if we have a Fractal connect message
+  if ((sxdata[2] == 0x11) && (sxdata[3] == 0x22) && (sxdata[4] == 0x66) && (sxdata[6] <= 0x10)) return; // Quit if we have a NUX connect message
 #endif
 
 #ifdef DEBUG_SYSEX

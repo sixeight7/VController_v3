@@ -32,7 +32,7 @@ struct Cmd_struct
 
 // ********************************* Section 1: VController commands ********************************************
 
-#define NUMBER_OF_DEVICES 13
+#define NUMBER_OF_DEVICES 14
 #define GP10 0
 #define GR55 1
 #define VG99 2
@@ -46,6 +46,7 @@ struct Cmd_struct
 #define SVL 10
 #define SY1000 11
 #define GM2 12
+#define MG300 13
 
 #define CURRENT 254 // To select the current device
 #define COMMON 255 // Not really a device, but used for common procedures, that are not device specific or for all devices.
@@ -205,7 +206,8 @@ struct Cmd_struct
 #define PAGE_CURRENT_ASSIGN 224
 #define PAGE_SY1000_PATCH_BANK 225
 #define PAGE_SY1000_ASSIGNS 226
-#define LAST_FIXED_CMD_PAGE 226
+#define PAGE_MG300_PATCH_BANK 227
+#define LAST_FIXED_CMD_PAGE 227
 
 // Default pages for devices
 #define FAS_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
@@ -273,6 +275,11 @@ struct Cmd_struct
 #define GM2_DEFAULT_PAGE3 0
 #define GM2_DEFAULT_PAGE4 0
 
+#define MG300_DEFAULT_PAGE1 PAGE_MG300_PATCH_BANK
+#define MG300_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define MG300_DEFAULT_PAGE3 0
+#define MG300_DEFAULT_PAGE4 0
+
 // ********************************* Section 3: VController default configuration for programmable pages ********************************************
 
 #define PAGE_DEFAULT 0
@@ -305,7 +312,10 @@ struct Cmd_struct
 #define PAGE_KTN4_FX1 215
 #define PAGE_KTN4_FX2 216
 #define PAGE_KTN4_FX3 217
-#define LAST_FIXED_CMD_PAGE 217
+#define PAGE_MG300_FX1 218
+#define PAGE_MG300_FX2 219
+#define PAGE_MG300_FX3 220
+#define LAST_FIXED_CMD_PAGE 220
 
 #define DEFAULT_PAGE PAGE_CURRENT_PATCH_BANK // The page that gets selected when a valid page number is unknown
 
@@ -374,6 +384,11 @@ struct Cmd_struct
 #define GM2_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
 #define GM2_DEFAULT_PAGE3 0
 #define GM2_DEFAULT_PAGE4 0
+
+#define MG300_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
+#define MG300_DEFAULT_PAGE2 PAGE_MG300_FX1
+#define MG300_DEFAULT_PAGE3 0
+#define MG300_DEFAULT_PAGE4 0
 
 // ********************************* Section 5: VController default configuration for programmable pages ********************************************
 #define PAGE_DEFAULT 0

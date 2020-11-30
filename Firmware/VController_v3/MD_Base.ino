@@ -137,13 +137,13 @@ void MD_base_class::send_alternative_identity_request(uint8_t check_device_no) {
 void MD_base_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {}
 
 void MD_base_class::connect(uint8_t device_id, uint8_t port) {
+  DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ':' + String(port & 0x0F));
   connected = true;
   MIDI_device_id = device_id;
   MIDI_port = port; // Set the correct MIDI port for this device
   do_after_connect();
   PAGE_check_first_connect(my_device_number); // Go to the device page of this device if it is the first device that connects
   if (enabled == DEVICE_DETECT) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
-  DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ':' + String(port & 0x0F));
 }
 
 void MD_base_class::do_after_connect() {}
@@ -223,6 +223,7 @@ bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
   // Check whether the current patch needs to be switched on or whether a new patch is chosen
   if (new_patch > patch_max) new_patch = patch_max;
   if (new_patch == patch_number) { // Check if curnum needs to be executed.
+    DEBUGMSG("Executing curnum action");
     switch (Setting.CURNUM_action) {
       case CN_PREV_PATCH:
         if (prev_patch_number != patch_number) patch_select_pressed(prev_patch_number);
@@ -243,9 +244,11 @@ bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
     return false;
   }
   else {
+    DEBUGMSG("Selecting patch " + String (new_patch));
     select_patch(new_patch); //New patch - send program change
     set_current_device(my_device_number);
     PC_ignore_timer = millis();
+    popup_patch_name = true;
   }
   bank_number = bank_select_number; // Update the real bank number with the selected number
   device_in_bank_selection = 0; // Switch off bank selection mode
@@ -272,7 +275,7 @@ void MD_base_class::bank_updown(signed int delta, uint8_t my_bank_size) {
     bank_size = my_bank_size;
   }
 
-  if (delta > 0) { // Perform bank up:
+  /*if (delta > 0) { // Perform bank up:
     for (uint8_t i = 0; i < delta; i++) {
       if (bank_select_number >= (rel_patch_max / bank_size)) bank_select_number = 0; // Check if we've reached the top
       else bank_select_number ++;
@@ -283,7 +286,8 @@ void MD_base_class::bank_updown(signed int delta, uint8_t my_bank_size) {
       if (bank_select_number <= 0) bank_select_number = (rel_patch_max / bank_size); // Check if we've reached the bottom
       else bank_select_number --;
     }
-  }
+  }*/
+  bank_select_number = update_encoder_value(delta, bank_select_number, 0, (rel_patch_max / bank_size));
 
   if (bank_select_number == bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
 
@@ -472,7 +476,7 @@ void MD_base_class::select_parameter_bank_category(uint8_t category) {
 
 void MD_base_class::par_bank_updown(signed int delta, uint8_t my_bank_size) {
 
-  // Perform bank up:
+  /*// Perform bank up:
   if (delta > 0) {
     for (uint8_t i = 0; i < delta; i++) {
       if (parameter_bank_number >= (number_of_parbank_parameters() - 1) / my_bank_size) parameter_bank_number = 0; // Check if we've reached the top
@@ -485,7 +489,8 @@ void MD_base_class::par_bank_updown(signed int delta, uint8_t my_bank_size) {
       if (parameter_bank_number <= 0) parameter_bank_number = (number_of_parbank_parameters() - 1) / my_bank_size; // Check if we've reached the bottom
       else parameter_bank_number--; //Otherwise move bank down
     }
-  }
+  }*/
+  parameter_bank_number = update_encoder_value(delta, parameter_bank_number, 0, number_of_parbank_parameters() - 1);
 
   if (my_bank_size == 1) { // Show the current parameter name and value if the bank size is only 1
     String msg = "";
@@ -532,7 +537,7 @@ void MD_base_class::request_current_assign(uint8_t sw) {
 
 void MD_base_class::asgn_bank_updown(signed int delta, uint8_t my_bank_size) {
 
-  // Perform bank up:
+  /*// Perform bank up:
   if (delta > 0) {
     for (uint8_t i = 0; i < delta; i++) {
       if (assign_bank_number >= (get_number_of_assigns() - 1) / my_bank_size) assign_bank_number = 0; // Check if we've reached the top
@@ -548,7 +553,9 @@ void MD_base_class::asgn_bank_updown(signed int delta, uint8_t my_bank_size) {
   }
   else {
     LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
-  }
+  }*/
+  assign_bank_number = update_encoder_value(delta, assign_bank_number, 0, get_number_of_assigns() - 1);
+  LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
 
   update_page = REFRESH_PAGE; //Re-read the patchnames for this bank
 }

@@ -67,7 +67,8 @@ SOURCES += main.cpp\
     devices/svl.cpp \
     custompatchlistwidget.cpp \
     devices/sy1000.cpp \
-    devices/gmajor2.cpp
+    devices/gmajor2.cpp \
+    devices/mg300.cpp
 
 HEADERS  += RtMidi.h \
     mainwindow.h \
@@ -102,7 +103,8 @@ HEADERS  += RtMidi.h \
     devices/svl.h \
     custompatchlistwidget.h \
     devices/sy1000.h \
-    devices/gmajor2.h
+    devices/gmajor2.h \
+    devices/mg300.h
 
 FORMS += \
     vceditsettingsdialog.ui \

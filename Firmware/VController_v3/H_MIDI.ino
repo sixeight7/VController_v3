@@ -99,6 +99,7 @@ USBHub hub1(myusb);
 USBHub hub2(myusb);
 USBHub hub3(myusb);
 USBHub hub4(myusb);
+
 #define NUMBER_OF_USB_HOST_MIDI_PORTS 8
 MIDIDevice_BigBuffer usbhMIDI01(myusb); // With bigbuffer, newer Roland devices are working properly!
 MIDIDevice_BigBuffer usbhMIDI02(myusb);
@@ -642,8 +643,7 @@ void MIDI_check_SYSEX_in_universal(const unsigned char* sxdata, short unsigned i
       MIDI_send_sysex(sysexbuffer, 15, port); // Will send F0 7E 01 06 02 7D 00 68 00 02 (03 03 05) 00 F7 - version number between brackets
     }
     if ((port == USBMIDI_PORT) && (My_KTN.connected)) { // Send Katana response
-      uint8_t sysexbuffer[15] = { 0xf0, 0x7e, 0x00, 0x06, 0x02, 0x41, 0x33, 0x03, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0xf7 };
-      MIDI_send_sysex(sysexbuffer, 15, port);
+      My_KTN.respond_to_identity_request_of_editor();
     }
   }
 }

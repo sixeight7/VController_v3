@@ -8,9 +8,8 @@ Deploy VC-edit for Mac:
 Deploy VC-edit for Windows:
 1) Make sure Qt creator is set to release (and not Debug) and compile and run the app.
 2) Deploy the app by running the following commands in a command prompt:
-   > D:
-   > cd D:\qt-projects\build-VC-edit-Desktop_Qt_5_10_1_MinGW_32bit-Release\packager
-   > windeployqt VC-edit.exe --compiler-runtime 
+   > cd C:\Users\HP\Documents\qt-projects\build-VC-edit-Desktop_Qt_5_11_1_MinGW_32bit-Release\packager
+   > C:\Qt\5.11.1\mingw53_32\bin\windeployqt VC-edit.exe --compiler-runtime 
 
 
 
@@ -22,7 +21,7 @@ Deploy VC-edit for Windows:
 
 Also for windeployqt to run, the D:\Qt\5.10.1\mingw53_32\bin folder must be in the PATH variable and there should be no link to other compilers here!
 
-4) Copy the folder D:\qt-projects\build-VC-edit-Desktop_Qt_5_10_1_MinGW_32bit-Release\packager to D:\qt-projects\build-VC-edit-Desktop_Qt_5_10_1_MinGW_32bit-Release\Releases and rename the folder to VC-edit for Controller or VC-edit for VC-mini depending on the IS_VCMINI setting in config.h in Qt creator. Also add the proper version number. Then zip the folder. 
+4) Copy the folder C:\Users\HP\Documents\qt-projects\build-VC-edit-Desktop_Qt_5_11_1_MinGW_32bit-Release\packager to C:\Users\HP\Documents\qt-projects\\Releases and rename the folder to VC-edit for Controller or VC-edit for VC-mini depending on the IS_VCMINI setting in config.h in Qt creator. Also add the proper version number. Then zip the folder. 
 
 
 

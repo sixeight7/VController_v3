@@ -45,7 +45,7 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Send_MIDI_clock_port; // SendMIDI clock data port
   uint8_t LED_bpm_synced_colour; // Colour of the tempo LED when tempo is synced with MIDI clock
   uint8_t RGB_Backlight_scheme; // The colour scheme of the backlight
-  uint8_t Main_display_show_top_right; // What will be shown top right on the nmain display 
+  uint8_t Main_display_show_top_right; // What will be shown top right on the main display 
   uint8_t HNP_mode_cc_number; // Addition to Bass mode
   uint8_t CURNUM_action; // What to do when current patch number is pressed again
 };
@@ -175,7 +175,6 @@ const MIDI_switch_settings_struct MIDI_switch_default_settings[NUMBER_OF_DEFAULT
   { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 31
 };
 
-#define LCD_DISPLAY_SIZE 16
 // Switch parameter memory
 struct SP_struct {
   uint8_t Device;       // The device the switch is assigned to

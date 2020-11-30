@@ -128,6 +128,8 @@ void main_switch_control()  // Checks if a button has been pressed and check out
     current_cmdbuf_index = 0;
     arm_page_cmd_exec = 0;
   }
+
+  SCO_check_update_tempo();
 }
 
 // ********************************* Section 2: Command Execution ********************************************
@@ -219,7 +221,6 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
-  bool show_label;
 
   DEBUGMAIN("Execute command " + String(Type) + " for device " + String(Dev));
 
@@ -363,10 +364,9 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
           else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_next_patch_number();
           else pnumber = SP[Sw].PP_number;
         }
-        show_label = Device[Dev]->patch_select_pressed(pnumber);
+        Device[Dev]->patch_select_pressed(pnumber);
         Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
         mute_all_but_me(Dev); // mute all the other devices
-        if ((show_label) && (SP[Sw].Label[0] != ' ')) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
         update_page = RELOAD_PAGE;
         break;
       case DIRECT_SELECT:
@@ -514,19 +514,13 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
 void SCO_execute_command_press(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Dev = cmd->Device;
   if (Dev == CURRENT) Dev = Current_device;
-  uint8_t Type = cmd->Type;
-  uint8_t Data1 = cmd->Data1;
-  uint8_t Data2 = cmd->Data2;
 
-  DEBUGMSG("Press -> execute command " + String(Type) + " for device " + String(Dev));
+  //DEBUGMSG("Press -> execute command " + String(Type) + " for device " + String(Dev));
 
   if (Dev == COMMON) { // Check for common parameters
-    switch (Type) {
+    switch (cmd->Type) {
       case MIDI_NOTE:
-        MIDI_send_note_on(Data1, cmd->Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
-        break;
-      case MIDI_CC:
-        if (first_cmd) SCO_CC_press(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        MIDI_send_note_on(cmd->Data1, cmd->Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
         break;
     }
   }
@@ -659,126 +653,159 @@ void mute_all_but_me(uint8_t my_device) {
 }
 
 // ********************************* Section 3: Parameter State Control ********************************************
+uint16_t SCO_find_max_value(uint8_t Max) {
+  if (Max < 128) return Max;
+  switch (Max + 1) {
+    case TIME_2000: return 2000;
+    case TIME_1000: return 1000;
+    case TIME_500: return 500;
+    case TIME_300: return 300;
+    case RPT_600: return 600;
+  }
+  return 0;
+}
 
 bool SCO_update_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t Step) {
   // Update the current paramater state. Return true if value was updated.
-  uint8_t val;
-  if (SC_switch_is_expr_pedal()) {
-    bool isnew = false;
-    SP[Sw].State = 1;
-    if (SP[Sw].Latch == RANGE) {
-      if (Max >= 128) { // Checking for dual byte parameters
-        uint16_t _max = Max;
-        uint16_t _min = Min;
-        if (Max + 1 == TIME_2000) _max = 2000;
-        if (Max + 1 == TIME_1000) _max = 1000;
-        if (Max + 1 == TIME_500) _max = 500;
-        if (Max + 1 == TIME_300) _max = 300;
-        if (Max + 1 == RPT_600) {
-          _min = 40;
-          _max = 600;
-        }
-        uint16_t new_value = map(Expr_ped_value, 0, 127, _min, _max);
-        if (new_value != (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2) {
-          SP[Sw].Target_byte1 = new_value / 128;
-          SP[Sw].Target_byte2 = new_value % 128;
-          isnew = true;
-        }
-      }
-      else { // Single byte parameter
-        uint8_t new_value = map(Expr_ped_value, 0, 127, Min, Max);
-        if (new_value != SP[Sw].Target_byte1) {
-          SP[Sw].Target_byte1 = new_value;
-          isnew = true;
-        }
-      }
-      LCD_show_bar(0, Expr_ped_value); // Show it on the main display
-      if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show the bar on the individual display when using the MEP
-      return isnew;
-    }
-  }
-  else { // Not an expresssion pedal
-    master_expr_from_cc = false;
-    signed int delta;
-    if (SC_switch_is_encoder()) delta = Enc_value;
-    else delta = 1;
+  uint16_t _max = SCO_find_max_value(Max);
+  uint16_t _min = Min;
+  if ((Max + 1) == RPT_600) _min = 40;
+  master_expr_from_cc = false;
 
-    switch (SP[Sw].Latch) {
-      case MOMENTARY:
-        SP[Sw].State = 1; // Switch state on
+  if (SC_switch_is_expr_pedal()) return SCO_update_parameter_state_exp_pedal(Sw, _min, _max, Step);
+  if (SC_switch_is_encoder()) return SCO_update_parameter_state_encoder(Sw, _min, _max, Step);
+  return SCO_update_parameter_state_switch(Sw, _min, _max, Step);
+}
+
+bool SCO_update_parameter_state_switch(uint8_t Sw, uint16_t _min, uint16_t _max, uint8_t Step) {
+  uint16_t val;
+  switch (SP[Sw].Latch) {
+    case MOMENTARY:
+      SP[Sw].State = 1; // Switch state on
+      switch_controlled_by_master_exp_pedal = 0;
+      break;
+    case TOGGLE:  // Toggle state
+      SP[Sw].State ++;
+      if (SP[Sw].State > 2) SP[Sw].State = 1;
+      switch_controlled_by_master_exp_pedal = 0;
+      break;
+    case TRISTATE:  // Select next state
+      SP[Sw].State ++;
+      if (SP[Sw].State > 3) SP[Sw].State = 1;
+      switch_controlled_by_master_exp_pedal = 0;
+      break;
+    case FOURSTATE:  // Select next state
+      SP[Sw].State ++;
+      if (SP[Sw].State > 4) SP[Sw].State = 1;
+      switch_controlled_by_master_exp_pedal = 0;
+      break;
+    case STEP:
+      // Update byte1 with the new value
+      if (_max >= 128) val = (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2;
+      else val = SP[Sw].Target_byte1;
+      if (val >= _max) val = _min;
+      else val += Step;
+      if (_max > 128) {
+        SP[Sw].Target_byte1 = val / 128;
+        SP[Sw].Target_byte2 = val % 128;
+      }
+      else SP[Sw].Target_byte1 = val;
+      if (Setting.MEP_control == 2) {
+        if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
+        switch_controlled_by_master_exp_pedal = Sw;
+      }
+      else {
         switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case TOGGLE:  // Toggle state
-        SP[Sw].State += delta;;
-        if (SP[Sw].State > 2) SP[Sw].State = 1;
+      }
+      break;
+    case UPDOWN:
+      updown_direction_can_change = true;
+      if (Setting.MEP_control >= 1) {
+        if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
+        switch_controlled_by_master_exp_pedal = Sw;
+      }
+      else {
         switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case TRISTATE:  // Select next state
-        SP[Sw].State += delta;
-        if (SP[Sw].State > 3) SP[Sw].State = 1;
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case FOURSTATE:  // Select next state
-        SP[Sw].State += delta;
-        if (SP[Sw].State > 4) SP[Sw].State = 1;
-        switch_controlled_by_master_exp_pedal = 0;
-        break;
-      case STEP:
-        // Update byte1 with the new value
-        val = SP[Sw].Target_byte1;
-        if (delta > 0) {
-          for (uint8_t i = 0; i < abs(delta); i++) {
-            val += Step;
-            if (val > Max) val = Min;
+      }
+      return false;
+      break;
+  }
+  return true;
+}
+
+bool SCO_update_parameter_state_encoder(uint8_t Sw, uint16_t _min, uint16_t _max, uint8_t Step) {
+  uint16_t val;
+  switch_controlled_by_master_exp_pedal = 0;
+  switch (SP[Sw].Latch) {
+    case TOGGLE:  // Toggle state
+      if (Enc_value > 0) SP[Sw].State = 1;
+      if (Enc_value < 0) SP[Sw].State = 2;
+      break;
+    case TRISTATE:  // Select next state
+      if ((Enc_value > 0) && (SP[Sw].State < 2)) SP[Sw].State ++;
+      if ((Enc_value < 0) && (SP[Sw].State > 0)) SP[Sw].State --;
+      break;
+    case FOURSTATE:  // Select next state
+      if ((Enc_value > 0) && (SP[Sw].State < 3)) SP[Sw].State ++;
+      if ((Enc_value < 0) && (SP[Sw].State > 0)) SP[Sw].State --;
+
+      break;
+    case STEP:
+    case UPDOWN:
+      // Update byte1 with the new value
+      if (_max >= 128) val = (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2;
+      else val = SP[Sw].Target_byte1;
+      val = update_encoder_value(Enc_value, val, _min, _max);
+      /*if (Enc_value > 0) {
+        for (uint8_t i = 0; i < abs(Enc_value); i++) {
+          if (val >= _max) {
+            if ((Enc_value > 1) || (_max < 4)) val = _max;
+            else val = _min;
           }
+          else val += Step;
         }
-        else {
-          for (uint8_t i = 0; i < abs(delta); i++) {
-            if (val == Min) val = Max - 1;
-            else val -= Step;
+        }
+        if (Enc_value < 0)
+        for (uint8_t i = 0; i < abs(Enc_value); i++) {
+          if (val <= _min) {
+            if ((Enc_value < -1) || (_max < 4)) val = _min;
+            else val = _max;
           }
-        }
-        SP[Sw].Target_byte1 = val;
-        if (Setting.MEP_control == 2) {
-          if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
-          switch_controlled_by_master_exp_pedal = Sw;
-        }
-        else {
-          switch_controlled_by_master_exp_pedal = 0;
-        }
-        break;
-      case UPDOWN:
-        if (SC_switch_is_encoder()) {
-          val = SP[Sw].Target_byte1;
-          if (delta > 0) {
-            for (uint8_t i = 0; i < abs(delta); i++) {
-              val ++;
-              if (val > Max) val = Min;
-            }
-          }
-          else {
-            for (uint8_t i = 0; i < abs(delta); i++) {
-              if (val == Min) val = Max - 1;
-              else val --;
-            }
-          }
-          SP[Sw].Target_byte1 = val;
-          break;
-        }
-        else {
-          updown_direction_can_change = true;
-          if (Setting.MEP_control >= 1) {
-            if (switch_controlled_by_master_exp_pedal != Sw) update_page = REFRESH_PAGE;
-            switch_controlled_by_master_exp_pedal = Sw;
-          }
-          else {
-            switch_controlled_by_master_exp_pedal = 0;
-          }
-          return false;
-        }
-        break;
+          else val -= Step;
+        }*/
+
+      if (_max > 128) {
+        SP[Sw].Target_byte1 = val / 128;
+        SP[Sw].Target_byte2 = val % 128;
+      }
+      else SP[Sw].Target_byte1 = val;
+      break;
+  }
+  return true;
+}
+
+bool SCO_update_parameter_state_exp_pedal(uint8_t Sw, uint16_t _min, uint16_t _max, uint8_t Step) {
+  bool isnew = false;
+  SP[Sw].State = 1;
+  if (SP[Sw].Latch == RANGE) {
+    if (_max >= 128) { // Checking for dual byte parameters
+      uint16_t new_value = map(Expr_ped_value, 0, 127, _min, _max);
+      if (new_value != (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2) {
+        SP[Sw].Target_byte1 = new_value / 128;
+        SP[Sw].Target_byte2 = new_value % 128;
+        isnew = true;
+      }
     }
-    //DEBUGMSG("New state is " + String(SP[Sw].State));
+    else { // Single byte parameter
+      uint8_t new_value = map(Expr_ped_value, 0, 127, _min, _max);
+      if (new_value != SP[Sw].Target_byte1) {
+        SP[Sw].Target_byte1 = new_value;
+        isnew = true;
+      }
+    }
+    LCD_show_bar(0, Expr_ped_value); // Show it on the main display
+    if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show the bar on the individual display when using the MEP
+    return isnew;
   }
   return true;
 }
@@ -793,53 +820,44 @@ void SCO_update_released_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, u
 
 void SCO_update_held_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t Step) {
   uint16_t val;
+  uint16_t _max = SCO_find_max_value(Max);
+  uint16_t _min = Min;
+  if ((Max + 1) == RPT_600) {
+    _min = 40;
+  }
   if (SP[Sw].Latch == STEP) {
-    // Update byte1 with the new value
-    val = SP[Sw].Target_byte1;
+    if (Max >= 128) val = (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2;
+    else val = SP[Sw].Target_byte1;
     val += Step;
-    if (val > Max) val = Min;
-    SP[Sw].Target_byte1 = val;
+    if (val > _max) val = _min;
+    if (Max > 128) {
+      SP[Sw].Target_byte1 = val / 128;
+      SP[Sw].Target_byte2 = val % 128;
+    }
+    else SP[Sw].Target_byte1 = val;
   }
   if (SP[Sw].Latch == UPDOWN) {
-    if (Max >= 128) { // Need double target byte for large numbers
-      val = (SP[Sw].Target_byte1 << 7) + SP[Sw].Target_byte2;
-      uint16_t _max = 0;
-      uint16_t _min = 0;
-      if (Max + 1 == TIME_2000) _max = 2000;
-      if (Max + 1 == TIME_1000) _max = 1000;
-      if (Max + 1 == TIME_500) _max = 500;
-      if (Max + 1 == TIME_300) _max = 300;
-      if (Max + 1 == RPT_600) {
-        _max = 600;
-        _min = 40;
-      }
-      if (SP[Sw].Direction) { // Up
-        if (val < _max) val++;
-      }
-      else { // Down
-        if (val > _min) val--;
-      }
-      SP[Sw].Target_byte1 = val >> 7;
-      SP[Sw].Target_byte2 = val & 0x7F;
+    if (Max >= 128) val = (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2;
+    else val = SP[Sw].Target_byte1;
+
+    if (SP[Sw].Direction) { // Up
+      if (val < _max) val++;
     }
-    else {
-      // Update byte1 with the new value
-      val = SP[Sw].Target_byte1;
-      if (SP[Sw].Direction) { // Up
-        if (val < Max) val++;
-      }
-      else { // Down
-        if (val > Min) val--;
-      }
-      SP[Sw].Target_byte1 = val;
+    else { // Down
+      if (val > _min) val--;
     }
+    if (Max > 128) {
+      SP[Sw].Target_byte1 = val / 128;
+      SP[Sw].Target_byte2 = val % 128;
+    }
+    else SP[Sw].Target_byte1 = val;
   }
 }
 
-uint8_t SCO_return_parameter_value(uint8_t Sw, Cmd_struct * cmd) {
-  if (SP[Sw].Latch == RANGE) return SP[Sw].Target_byte1;
-  if (SP[Sw].Latch == STEP) return SP[Sw].Target_byte1;
-  if (SP[Sw].Latch == UPDOWN) return SP[Sw].Target_byte1;
+uint16_t SCO_return_parameter_value(uint8_t Sw, Cmd_struct * cmd) {
+  if ((SP[Sw].Latch == RANGE) || (SP[Sw].Latch == STEP) || (SP[Sw].Latch == UPDOWN)) {
+    return SP[Sw].Target_byte1;
+  }
   // Latch is MOMENTARY or TOGGLE
   if (SP[Sw].Type == PARAMETER) { //Parameters are read directly from the switch config.
     if (SP[Sw].State == 1) return cmd->Value1;
@@ -939,7 +957,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
         // Update byte1 with the new value
         val = SP[Sw].Target_byte1;
         val += 1;
-        if (val > value1) val = value2;
+        if (val > value1) val = value2; // Go from max to min value.
         SP[Sw].Target_byte1 = val;
         MIDI_send_CC(CC_number, val, channel, port); // Controller, Value, Channel, Port
         MIDI_remember_CC(CC_number, val, channel, port);
@@ -1100,19 +1118,20 @@ void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page
 }
 
 void SCO_page_up_down(signed int delta) {
-  uint8_t New_page = 0;
-  if (delta > 0) {
+  uint8_t New_page = update_encoder_value(delta, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
+  /*uint8_t New_page = 0;
+    if (delta > 0) {
     for (uint8_t i = 0; i < delta; i++) {
       if (Current_page < (Number_of_pages - 1)) New_page = Current_page + 1;
       else New_page = LOWEST_USER_PAGE;
     }
-  }
-  if (delta < 0) {
+    }
+    if (delta < 0) {
     for (uint8_t i = 0; i < abs(delta); i++) {
       if (Current_page > LOWEST_USER_PAGE) New_page = Current_page - 1;
       else New_page = Number_of_pages - 1;
     }
-  }
+    }*/
   SCO_trigger_default_page_cmds(New_page);
   SCO_select_page(New_page);
 }
@@ -1126,18 +1145,19 @@ void SC_page_bank_updown(signed int delta, uint8_t bank_size) {
     page_bank_select_number = page_bank_number; //Reset the bank to current patch
   }
   // Perform bank up:
-  if (delta > 0) {
+  /*if (delta > 0) {
     for (uint8_t i = 0; i < delta; i++) {
       if (page_bank_select_number >= (page_max / bank_size)) page_bank_select_number = 0; // Check if we've reached the top
       else page_bank_select_number ++;
     }
-  }
-  if (delta < 0) {
+    }
+    if (delta < 0) {
     for (uint8_t i = 0; i < abs(delta); i++) {
       if (page_bank_select_number <= 0) page_bank_select_number = (page_max / bank_size); // Check if we've reached the bottom
       else page_bank_select_number --;
     }
-  }
+    }*/
+  page_bank_select_number = update_encoder_value(delta, page_bank_select_number, 0, page_max / bank_size);
 
   if (page_bank_select_number == page_bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
 }
@@ -1191,12 +1211,13 @@ uint8_t MIDI_CLOCK_BPM_MEMS[NUMBER_OF_TAPMEMS] = { 0 };
 uint8_t MIDI_clock_bpm_mem_index = 0;
 uint32_t previous_midi_clock_time = 0;
 bool MIDI_clock_received = false;
+bool update_tempo = false;
 IntervalTimer MIDI_clock_timer;
 uint8_t bpm_LED_tick = 0;
 
 void SCO_MIDI_clock_start() {
   long timer_interval = 60000000 / (24 * Setting.Bpm);
-  MIDI_clock_timer.begin(SCO_MIDI_clock_run, timer_interval);
+  MIDI_clock_timer.begin(SCO_MIDI_clock_timer_expired, timer_interval);
 }
 
 void SCO_MIDI_clock_update() {
@@ -1204,9 +1225,16 @@ void SCO_MIDI_clock_update() {
   MIDI_clock_timer.update(timer_interval);
 }
 
-void SCO_MIDI_clock_run() {
+void SCO_check_update_tempo() {
+  if (update_tempo) {
+    SCO_update_tap_tempo_LED();
+    update_tempo = false;
+  }
+}
+
+void SCO_MIDI_clock_timer_expired() {
   MIDI_send_clock();
-  SCO_update_tap_tempo_LED();
+  update_tempo = true;
 }
 
 void SCO_global_tap_external() { // For external tapping sources
@@ -1280,9 +1308,10 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
 void SCO_set_global_tempo_press(uint8_t new_bpm) {
   Setting.Bpm = new_bpm;
   // Send it to the devices
-  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+  send_new_bpm_value = true; // Will delay sending the data, but also hangs the VC-mini when using the encoder for tempo change
+  /*for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     Device[d]->set_bpm();
-  }
+    } */
   tap = 0; // So the tempo will be retapped (done from SCO_update_tap_tempo_LED)
   do_not_tap_port = 255;
   SCO_delay_receiving_MIDI_clock();
@@ -1291,23 +1320,12 @@ void SCO_set_global_tempo_press(uint8_t new_bpm) {
 }
 
 void SCO_set_global_tempo_with_encoder(signed int delta) {
-  if (delta > 0) {
-    Setting.Bpm += delta;
-    if (Setting.Bpm > 240) Setting.Bpm = 40;
-  }
-  if (delta <= 0) {
-    Setting.Bpm -= abs(delta);
-    if (Setting.Bpm < 40) Setting.Bpm = 240;
-  }
-  send_new_bpm_value = true;
-  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
-    Device[d]->set_bpm();
-  }
-  tap = 0; // So the tempo will be retapped (done from SCO_update_tap_tempo_LED)
-  do_not_tap_port = 255;
-  SCO_delay_receiving_MIDI_clock();
-  SCO_MIDI_clock_update();
-  update_page = REFRESH_PAGE; //Refresh the page, so any present tap tempo button display will also be updated.
+  if (delta > 15) delta = 15;
+  uint8_t new_bpm = update_encoder_value(delta, Setting.Bpm, 40, 240);
+  //if (new_bpm > 240) new_bpm = 240;
+  //if (new_bpm < 40) new_bpm = 40;
+  SCO_set_global_tempo_press(new_bpm);
+  if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Set tempo: " + String(Setting.Bpm), ACTION_TIMER_LENGTH);
 }
 
 void SCO_receive_MIDI_clock_pulse(uint8_t port) {

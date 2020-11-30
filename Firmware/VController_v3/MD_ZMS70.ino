@@ -19,19 +19,19 @@
 // The relevant messages are repeated here
 // 1) The Zoom responds to an MIDI identity request message with F0 7E 00 (Device ID) 06 02 52 (Manufacturing ID for Zoom) 61 (model number MS70CDR) 00  00 00 32 2E 31 30 F7
 #define ZMS70_MODEL_NUMBER 0x61
-// 2) The editor keeps sending F0 52 00 5A 50 F7. The MS70-CDR does not seem to respond to it. But it may signal editor mode on.
+// 2) The editor keeps sending F0 52 00 61 50 F7. The MS70-CDR does not seem to respond to it. But it may signal editor mode on.
 #define ZMS70_EDITOR_MODE_ON 0x50
-// 3) If the editor sends F0 52 00 5A 33 F7, the MS70-CDR responds with the current Bank number (CC00 and CC32) and the current Program number (PC)
+// 3) If the editor sends F0 52 00 61 33 F7, the MS70-CDR responds with the current Bank number (CC00 and CC32) and the current Program number (PC)
 #define ZMS70_REQUEST_CURRENT_PATCH_NUMBER 0x33
-// 4) If the editor sends F0 52 00 5A 29 F7, the MS70-CDR responds with the current patch in 110 bytes with comaand number 28. Byte 0x61 - 0x6B contain the patch name. with a strange 0 at position 0x65
+// 4) If the editor sends F0 52 00 61 29 F7, the MS70-CDR responds with the current patch in 110 bytes with command number 28. Byte 0x61 - 0x6B contain the patch name. with a strange 0 at position 0x65
 #define ZMS70_REQUEST_CURRENT_PATCH 0x29
-// 5) The editor then reads all individual patches by sending F0 52 00 5A 09 00 00 {00-63} (patch number) F7.
+// 5) The editor then reads all individual patches by sending F0 52 00 61 09 00 00 {00-63} (patch number) F7.
 //    The MS70-CDR responds with 156 bytes with command number 08. Byte 0x66 - 0x70 contain the patch name. with an "overflow byte" at position 0x6A.
-// 6) At the end the editor sends F0 52 00 5A 51 F7 and communication seems to stop.
+// 6) At the end the editor sends F0 52 00 61 51 F7 and communication seems to stop.
 #define ZMS70_EDITOR_MODE_OFF 0x51
 // 7) Switch effect on/off:
-//    Switch on effect 1: F0 52 00 5A 31 00 00 01 (on) 00 F7, switch off: F0 52 00 5A 31 00 00 00 (off) 00 F7
-//    Switch on effect 2: F0 52 00 5A 31 01 00 01 (on) 00 F7 switch off: F0 52 00 5A 31 01 00 00 (off) 00 F7. etc. sixth byte changes consistent for the effect
+//    Switch on effect 1: F0 52 00 61 31 00 00 01 (on) 00 F7, switch off: F0 52 00 61 31 00 00 00 (off) 00 F7
+//    Switch on effect 2: F0 52 00 61 31 01 00 01 (on) 00 F7 switch off: F0 52 00 61 31 01 00 00 (off) 00 F7. etc. sixth byte changes consistent for the effect
 //    Same message is sent for changing a knob on the MS70-CDR, but byte 7 is not 0x00
 // 8) Tempo. set bpm=40: F0 52 00 61 31 03 08 28 00 F7 => 0x28 = 40, bpm=240: F0 52 00 61 31 03 08 7A 01 F7 => 0x7A = 122, 122+128 = 240, so the last two bytes are the tempo.
 
@@ -40,7 +40,7 @@
 void MD_ZMS70_class::init() // Default values for variables
 {
   MD_base_class::init();
-  
+
   // Variables
   enabled = DEVICE_DETECT; // Default value
   strcpy(device_name, "MS70"); // This line crashes the VController Production Model for no apparent reason - memory leak somewhere? Fixed by changing "Optimize" to fast
@@ -107,8 +107,6 @@ void MD_ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned 
     // Check if it is the current patch
     if (sxdata[4] == 0x28) {
       if (sxlength == ZMS70_CURRENT_PATCH_DATA_SIZE) {
-        //if (sxdata[4] == 0x28) {
-        //DEBUGMSG("!!!!Length sysex message: " + String(sxlength));
         // Copy current patch data to current patch memory - we need it later for changing specific parameters
         memcpy( CP_MEM, sxdata, ZMS70_CURRENT_PATCH_DATA_SIZE );
         CP_MEM_current = true;
@@ -133,6 +131,10 @@ void MD_ZMS70_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned 
 
         MIDI_enable_device_check();
         update_main_lcd = true;
+        if (popup_patch_name) {
+          LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+          popup_patch_name = false;
+        }
         update_page = REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the MS70-CDR.
       }
       else { // Data is not complete
@@ -205,7 +207,7 @@ void MD_ZMS70_class::request_patch(uint8_t number) { //Will request the complete
 }
 
 void MD_ZMS70_class::set_FX_state(uint8_t number, uint8_t state) { //Will set an effect on or off
-  uint8_t sysexmessage[10] = {0xF0, 0x52, MIDI_device_id, ZMS70_MODEL_NUMBER, 0x31, number, 0x00, state, 0x00, 0xF7}; // F0 52 00 5A 31 00 (FX) 00 01 (on) 00 F7
+  uint8_t sysexmessage[10] = {0xF0, 0x52, MIDI_device_id, ZMS70_MODEL_NUMBER, 0x31, number, 0x00, state, 0x00, 0xF7}; // F0 52 00 61 31 00 (FX) 00 01 (on) 00 F7
   //check_sysex_delay();
   MIDI_send_sysex(sysexmessage, 10, MIDI_port);
 }
@@ -217,16 +219,19 @@ void MD_ZMS70_class::send_current_patch() { //  Send the previously saved data b
 void MD_ZMS70_class::set_bpm() { //Will change the bpm to the specified value
 
   if ((connected) && (CP_MEM_current)) {
-    // We write the tempo in the full patch memory. Here is where it is stored:
-    // Tempo bit 4 - 8 is bit 1-5 from second tempo byte (index 131)
-    // Tempo bit 3 is bit 3 of the overflow byte! (index 125)
-    // Tempo bit 2 and 1 are first byte bit 2 and 3 (index 130)
-    CP_MEM[131] = (CP_MEM[131] & B11100000) | ((Setting.Bpm & B11111000) >> 3);
-    CP_MEM[125] = (CP_MEM[125] & B11111011) | (Setting.Bpm & B00000100);
-    CP_MEM[130] = (CP_MEM[130] & B10011111) | ((Setting.Bpm & B00000011) << 5);
-
+    write_tempo_to_cpmem();
     send_current_patch(); // Write the updated patch memory to the MS70-CDR
   }
+}
+
+void MD_ZMS70_class::write_tempo_to_cpmem() {
+  // We write the tempo in the full patch memory. Here is where it is stored:
+  // Tempo bit 4 - 8 is bit 1-5 from second tempo byte (index 131)
+  // Tempo bit 3 is bit 3 of the overflow byte! (index 125)
+  // Tempo bit 2 and 1 are first byte bit 2 and 3 (index 130)
+  CP_MEM[131] = (CP_MEM[131] & B11100000) | ((Setting.Bpm & B11111000) >> 3);
+  CP_MEM[125] = (CP_MEM[125] & B11111011) | (Setting.Bpm & B00000100);
+  CP_MEM[130] = (CP_MEM[130] & B10011111) | ((Setting.Bpm & B00000011) << 5);
 }
 
 void MD_ZMS70_class::start_tuner() {
@@ -246,9 +251,11 @@ void MD_ZMS70_class::stop_tuner() {
 void MD_ZMS70_class::select_patch(uint16_t new_patch) {
 
   if (new_patch == patch_number) unmute();
-  else prev_patch_number = patch_number;
-  patch_number = new_patch;
-  send_patch_change = true;
+  else {
+    prev_patch_number = patch_number;
+    patch_number = new_patch;
+    send_patch_change = true; 
+  }
   update_LEDS = true;
   update_main_lcd = true;
 }
@@ -258,6 +265,7 @@ void MD_ZMS70_class::do_after_patch_selection() {
   Current_patch_number = patch_number;
   update_LEDS = true;
   update_main_lcd = true;
+  delay(5); // short delay after patch change...
   CP_MEM_current = false;
   write_sysex(ZMS70_REQUEST_CURRENT_PATCH); // Request current patch, so the FX buttons will be updated
   MIDI_disable_device_check();
@@ -514,14 +522,21 @@ void MD_ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t numbe
   // Send sysex MIDI command to Zoom G3
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   bool FX_on = (value & 1);
-  if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
-    set_FX_state(SP[Sw].PP_number, FX_on);
-  }
-  else if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
-    if (SP[Sw].PP_number == 3) bitWrite(CP_MEM[67], 0, FX_on);
-    if (SP[Sw].PP_number == 4) bitWrite(CP_MEM[88], 0, FX_on);
-    if (SP[Sw].PP_number == 5) bitWrite(CP_MEM[108], 0, FX_on);
+  if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
+    switch (SP[Sw].PP_number) {
+      case 0: bitWrite(CP_MEM[6], 0, FX_on); break;
+      case 1: bitWrite(CP_MEM[26], 0, FX_on); break;
+      case 2: bitWrite(CP_MEM[47], 0, FX_on); break;
+      case 3: bitWrite(CP_MEM[67], 0, FX_on); break;
+      case 4: bitWrite(CP_MEM[88], 0, FX_on); break;
+      case 5: bitWrite(CP_MEM[108], 0, FX_on); break;
+    }
+    write_active_fx_to_cpmem(SP[Sw].PP_number);
+    write_tempo_to_cpmem();
     send_current_patch(); // Write the updated patch memory to the MS70-CDR
+  }
+  else if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
+    set_FX_state(SP[Sw].PP_number, FX_on);
   }
 
   LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
@@ -529,15 +544,38 @@ void MD_ZMS70_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t numbe
 
 void MD_ZMS70_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   if (SP[Sw].Latch == MOMENTARY) {
-    if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
-      set_FX_state(SP[Sw].PP_number, cmd->Value2);
-    }
-    else if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
-      if (SP[Sw].PP_number == 3) bitWrite(CP_MEM[67], 0, cmd->Value2);
-      if (SP[Sw].PP_number == 4) bitWrite(CP_MEM[88], 0, cmd->Value2);
-      if (SP[Sw].PP_number == 5) bitWrite(CP_MEM[108], 0, cmd->Value2);
+    if (CP_MEM_current) { // Here we change the on/off bit in the patch data memory and write it back to the unit
+      switch (SP[Sw].PP_number) {
+        case 0: bitWrite(CP_MEM[6], 0, cmd->Value2); break;
+        case 1: bitWrite(CP_MEM[26], 0, cmd->Value2); break;
+        case 2: bitWrite(CP_MEM[47], 0, cmd->Value2); break;
+        case 3: bitWrite(CP_MEM[67], 0, cmd->Value2); break;
+        case 4: bitWrite(CP_MEM[88], 0, cmd->Value2); break;
+        case 5: bitWrite(CP_MEM[108], 0, cmd->Value2); break;
+      }
+      write_active_fx_to_cpmem(SP[Sw].PP_number);
+      write_tempo_to_cpmem();
       send_current_patch(); // Write the updated patch memory to the MS70-CDR
     }
+    else if (SP[Sw].PP_number < 3) { // This command will only work for the first three FX on the MS70-CDR
+      set_FX_state(SP[Sw].PP_number, cmd->Value2);
+    }
+  }
+}
+
+void MD_ZMS70_class::write_active_fx_to_cpmem(uint8_t fx_no) {
+  //Byte 125, 129 en 130 are changing for block selection:
+  //Block 1: 125, bit 4 = 0, 129 bit 7 = 1, 130 bit 0 = 1
+  //Block 2: 125, bit 4 = 0, 129 bit 7 = 0, 130 bit 0 = 1
+  //Block 3: 125, bit 4 = 1, 129 bit 7 = 1, 130 bit 0 = 0
+  //Block 4: 125, bit 4 = 1, 129 bit 7 = 0, 130 bit 0 = 0
+  //Block 5: 125, bit 4 = 0, 129 bit 7 = 1, 130 bit 0 = 0
+  //Block 6: 125, bit 4 = 0, 129 bit 7 = 0, 130 bit 0 = 0
+  const uint8_t bitState[6] = {B011, B001, B110, B100, B010, B000 };
+  if (fx_no < 6) {
+    bitWrite(CP_MEM[125], 3, (bitState[fx_no] & B100) >> 2);
+    bitWrite(CP_MEM[129], 6, (bitState[fx_no] & B010) >> 1);
+    bitWrite(CP_MEM[130], 0, bitState[fx_no] & B001);
   }
 }
 

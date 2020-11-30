@@ -13,6 +13,9 @@
 // Section 10: MD_KTN_class declaration (derived)
 // Section 11: MD_KPA_class declaration (derived)
 // Section 12: MD_SVL_class declaration (derived)
+// Section 13: MD_SY1000_class declaration (derived)
+// Section 14: MD_GM2_class declaration (derived)
+// Section 15: MD_MG300_class declaration (derived)
 
 // Here we declare the class objects for the midi devices the VController supports. The actual class code is found in the Md_<device_name>.ino files.
 
@@ -170,6 +173,7 @@ class MD_base_class
     uint8_t patch_number_offset = 1; // Is the first patch numbered one or zero?
     uint32_t PC_ignore_timer;
     String current_patch_name;
+    bool popup_patch_name = false;
     uint16_t patch_min;
     uint16_t patch_max;
     uint16_t bank_number = 0; // The bank number of the current_patch
@@ -617,6 +621,7 @@ class MD_ZMS70_class : public MD_base_class
     void set_FX_state(uint8_t number, uint8_t state);
     void send_current_patch();
     virtual void set_bpm();
+    void write_tempo_to_cpmem();
     virtual void start_tuner();
     virtual void stop_tuner();
 
@@ -637,6 +642,7 @@ class MD_ZMS70_class : public MD_base_class
     virtual bool request_parameter(uint8_t sw, uint16_t number);
     virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
     virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    void write_active_fx_to_cpmem(uint8_t fx_no);
     virtual void read_parameter_name(uint16_t number, String &Output);
     virtual uint16_t number_of_parameters();
     virtual uint8_t number_of_values(uint16_t parameter);
@@ -908,6 +914,7 @@ class MD_KTN_class : public MD_base_class
 
     // Device connection procedures
     virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    void respond_to_identity_request_of_editor();
     virtual void do_after_connect();
     void check_default_page_settings();
 
@@ -953,6 +960,8 @@ class MD_KTN_class : public MD_base_class
     void count_parameter_categories();
     virtual void request_par_bank_category_name(uint8_t sw);
     virtual void par_bank_updown(signed int delta, uint8_t my_bank_size);
+    void show_popup_category(uint16_t number);
+    void show_popup_parameter(uint16_t number);
     bool check_parameter_empty(uint16_t number);
     uint16_t get_fx_table_index(uint16_t number);
     virtual void read_parameter_title(uint16_t number, String &Output);
@@ -978,6 +987,7 @@ class MD_KTN_class : public MD_base_class
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
 
     // Variables:
+    bool is_mk2;
     uint8_t version;
 #define KTN_PATCH_SIZE 192
     uint8_t KTN_patch_buffer[KTN_PATCH_SIZE];
@@ -988,12 +998,16 @@ class MD_KTN_class : public MD_base_class
     bool fx_enabled = false;
     uint8_t current_fx_type = 0;
     uint8_t current_eq_type = 0;
+    uint8_t current_global_eq_type = 0;
     uint8_t current_pedal_type = 0;
     uint8_t current_midi_message; // Used for reading the patch from the Katana
     uint32_t current_midi_message_address;
     uint8_t save_patch_number = 0;
     uint32_t midi_timer;
     uint8_t prev_channel_number = 255;
+    bool editor_connected = false;
+#define KTN_IDENTITY_MESSAGE_SIZE 15
+    uint8_t identity_message[KTN_IDENTITY_MESSAGE_SIZE];
 };
 
 // ********************************* Section 11: MD_KPA_class declaration (derived) ********************************************
@@ -1309,4 +1323,74 @@ class MD_GM2_class : public MD_base_class
     uint8_t FX_state[GM2_NUMBER_OF_FX];
     uint8_t FX_type[GM2_NUMBER_OF_FX];
     bool send_patch_change = false;
+};
+
+// ********************************* Section 15: MD_MG300_class declaration (derived) ********************************************
+
+class MD_MG300_class : public MD_base_class
+{
+  public:
+    MD_MG300_class (uint8_t _dev_no) : MD_base_class (_dev_no) {} // Constructor
+
+    // Basic procedures
+    virtual void init();
+    virtual void update();
+
+    // Midi in procedures
+    virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
+    void read_patch_name(const unsigned char* sxdata, short unsigned int sxlength);
+    char convert_char(uint8_t data);
+    //virtual void check_PC_in(uint8_t program, uint8_t channel, uint8_t port);
+    virtual void check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port);
+
+    // Device connection procedures
+    virtual void send_alternative_identity_request(uint8_t check_device_no);
+    virtual void do_after_connect();
+
+    // Midi out procedures
+    void request_patch(uint8_t number);
+    void request_current_patch();
+    void request_device_state();
+    virtual void set_bpm();
+
+    // Patch selection procedures
+    virtual void select_patch(uint16_t new_patch);
+    virtual void do_after_patch_selection();
+    virtual bool request_patch_name(uint8_t sw, uint16_t number);
+    virtual void number_format(uint16_t number, String &Output);
+
+    // Direct select procedures
+    virtual bool flash_LEDs_for_patch_bank_switch(uint8_t sw);
+    virtual void direct_select_format(uint16_t number, String &Output);
+    virtual bool valid_direct_select_switch(uint8_t number);
+    virtual void direct_select_start();
+    virtual void direct_select_press(uint8_t number);
+
+    // Parameter control procedures
+    virtual void read_parameter_title(uint16_t number, String &Output);
+    virtual void read_parameter_name(uint16_t number, String &Output);
+    virtual void read_parameter_value_name(uint16_t number, uint16_t value, String &Output);
+    virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    virtual bool request_parameter(uint8_t sw, uint16_t number);
+    void read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2);
+    void read_FX_state_from_memory();
+    //void check_update_label(uint8_t Sw, uint8_t value);
+    virtual uint16_t number_of_parameters();
+    virtual uint8_t number_of_values(uint16_t parameter);
+    void update_parameter_state_through_cc(uint8_t control, uint8_t value);
+
+    // Master expression pedal procedures
+    //virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
+    //virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
+
+    // Variables:
+#define MG300_NUMBER_OF_FX 9
+    uint8_t fx_type[MG300_NUMBER_OF_FX];
+    bool fx_state[MG300_NUMBER_OF_FX];
+    uint8_t flash_bank_of_four = 255;
+    bool current_patch_read = false;
+    //uint8_t expr_pedal_cc = 0;
+    uint32_t current_patch_request_timer = 0;
+    uint16_t current_checksum;
 };

@@ -46,7 +46,7 @@ QString GM2_class::number_format(uint16_t patch_no)
 struct GM2_FX_type_struct { // Combines all the data we need for controlling a parameter in a device
     uint8_t Address;
       uint8_t Address_type;
-      char Name[17]; // The name for the label
+      QString Name; // The name for the label
       uint8_t Sublist;
       uint8_t Colour; // The colour for this effect.
 };
