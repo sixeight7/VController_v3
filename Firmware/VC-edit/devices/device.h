@@ -16,6 +16,8 @@ public:
     uint8_t get_setting(uint8_t variable);
     void set_setting(uint8_t variable, uint8_t value);
     QString get_setting_name(uint8_t variable);
+    virtual QString get_patch_info(uint16_t number);
+    virtual void rename_patch(uint16_t number);
 
     virtual bool check_command_enabled(uint8_t cmd);
     virtual QString number_format(uint16_t patch_no);
@@ -29,6 +31,15 @@ public:
     virtual QString read_assign_name(uint8_t assign_no);
     virtual QString read_assign_trigger(uint8_t assign_no);
     virtual uint8_t trigger_follow_assign(uint8_t assign_no);
+    virtual QString read_scene_name_from_buffer(int number, uint8_t scene) const;
+    virtual void store_scene_name_to_buffer(int number, uint8_t scene, QString name);
+
+    virtual uint8_t supportPatchSaving();
+    virtual void readPatchData(int index, int patch_no, const QJsonObject &json);
+    virtual void writePatchData(int patch_no, QJsonObject &json) const;
+    virtual QString patchFileHeader();
+    virtual QString DefaultPatchFileName(int number);
+    QString numConv(int number) const;
 
     // Variables
     QString device_name;
@@ -36,6 +47,8 @@ public:
     uint16_t patch_number;
     uint16_t patch_max;
     uint16_t patch_min;
+    uint16_t patch_max_as_stored_on_VC = 0;
+    uint16_t patch_min_as_stored_on_VC = 0;
 
     uint8_t my_LED_colour;
     uint8_t MIDI_channel;

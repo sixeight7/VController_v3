@@ -178,7 +178,7 @@ uint16_t MD_ZMS70_class::FXtypeMangler(uint8_t byte1, uint8_t byte2, uint8_t byt
 
 void MD_ZMS70_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Zoom MS70-CDR
-  if ((sxdata[5] == 0x52) && (sxdata[6] == ZMS70_MODEL_NUMBER) && (sxdata[7] == 0x00)) {
+  if ((sxdata[5] == 0x52) && (sxdata[6] == ZMS70_MODEL_NUMBER) && (sxdata[7] == 0x00) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }

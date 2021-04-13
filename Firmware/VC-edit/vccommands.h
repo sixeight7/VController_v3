@@ -15,7 +15,7 @@
 #include <QTableWidget>
 
 #define MAX_NUMBER_OF_PAGES 256
-#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 2997
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 1737
 #define MAX_NUMBER_OF_INTERNAL_COMMANDS 1000
 #define INTERNAL_CMD 0x8000 // MSB of an index set indicates the command is an internal command
 

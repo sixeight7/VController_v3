@@ -37,8 +37,11 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
     RtMidi.cpp\
+    customlineedit.cpp \
     mainwindow.cpp \
     midi.cpp \
+    scenedialog.cpp \
+    vcseqpattern.cpp \
     vcsettings.cpp \
     customcombobox.cpp \
     customspinbox.cpp \
@@ -71,8 +74,11 @@ SOURCES += main.cpp\
     devices/mg300.cpp
 
 HEADERS  += RtMidi.h \
+    customlineedit.h \
     mainwindow.h \
     midi.h \
+    scenedialog.h \
+    vcseqpattern.h \
     vcsettings.h \
     customcombobox.h \
     customspinbox.h \
@@ -107,6 +113,7 @@ HEADERS  += RtMidi.h \
     devices/mg300.h
 
 FORMS += \
+    scenedialog.ui \
     vceditsettingsdialog.ui \
     commandeditdialog.ui \
     mainwindow_VC-full.ui \

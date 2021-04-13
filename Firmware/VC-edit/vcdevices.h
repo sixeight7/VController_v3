@@ -9,6 +9,7 @@
 #include "VController/globaldevices.h"
 #include "vccommands.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 #include <QObject>
 #include <QDialog>
@@ -24,10 +25,31 @@ public:
     void fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd);
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
-    //void readMidi();
-    //void receiveDeviceSettings(uint8_t dev, uint8_t *settings);
-    //uint8_t getDeviceSetting(uint8_t dev, uint8_t setting);
 
+    QByteArray ReadPatch(int number);
+    QString ReadPatchStringForListWidget(int number, int type);
+    int findIndex(int type, int patch_no);
+    int newIndex();
+    int numberOfPatches();
+    int indexFromMode(int type, int number);
+    int getDevicePatchDeviceNumber(int number, int type);
+    int getDevicePatchType(int number, int type);
+    int getDevicePatchNumber(int number, int type);
+    void WritePatch(int type, int number, QByteArray patch);
+    void InitializePatchArea();
+    void readAll(const QJsonObject &json);
+    void readPatchData(int patch_no, const QJsonObject &json, int my_type);
+    void readAllLegacyKatana(const QJsonObject &json);
+    void writeAll(QJsonObject &json) const;
+    void writePatchData(int patch_no, QJsonObject &json) const;
+    void swapPatch(int patch_no1, int patch_no2, int type);
+    void movePatch(int source_patch, int dest_patch, int type);
+    void copyPatch(int number, int type);
+    void pastePatch(int number, int type);
+    void clearCopyBuffer();
+    void initializePatch(int number, int type);
+
+#define PATCH_INDEX_NOT_FOUND 0xFFFF
 
 signals:
 
@@ -39,6 +61,9 @@ private slots:
 
 private:
     void setup_devices();
+
+    QVector<uint8_t> Patch_copy_buffer;
+    bool copyBufferFilled = false;
 
     enum type_enum { HEADER, OPTION, VALUE };
     struct Device_menu_struct {

@@ -42,6 +42,7 @@ char menu_label[LCD_DISPLAY_SIZE + 1];
 uint8_t page_in_edit = 0; // The page we are editing
 uint8_t switch_in_edit = 0; // The switch we are editing
 String Text_entry; // The string we use for entering a text
+uint8_t Text_entry_length = 16;
 uint8_t Text_previous_switch = 255; // The number of the switch that was pressed before
 uint8_t Text_switch_char_index = 0; // The index of the characters of the switch that is being pressed
 bool keyboard_timer_running = false;
@@ -49,6 +50,7 @@ uint32_t keyboard_timer = 0;
 #define KEYBOARD_TIMER_LENGTH 800 // Wait time before forwarding the cursor to the next position
 bool no_hold; // Holding switches too long may trigger hold when we don't want it
 bool KTN_name_edited = false;
+bool SY1000_name_edited = false;
 uint8_t Current_MIDI_switch = 1;
 
 struct menu_struct {
@@ -71,16 +73,19 @@ struct menu_struct {
 #define KEYBOARD_MENU 8
 #define FIRMWARE_MENU 9
 #define CALIBRATION_MENU 10
-#define KATANA_MENU 11
-#define MIDI_SWITCH_MENU 12
-#define MIDI_ADV_MENU 13
+#define MIDI_SWITCH_MENU 11
+#define MIDI_ADV_MENU 12
+#define KATANA_MENU 13
+#define SY1000_MENU 14
 
 #define DEVICE_SUBLIST 255
 #define PAGE_SUBLIST 254
-#define KTN_NUMBER_SUBLIST 253
-#define SWITCH_SUBLIST 252
+#define SWITCH_SUBLIST 253
+#define KTN_NUMBER_SUBLIST 252
+#define SY1000_NUMBER_SUBLIST 251
 
 // The table below has an edited copy in VC-eit/Headers/vcsettings.h
+// Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty. 
 
 const PROGMEM menu_struct menu[][15] = {
   { // Menu 0 - Select menu
@@ -96,7 +101,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "FIRMWARE MENU", OPEN_MENU, FIRMWARE_MENU }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "EXIT MENU", EXIT_MENU, 0 }, // Switch 12
+    { "EXIT MENU", EXIT_MENU, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -104,7 +109,7 @@ const PROGMEM menu_struct menu[][15] = {
   { // Menu 1 - Global settings
     { "GLOBAL SETTINGS ", NONE }, // Menu title
     { "Main disp mode", SET, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-    { "Main disp shows", SET, 48, 0, 1, &Setting.Main_display_show_top_right }, // Switch 2
+    { "Main disp shows", SET, 48, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
     { "CURNUM action", SET, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
     { "MEP also cntrols", SET, 35, 0, 2, &Setting.MEP_control }, // Switch 4
     { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
@@ -114,7 +119,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -132,7 +137,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "Colour", DEVICE_SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, (void*) 0 }, // Switch 9
     { "Is always on", DEVICE_SET, 1, 0, 1, (void*) 5 }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -150,7 +155,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "BPM colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 9
     { "BPM sync colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -168,7 +173,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "LOOPER COLOUR", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_LOOPER_colour }, // Switch 9
     { "WAH COLOUR", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_WAH_colour }, // Switch 10
     { "DYNAMICS COLOUR", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_DYNAMICS_colour }, // Switch 11
-    { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 12
+    { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -185,9 +190,9 @@ const PROGMEM menu_struct menu[][15] = {
     { "DELETE COMMAND", EXECUTE, 0, 0, 0, (void*)go_delete_cmd }, // Switch 7
     { "INITIALIZE PAGE", EXECUTE, 0, 0, 0, (void*)go_init_page }, // Switch 8
     { "INIT SWITCH", EXECUTE, 0, 0, 0, (void*)go_init_switch }, // Switch 9
-    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 10
+    { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "", NONE }, // Switch 12
+    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13
     { "", NONE }, // Switch 14
   },
@@ -205,7 +210,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "DECREASE VALUE", CMD_BACK }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 12
+    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -224,7 +229,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "DECREASE VALUE", CMD_BACK }, // Switch 9
     { "DEL SWITCH NAME", EXECUTE, 0, 0, 0, (void*)delete_switch_name }, // Switch 10
     { "", NONE }, // Switch 11
-    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 12
+    { "EXIT", OPEN_MENU, SELECT_MENU }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -242,7 +247,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", CMD_BYTE, 8 }, // Switch 9
     { "DECREASE VALUE", CMD_BACK}, // Switch 10
     { "SAVE CMD", EXECUTE, 0, 0, 0, (void*)go_save_cmd }, // Switch 11
-    { "EXIT", OPEN_MENU, COMMAND_SELECT_MENU }, // Switch 12
+    { "EXIT", OPEN_MENU, COMMAND_SELECT_MENU }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -259,7 +264,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "UVW9uvw", KEYBOARD}, // Switch 9
     { "XYZ0xyz", KEYBOARD}, // Switch 10
     { " !?-+_", KEYBOARD}, // Switch 11
-    { "<OK>", EXECUTE, 0, 0, 0, (void*)close_edit_name }, // Switch 12
+    { "<OK>", EXECUTE, 0, 0, 0, (void*)close_edit_name }, // Switch 12 (should not be of type NONE)
     { "<=", EXECUTE, 0, 0, 0, (void*)cursor_left_page_name }, // Switch 13 (LEFT)
     { "=>", EXECUTE, 0, 0, 0, (void*)cursor_right_page_name }, // Switch 14 (RIGHT)
   },
@@ -268,8 +273,8 @@ const PROGMEM menu_struct menu[][15] = {
     { "FIRMWARE MENU   ", NONE }, // Menu title
     { "Init Settings",  EXECUTE, 0, 0, 0, (void*)initialize_settings }, // Switch 1
     { "Init Commands",  EXECUTE, 0, 0, 0, (void*)initialize_commands }, // Switch 2
-    { "Init KTN patches",  EXECUTE, 0, 0, 0, (void*)initialize_KTN_patches },// Switch 3
-    { "", NONE }, // Switch 4
+    { "Init ALL patches",  EXECUTE, 0, 0, 0, (void*)initialize_device_patches },// Switch 3
+    { "", NONE  }, // Switch 4
     { "Program Mode",  EXECUTE, 0, 0, 0, (void*)reboot_program_mode }, // Switch 5
     { "Reboot",  EXECUTE, 0, 0, 0, (void*)reboot }, // Switch 6
     { "", NONE }, // Switch 7
@@ -277,7 +282,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "EXIT",  OPEN_MENU, SELECT_MENU }, // Switch 12
+    { "EXIT",  OPEN_MENU, SELECT_MENU }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -295,31 +300,13 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
 
-  { // Menu 11 - Katana menu
-    { "KATANA SAVE", NONE }, // Menu title
-    { "Write to:", SET, KTN_NUMBER_SUBLIST, 0, 80, &My_KTN.save_patch_number }, // Switch 1
-    { "Write",  EXECUTE, 0, 0, 0, (void*)KTN_save },// Switch 2
-    { "Cancel", EXECUTE, 0, 0, 0, (void*)KTN_exit }, // Switch 3
-    { "Rename",  EXECUTE, 0, 0, 0, (void*)KTN_rename }, // Switch 4
-    { "Exchange",  EXECUTE, 0, 0, 0, (void*)KTN_exchange }, // Switch 5
-    { "", NONE }, // Switch 6
-    { "", NONE }, // Switch 7
-    { "", NONE }, // Switch 8
-    { "", NONE }, // Switch 9
-    { "", NONE }, // Switch 10
-    { "", NONE }, // Switch 11
-    { "", NONE }, // Switch 12
-    { "", NONE }, // Switch 13 (LEFT)
-    { "", NONE }, // Switch 14 (RIGHT)
-  },
-
-  { // Menu 12 - MIDI switch
+  { // Menu 11 - MIDI switch
     { "MIDI SWITCH MENU", NONE }, // Menu title
     { "Select switch", SET, SWITCH_SUBLIST, 1, TOTAL_NUMBER_OF_SWITCHES, &Current_MIDI_switch }, // Switch 1
     { "Type",  MIDI_SWITCH_SET, 38, 0, 4, (void*) 1 }, // Switch 2
@@ -332,12 +319,12 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 13 - Midi advanced settings
+  { // Menu 12 - Midi advanced settings
     { "MIDI ADVNCD MENU", NONE }, // Menu title
     { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
     { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
@@ -350,7 +337,43 @@ const PROGMEM menu_struct menu[][15] = {
     { "HighNotePriotyCC", SET, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
-    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 13 - Katana menu
+    { "KATANA SAVE", NONE }, // Menu title
+    { "Write to:", SET, KTN_NUMBER_SUBLIST, 0, 80, &My_KTN.save_patch_number }, // Switch 1
+    { "Write",  EXECUTE, 0, 0, 0, (void*)KTN_save },// Switch 2
+    { "Rename",  EXECUTE, 0, 0, 0, (void*)KTN_rename }, // Switch 3
+    { "Exchange",  EXECUTE, 0, 0, 0, (void*)KTN_exchange }, // Switch 4
+    { "", NONE }, // Switch 5
+    { "", NONE }, // Switch 6
+    { "", NONE }, // Switch 7
+    { "", NONE }, // Switch 8
+    { "", NONE }, // Switch 9
+    { "", NONE }, // Switch 10
+    { "", NONE }, // Switch 11
+    { "Cancel", EXECUTE, 0, 0, 0, (void*)KTN_exit }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 14 - SY1000 menu
+    { "SY1000 SCENE MNU", NONE }, // Menu title
+    { "Select scene:", SET, SY1000_NUMBER_SUBLIST, 1, 8, &My_SY1000.save_scene_number }, // Switch 1
+    { "Read scene",  EXECUTE, 0, 0, 0, (void*)SY1000_save },// Switch 2
+    { "Change to all sc",  EXECUTE, 0, 0, 0, (void*)SY1000_change_to_all_scenes }, // Switch 3
+    { "Rename",  EXECUTE, 0, 0, 0, (void*)SY1000_rename }, // Switch 4
+    { "Exchange scenes", EXECUTE, 0, 0, 0, (void*)SY1000_exchange }, // Switch 5
+    { "Clear scene", EXECUTE, 0, 0, 0, (void*)SY1000_clear }, // Switch 6
+    { "Clear all scenes", EXECUTE, 0, 0, 0, (void*)SY1000_clear_all }, // Switch 7
+    { "Add bass assigns", EXECUTE, 0, 0, 0, (void*)SY1000_add_bass_string_assigns }, // Switch 8
+    { "", NONE }, // Switch 9
+    { "", NONE }, // Switch 10
+    { "", NONE }, // Switch 11
+    { "Cancel", EXECUTE, 0, 0, 0, (void*)SY1000_exit }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -364,7 +387,7 @@ const PROGMEM char menu_sublist[][17] = {
   "OFF", "ON", "DETECT",
 
   // Sublist 4 - 18: LED colours
-  "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "", "", "", "",
+  "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "LIGHT BLUE", "", "", "",
 
   // Sublist 19 - 22: Main display modes
   "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
@@ -385,7 +408,7 @@ const PROGMEM char menu_sublist[][17] = {
   "ADAFRUIT", "BUYDISPLAY",
 
   // Sublist 48 - 50: Main display top right types
-  "CURRENT DEVICE", "CURRENT TEMPO", "",
+  "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
 
   // Sublist 51 - 57: Current number actions
   "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
@@ -403,14 +426,14 @@ void initialize_settings() {
 
 void initialize_commands() {
   if (menu_are_you_sure("Reset commands?", "Sure?")) {
-    EEP_initialize_external_eeprom_data();
+    EEP_initialize_command_data();
   }
 }
 
-void initialize_KTN_patches() {
-  if (menu_are_you_sure("Wipe all Katana", "patches? Sure?")) {
-    EEP_initialize_katana_preset_memory();
-  }
+void initialize_device_patches() {
+  bool go = false;
+  go = menu_are_you_sure("Wipe all patches", "      Sure?     ");
+  if (go) EEP_initialize_patch_data();
 }
 
 void reboot_program_mode() { // Reboot the Teensy to program mode
@@ -434,6 +457,8 @@ void KTN_save() {
 void KTN_rename() {
   // Read patch name into Text_entry
   My_KTN.read_patch_name_from_buffer(Text_entry);
+  Text_entry_length = 16;
+  Main_menu_cursor = 1;
 
   // Select the keyboard menu
   previous_menu = current_menu;
@@ -462,6 +487,65 @@ void KTN_exchange() {
   if (swapped) KTN_exit();
 }
 
+void SY1000_save() {
+  My_SY1000.store_scene();
+  SY1000_exit();
+}
+
+void SY1000_change_to_all_scenes() {
+  My_SY1000.update_change_on_all_scenes();
+  SY1000_exit();
+}
+
+void SY1000_rename() {
+  // Read scene name into Text_entry
+  Text_entry = "";
+  for (uint8_t c = 0; c < 8; c++) Text_entry += My_SY1000.scene_label_buffer[c];
+  Text_entry_length = 8;
+  Main_menu_cursor = 1;
+
+  // Select the keyboard menu
+  previous_menu = current_menu;
+  current_menu = KEYBOARD_MENU;
+  SY1000_name_edited = true;
+  update_page = REFRESH_PAGE;
+  update_main_lcd = true;
+}
+
+void SY1000_rename_done() {
+  //My_SY1000.store_scene_name_to_buffer(My_SY1000.save_scene_number, Text_entry);
+  for (uint8_t c = 0; c < 8; c++) My_SY1000.scene_label_buffer[c] = Text_entry[c];
+  My_SY1000.store_scene_name_to_buffer(My_SY1000.save_scene_number);
+  SY1000_name_edited = false;
+}
+
+void SY1000_exchange() {
+  My_SY1000.exchange_scene(My_SY1000.save_scene_number, My_SY1000.current_snapscene);
+  SY1000_exit();
+}
+
+void SY1000_clear() {
+  My_SY1000.initialize_scene(My_SY1000.save_scene_number);
+  SY1000_exit();
+}
+
+void SY1000_clear_all() {
+  My_SY1000.initialize_patch_space();
+  SY1000_exit();
+}
+
+void SY1000_add_bass_string_assigns() {
+  My_SY1000.add_bass_string_assigns();
+  SY1000_exit();
+}
+
+void SY1000_exit() {
+  SC_set_enc1_acceleration(true);
+  //SCO_select_next_page_of_device(Current_device);
+  SCO_select_page(Previous_page);
+  update_page = RELOAD_PAGE;
+}
+
 
 // ********************************* Section 3: Functions that make the menu work ********************************************
 void SCO_toggle_menu() { // Will open or close the menu
@@ -477,7 +561,8 @@ void SCO_toggle_menu() { // Will open or close the menu
 
 void menu_open() { // Called when the menu is started the first time
   SC_set_enc1_acceleration(false);
-  if (open_menu_for_Katana_edit) current_menu = KATANA_MENU;
+  if (open_menu_for_Katana_patch_save) current_menu = KATANA_MENU;
+  else if (open_menu_for_SY1000_scene_save) current_menu = SY1000_MENU;
   else {
     current_menu = SELECT_MENU; // Go to top menu
 #ifdef IS_VCMINI
@@ -559,8 +644,12 @@ void menu_load(uint8_t Sw) {
       else if (menu[current_menu][number].Sublist == KTN_NUMBER_SUBLIST) {
         My_KTN.number_format(My_KTN.save_patch_number + 9 , msg);
         msg += ':';
-        EEPROM_read_KTN_title(My_KTN.save_patch_number, msg);
+        EEPROM_read_KTN_title(My_KTN.my_device_number + 1, My_KTN.save_patch_number, msg);
         //LCD_set_SP_label(Sw, msg);
+        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
+      }
+      else if (menu[current_menu][number].Sublist == SY1000_NUMBER_SUBLIST) {
+        My_SY1000.get_snapscene_title(My_SY1000.save_scene_number, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
       else if (menu[current_menu][number].Sublist > 0) { // Show sublist if neccesary
@@ -732,10 +821,15 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       return;
     }
     if (current_menu == KATANA_MENU) {
-      KTN_save();
+      if (current_menu_switch == 1) KTN_save();
+      else KTN_exit();
       return;
     }
-
+    if (current_menu == SY1000_MENU) {
+      if (current_menu_switch == 1) SY1000_save();
+      else SY1000_exit();
+      return;
+    }
     number = current_menu_switch;
     if ((menu[current_menu][number].Type != SAVE_AND_EXIT) && (menu[current_menu][number].Type != EXIT_MENU)) {
       //save current item
@@ -820,11 +914,11 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       /*if (go_up) {
         if (*val < menu[current_menu][number].Max)*val = *val + 1;
         else *val = menu[current_menu][number].Min;
-      }
-      else {
+        }
+        else {
         if (*val > menu[current_menu][number].Min)*val = *val - 1;
         else *val = menu[current_menu][number].Max;
-      }*/
+        }*/
       *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, menu[current_menu][number].Max);
       DEBUGMSG("Menu target " + String(number) + " set to value " + String (*val));
       menu_load(Sw); // Will update the label
@@ -840,11 +934,11 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
         /*if (go_up) {
           if (value < menu[current_menu][number].Max) value = value + 1;
           else value = menu[current_menu][number].Min;
-        }
-        else {
+          }
+          else {
           if (value > menu[current_menu][number].Min) value = value - 1;
           else value = menu[current_menu][number].Max;
-        }*/
+          }*/
         value = update_encoder_value(delta, value, menu[current_menu][number].Min, menu[current_menu][number].Max);
         if (menu[current_menu][number].Sublist == PAGE_SUBLIST) { // Hop over gap in pages
           if ((value > Number_of_pages) && (value < FIRST_SELECTABLE_FIXED_CMD_PAGE)) {
@@ -881,11 +975,11 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
           /*if (go_up) {
             if (*p < menu[current_menu][number].Max) *p = *p + 1;
             else *p = menu[current_menu][number].Min;
-          }
-          else {
+            }
+            else {
             if (*p > menu[current_menu][number].Min) *p = *p - 1;
             else *p = menu[current_menu][number].Max;
-          }*/
+            }*/
           *p = update_encoder_value(delta, *p, menu[current_menu][number].Min, menu[current_menu][number].Max);
         }
         menu_load(Sw); // Will update the label
@@ -952,8 +1046,9 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
       case SET:
       case SET_NO_EXP:
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-        if (*val < menu[current_menu][number].Max)*val = *val + 1;
-        else *val = menu[current_menu][number].Min;
+        //if (*val < menu[current_menu][number].Max)*val = *val + 1;
+        //else *val = menu[current_menu][number].Min;
+        *val = update_encoder_value(1, *val, menu[current_menu][number].Min, menu[current_menu][number].Max);
         menu_load(Sw); // Will update the label
         if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
         break;
@@ -1101,18 +1196,9 @@ void menu_encoder_turn(uint8_t Sw, signed int value) {
   }
 
   if (type == MENU_SELECT) {
-    /*if (value < 0) {
-      for (uint8_t i = 0; i < abs(value); i++) {
-        menu_select_prev();
-      }
-      }
-      if (value > 0) {
-      for (uint8_t i = 0; i < value; i++) {
-        menu_select_next();
-      }
-      }*/
     do { // Skip menu items of type NONE
       current_menu_switch = update_encoder_value(value, current_menu_switch, 1, 12);
+      DEBUGMSG("CMS:" + String(current_menu_switch));
     } while (skip_menu_item_for_encoder());
     menu_load(Sw); // Will update the label
   }
@@ -1499,7 +1585,7 @@ void go_save_cmd() {
   //LCD_show_popup_label("Wrote command!", ACTION_TIMER_LENGTH);
   DEBUGMSG("Wrote command for page " + String(sel_page) + " switch " + String(sel_switch) + " and command " + String(sel_cmd_no));
   // Recreate indexes
-  //EEPROM_create_indexes();
+  //EEPROM_create_command_indexes();
 
   // Go to switch select page
   current_menu = COMMAND_SELECT_MENU;
@@ -1547,7 +1633,7 @@ void load_cmd_byte(uint8_t number) { // Display a command byte on a display.
   DEBUGMSG("Cmd_type: " + String(cmd_type));
 }
 
-void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String &msg) {
+void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String & msg) {
   uint8_t index;
   uint8_t dev;
   uint8_t sel_page;
@@ -2103,7 +2189,7 @@ void cmdbyte_increase(uint8_t cmd_byte_no) { // Will increase the value of a com
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
   if (cmdtype[cmd_type].Max > 0) {
     /*cmdbyte[cmd_byte_no].Value++;
-    if (cmdbyte[cmd_byte_no].Value > cmdtype[cmd_type].Max) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Min;*/
+      if (cmdbyte[cmd_byte_no].Value > cmdtype[cmd_type].Max) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Min;*/
     cmdbyte[cmd_byte_no].Value = update_encoder_value(1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
     build_command_structure(cmd_byte_no, cmd_type, true);
   }
@@ -2190,6 +2276,7 @@ void edit_page_name() { // Load page name and start edit. Called from menu
   page_in_edit = cmdbyte[CB_PAGE].Value;
   switch_in_edit = 0;
   EEPROM_read_title(page_in_edit, switch_in_edit, Text_entry);
+  Text_entry_length = 16;
   Main_menu_cursor = 1;
 
   // Select the keyboard menu
@@ -2217,9 +2304,12 @@ void close_edit_name() { // Called when pressing OK on the edit name menu page
   if (KTN_name_edited) {
     KTN_rename_done();
   }
+  else if (SY1000_name_edited) {
+    SY1000_rename_done();
+  }
   else {
     EEPROM_write_title(page_in_edit, switch_in_edit, Text_entry);
-    EEPROM_create_indexes();
+    EEPROM_create_command_indexes();
   }
 
   Main_menu_cursor = 0; // Switch off the cursor
@@ -2327,13 +2417,15 @@ void check_keyboard_press_expired() { // Will advance the cursor to the right wh
 
 void cursor_left_page_name() {
   if (Main_menu_cursor > 1) Main_menu_cursor--;
+  else Main_menu_cursor = Text_entry_length;
   update_main_lcd = true;
   keyboard_timer_running = false;
   Text_switch_char_index = 0;
 }
 
 void cursor_right_page_name() {
-  if (Main_menu_cursor < 16) Main_menu_cursor++;
+  if (Main_menu_cursor < Text_entry_length) Main_menu_cursor++;
+  else Main_menu_cursor = 1;
   update_main_lcd = true;
   keyboard_timer_running = false;
   Text_switch_char_index = 0;

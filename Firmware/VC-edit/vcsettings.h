@@ -51,7 +51,7 @@ private:
     {
       { "General Settings", HEADER, 0, 0, 0, 0 },
       { "Main display mode shows on bottom line", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-      { "Main display shows top right", OPTION, 48, 0, 1, &Setting.Main_display_show_top_right }, // Switch 2
+      { "Main display shows top right", OPTION, 48, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
       { "CURNUM action", OPTION, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
       { "Master Expression Pedal also controls", OPTION, 35, 0, 2, &Setting.MEP_control }, // Switch 4
       { "Send Global Tempo on patch change", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
@@ -101,7 +101,7 @@ private:
       "OFF", "ON", "DETECT",
 
       // Sublist 4 - 18: LED colours
-      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "", "", "", "",
+      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "LIGHT BLUE", "", "", "",
 
       // Sublist 19 - 22: Main display modes
       "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
@@ -122,7 +122,7 @@ private:
       "ADAFRUIT", "BUYDISPLAY",
 
       // Sublist 48 - 50: Main display top right types
-      "CURRENT DEVICE", "CURRENT TEMPO", "",
+      "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
 
       // Sublist 51 - 56: Current number actions
       "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",

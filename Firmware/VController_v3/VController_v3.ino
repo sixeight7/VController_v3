@@ -1,4 +1,4 @@
- /****************************************************************************
+/****************************************************************************
 **
 ** Copyright (C) 2015 Catrinus Feddema
 ** All rights reserved.
@@ -18,6 +18,9 @@
 ** with this program; if not, write to the Free Software Foundation, Inc.,
 ** 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 **
+** If you use this code in a homnebuild project, please support me by sending
+** a donation via https://www.paypal.me/sixeight 
+** If you want to build VControllers or VC-mini's commerically, please contact me.
 ****************************************************************************/
 
 // This page has the following parts:
@@ -60,8 +63,8 @@
 #include "debug.h"
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 6
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 7
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
   SCO_switch_power_on();
@@ -295,4 +298,17 @@ void loop() {
   16-11-2020 Changed behaviour of encoders. Almost all encoder turns use update_encoder_value(). This will make the encoder stop at minimum and maximum values. After one second you can cross from min to max or vise versa
   18-11-2020 Improved the speed of the encoder for parameters with large ranges (like delay time: 0 - 2000 ms)
   30-11-2020 v.3.6.1 release Added support for the NUX MG300 and the Katana MK2.
+  07-12-2020 Started with the MIDI CC sequencer for Helix
+  01-01-2021 SY-1000 now works through USB Host port. There is some very weird stuff going on here, with data being sent double. But it has been resolved. Also fixed occasional patch name read errors
+  03-01-2021 Fixed a lot of bugs in the US20 emulation mode, as I use that for my setup now. Helix will now go to tuner mode to mute it.
+  10-01-2021 SY-1000: added option to control all the ctl, num, bank up/down, manual and gk assigns from the VController.
+  11-01-2021 SY-1000: all ctl, num, bank and gk ctl functions will also control the regular asdigns via CC #95
+  14-01-2021 SY-1000: Expression pedals now also control assigns. There are changed to CC #94 to control
+  23-01-2021 SY-1000: Added scene mode.
+  29-03-2021 SY-1000: weeks of debugging amd working around the quirks of the SY1000. Added scene assigns, use the SY1000 switches for scene selection with VC-mini and much more.
+  04-04-2021 SY-1000: Added harmony mode.
+  10-04-2021 SY-1000: Added "change to all scenes" to SY1000 menu - to allow updating of changed parameter in all scenes!
+  10-04-2021 Changed the memory division: now 150 patches can be stored. The number of commands is now 1737.
+  12-04-2021 MIDI CC sequencer can be programmed from editor
+  13-04-2021 Release of firmware 3.7.0
 */

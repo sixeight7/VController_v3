@@ -16,7 +16,7 @@
 // Roland GR-55 settings:
 #define GR55_MIDI_CHANNEL 8
 #define GR55_PATCH_MIN 0
-#define GR55_PATCH_MAX 656 // Assuming we are in guitar mode!!! When the GR-55 is in bass mode the numver of patches is less.
+#define GR55_PATCH_MAX 656 // Assuming we are in guitar mode!!! When the GR-55 is in bass mode the number of patches is less.
 
 //Sysex messages for Roland GR-55
 #define GR55_REQUEST_MODE 0x18000000, 1 //Is 00 in guitar mode, 01 in bass mode (Gumtown in town :-)
@@ -147,8 +147,8 @@ void MD_GR55_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
       }
     }
 
-    // Check if it is the guitar on/off states
-    if (checksum_ok) check_guitar_switch_states(sxdata, sxlength);
+    // Check if it is the instrument on/off states
+    if (checksum_ok) check_inst_switch_states(sxdata, sxlength);
 
     // Check if the GR55 is in bass mode (address: 0x18, 0x00, 0x00, 0x00)
     if ((sxdata[6] == 0x12) && (address == 0x18000000) && (sxdata[11] == 0x01) && (checksum_ok)) {
@@ -193,7 +193,7 @@ void MD_GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
 void MD_GR55_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a GR-55
-  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x53) && (sxdata[7] == 0x02)) {
+  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x53) && (sxdata[7] == 0x02) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -255,8 +255,9 @@ void MD_GR55_class::stop_tuner() {
   }
 }
 
-void MD_GR55_class::sendGR55BankPatch(uint16_t patchno)
+/*void MD_GR55_class::sendGR55BankPatch(uint16_t patchno)
 {
+  // Experimental method: https://www.vguitarforums.com/smf/index.php?topic=23298.25
   byte SysArray[135]; // Create 9 messages of 15 bytes = 135 bytes
   const uint8_t byte_eight[9] = { 0x00, 0x03, 0x06, 0x07, 0x10, 0x20, 0x21, 0x30, 0x31};
 
@@ -283,7 +284,7 @@ void MD_GR55_class::sendGR55BankPatch(uint16_t patchno)
     SysArray[b++] = 0xF7;
   }
   MIDI_send_sysex(SysArray, 135, MIDI_port);
-}
+}*/
 
 // ********************************* Section 4: GR55 program change ********************************************
 
@@ -293,15 +294,11 @@ void MD_GR55_class::select_patch(uint16_t new_patch) {
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
-  uint16_t GR55_patch_send = 0; // Temporary value
+  // Method 1: using CC/PC
+  uint16_t GR55_patch_send = patch_number;
   if (patch_number > 296) {
     GR55_patch_send += 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will recreate it.
   }
-  else {
-    GR55_patch_send = patch_number;
-  }
-
-  // Method 1: using CC/PC
   MIDI_send_CC(0, GR55_patch_send >> 7, MIDI_channel, MIDI_port);
   MIDI_send_PC(GR55_patch_send & 0x7F, MIDI_channel, MIDI_port);
 
@@ -309,7 +306,7 @@ void MD_GR55_class::select_patch(uint16_t new_patch) {
   // Method 2: Using Phil's method
   //sendGR55BankPatch(GR55_patch_send)
 
-  DEBUGMSG("out(GR55) PC" + String(new_patch)); //Debug
+  DEBUGMSG("Selecting patch " + String(new_patch));
   do_after_patch_selection();
 }
 
@@ -464,7 +461,7 @@ void MD_GR55_class::request_guitar_switch_states() {
   request_onoff = true;
 }
 
-void MD_GR55_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_GR55_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
@@ -489,11 +486,12 @@ void MD_GR55_class::check_guitar_switch_states(const unsigned char* sxdata, shor
 
 void MD_GR55_class::unmute() {
   is_on = connected;
-  //GR55_select_LED = GR55_PATCH_COLOUR; //Switch the LED on
-  write_sysex(GR55_SYNTH1_SW, synth1_onoff); // Switch synth 1 off
-  write_sysex(GR55_SYNTH2_SW, synth2_onoff); // Switch synth 1 off
-  write_sysex(GR55_COSM_GUITAR_SW, COSM_onoff); // Switch COSM guitar on
-  write_sysex(GR55_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+  if (is_on) {
+    write_sysex(GR55_SYNTH1_SW, synth1_onoff); // Switch synth 1 off
+    write_sysex(GR55_SYNTH2_SW, synth2_onoff); // Switch synth 1 off
+    write_sysex(GR55_COSM_GUITAR_SW, COSM_onoff); // Switch COSM guitar on
+    write_sysex(GR55_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+  }
 }
 
 void MD_GR55_class::mute() {
@@ -504,7 +502,6 @@ void MD_GR55_class::mute() {
 
 void MD_GR55_class::mute_now() { // Also called when engaging global tuner.
   is_on = false;
-  //  GR55_select_LED = GR55_OFF_COLOUR; //Switch the LED off
   write_sysex(GR55_SYNTH1_SW, 0x01); // Switch synth 1 off
   write_sysex(GR55_SYNTH2_SW, 0x01); // Switch synth 1 off
   write_sysex(GR55_COSM_GUITAR_SW, 0x01); // Switch COSM guitar off
@@ -535,7 +532,7 @@ struct GR55_parameter_struct { // Combines all the data we need for controlling 
   uint16_t Target; // Target of the assign as given in the assignments of the GR55 / GR55
   uint32_t Address; // The address of the parameter
   uint8_t NumVals; // The number of values for this parameter
-  char Name[17]; // The name for the label
+  char Name[11]; // The name for the label
   uint16_t Sublist; // Which sublist to read for the FX or amp type - 0 if second byte does not contain the type or if there is no sublist +100 Show value from sublist.
   uint8_t Colour; // The colour for this effect.
   bool Reversed; // The GR-55 has SYNTH 1 SW, SYNTH 2 SW, COSM GUITAR SW and NORMAL PICKUP reversed. For these parameters the on and off values will be read and written in reverse
@@ -555,52 +552,52 @@ struct GR55_parameter_struct { // Combines all the data we need for controlling 
 // All parameters that cannot be set from an assign have the target address at 0xFFF
 
 const PROGMEM GR55_parameter_struct GR55_parameters[] = {
-  {0x12B, 0x18000304, 2, "MFX", 1 | SUBLIST_FROM_BYTE2, GR55_MFX_COLOUR, false}, // 0
-  {0x12C, 0x18000305, 20, "MFX TYPE", 1, GR55_MFX_TYPE_COLOUR, false},
-  {0x0E6, 0x18000715, 2, "MOD", 63 | SUBLIST_FROM_BYTE2, GR55_MOD_COLOUR, false},
-  {0x0E7, 0x18000716, 14, "MOD TYPE", 63, GR55_MOD_TYPE_COLOUR, false},
-  {0x000, 0x18002003, 2, "SYNTH1 SW", 0, FX_GTR_TYPE, true},
-  {0x003, 0x18002005, 68, "PCM1 TONE OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
-  {0x03B, 0x18002103, 2, "SYNTH2 SW", 0, FX_GTR_TYPE, true},
-  {0x03E, 0x18002105, 68, "PCM2 TONE OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
-  {0x076, 0x1800100A, 2, "COSM GT SW", 0, FX_GTR_TYPE, true},
-  {0x081, 0x1800101D, 2, "12STRING SW", 0, FX_PITCH_TYPE, false},
-  {0x0D6, 0x18000700, 2, "AMP", 21 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, false}, // 10
-  {0xFFF, 0x18000701, 42, "AMP TP", 21, FX_AMP_TYPE, false},
+  {0x12B, 0x18000304,   2, "MFX", 1 | SUBLIST_FROM_BYTE2, GR55_MFX_COLOUR, false}, // 0
+  {0x12C, 0x18000305,  20, "MFX TYPE", 1, GR55_MFX_TYPE_COLOUR, false},
+  {0x0E6, 0x18000715,   2, "MOD", 63 | SUBLIST_FROM_BYTE2, GR55_MOD_COLOUR, false},
+  {0x0E7, 0x18000716,  14, "MOD TYPE", 63, GR55_MOD_TYPE_COLOUR, false},
+  {0x000, 0x18002003,   2, "SYNTH1 SW", 0, FX_GTR_TYPE, true},
+  {0x003, 0x18002005,  68, "PCM1 OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
+  {0x03B, 0x18002103,   2, "SYNTH2 SW", 0, FX_GTR_TYPE, true},
+  {0x03E, 0x18002105,  68, "PCM2 OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
+  {0x076, 0x1800100A,   2, "COSM GT SW", 0, FX_GTR_TYPE, true},
+  {0x081, 0x1800101D,   2, "12STR SW", 0, FX_PITCH_TYPE, false},
+  {0x0D6, 0x18000700,   2, "AMP", 21 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, false}, // 10
+  {0xFFF, 0x18000701,  42, "AMP TP", 21, FX_AMP_TYPE, false},
   {0x0D7, 0x18000702, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, false},
   {0x0D8, 0x18000703, 101, "AMP LVL", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0D9, 0x18000704, 3, "AMP GAIN SW", 141, FX_AMP_TYPE, false},
-  {0x0DA, 0x18000705, 2, "AMP SOLO SW", 0, FX_AMP_TYPE, false},
+  {0x0D9, 0x18000704,   3, "AMP GAIN", 141, FX_AMP_TYPE, false},
+  {0x0DA, 0x18000705,   2, "AMP SOLO", 0, FX_AMP_TYPE, false},
   {0x0DC, 0x18000707, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, false},
   {0x0DD, 0x18000708, 101, "AMP MID", SHOW_NUMBER, FX_AMP_TYPE, false},
   {0x0DE, 0x18000709, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, false},
   {0x0DF, 0x1800070A, 101, "AMP PRESC", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0E0, 0x1800070B, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, false}, // 20
-  {0x0E1, 0x1800070C, 9, "SPKR TYPE", 144, FX_AMP_TYPE, false},
-  {0x128, 0x1800075A, 2, "NS SWITCH", 0, FX_DYNAMICS_TYPE, false},
-  {0x1EC, 0x18000605, 2, "DLY SW", 129 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, false},
-  {0x1ED, 0x18000606, 7, "DLY TYPE", 129, FX_DELAY_TYPE, false},
-  {0x1F4, 0x1800060C, 2, "RVRB SW", 136 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, false},
-  {0x1F5, 0x1800060D, 5, "RVRB TYPE", 136, FX_REVERB_TYPE, false},
-  {0x1FC, 0x18000600, 2, "CHOR SW", 125 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE,  false},
-  {0x1FD, 0x18000601, 4, "CHOR TYPE", 125, FX_MODULATE_TYPE,  false},
-  {0x204, 0x18000611, 2, "EQ SWITCH", 0, FX_FILTER_TYPE, false},
-  {0x213, 0x18000234, 2, "TUN SW", 160 | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE, false}, // 30
-  {0x214, 0x18000235, 13, "TUNING", 160, FX_PITCH_TYPE, false},
+  {0x0E0, 0x1800070B,   2, "AMP BRIGHT", 0, FX_AMP_TYPE, false}, // 20
+  {0x0E1, 0x1800070C,   9, "SPKR TYPE", 144, FX_AMP_TYPE, false},
+  {0x128, 0x1800075A,   2, "NS SWITCH", 0, FX_DYNAMICS_TYPE, false},
+  {0x1EC, 0x18000605,   2, "DLY SW", 129 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, false},
+  {0x1ED, 0x18000606,   7, "DLY TYPE", 129, FX_DELAY_TYPE, false},
+  {0x1F4, 0x1800060C,   2, "RVRB SW", 136 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, false},
+  {0x1F5, 0x1800060D,   5, "RVRB TYPE", 136, FX_REVERB_TYPE, false},
+  {0x1FC, 0x18000600,   2, "CHOR SW", 125 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE,  false},
+  {0x1FD, 0x18000601,   4, "CHOR TYPE", 125, FX_MODULATE_TYPE,  false},
+  {0x204, 0x18000611,   2, "EQ SWITCH", 0, FX_FILTER_TYPE, false},
+  {0x213, 0x18000234,   2, "TUN SW", 160 | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE, false}, // 30
+  {0x214, 0x18000235,  13, "TUNING", 160, FX_PITCH_TYPE, false},
   {0x216, 0x18000230, 201, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_FILTER_TYPE, false},
-  {0xFFF, 0x18000011, 2, "CTL", 94 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000012, 16, "CTL SW", 94, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800001F, 10, "EXP", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000036, 10, "EXP ON", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800004D, 2, "EXP SW", 111 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800004E, 14, "EXP SW", 111, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800005B, 10, "GK VOL", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000072, 14, "GK S1", 111, FX_DEFAULT_TYPE, false}, // 40
-  {0xFFF, 0x1800007F, 14, "GK S2", 111, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000007, 2, "GTR2MIDI", 0, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000008, 2, "G2M MODE", 77, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000009, 2, "G2M CHOMATIC", 0, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000016, 5, "GTR OUT", 79, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x18000011,   2, "CTL", 94 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x18000012,  16, "CTL SW", 94, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x1800001F,  10, "EXP", 84, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x18000036,  10, "EXP ON", 84, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x1800004D,   2, "EXP SW", 111 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x1800004E,  14, "EXP SW", 111, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x1800005B,  10, "GK VOL", 84, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x18000072,  14, "GK S1", 111, FX_DEFAULT_TYPE, false}, // 40
+  {0xFFF, 0x1800007F,  14, "GK S2", 111, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x02000007,   2, "GTR2MIDI", 0, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x02000008,   2, "G2M MODE", 77, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x02000009,   2, "G2M CHOM", 0, FX_DEFAULT_TYPE, false},
+  {0xFFF, 0x02000016,   5, "GTR OUT", 79, FX_DEFAULT_TYPE, false},
 };
 
 #define GR55_EXP_SW 37
@@ -914,13 +911,13 @@ const PROGMEM uint32_t GR55_assign_address[GR55_NUMBER_OF_ASSIGNS] = { 0x1800010
 void MD_GR55_class::read_assign_name(uint8_t number, String & Output) {
   //if (number < GR55_NUMBER_OF_ASSIGNS)  Output += GR55_assign_title[number];
   if (number < GR55_NUMBER_OF_ASSIGNS)  Output += "ASSIGN " + String(number + 1);
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_GR55_class::read_assign_short_name(uint8_t number, String & Output) {
   //if (number < GR55_NUMBER_OF_ASSIGNS)  Output += GR55_assign_title[number];
   if (number < GR55_NUMBER_OF_ASSIGNS)  Output += "ASG" + String(number + 1);
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_GR55_class::read_assign_trigger(uint8_t number, String & Output) {

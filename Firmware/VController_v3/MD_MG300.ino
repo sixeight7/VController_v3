@@ -126,8 +126,9 @@ void MD_MG300_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned 
       }
 
       if (sxdata[7] == 0x0E) { // Patch is being saved on the MG300
-        read_patch_name(sxdata, sxlength); // So patchname and cheksum are current in case the name has been edited on the MG300
+        read_patch_name(sxdata, sxlength); // So patchname and checksum are current in case the name has been edited on the MG300
         EEPROM_store_MG300_effect_types(sxdata[8], current_checksum); // Also store the effect types on the VContoller/VC-mini
+        LCD_show_popup_label("Patch saved.", MESSAGE_TIMER_LENGTH);
         DEBUGMSG("MG-300 saving effect states for patch " + String (sxdata[8]));
         // Read FX types
         fx_type[0] = sxdata[9]; // Type of expression pedal
@@ -140,7 +141,7 @@ void MD_MG300_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned 
       // F0 00 11 22 66 00 10 56  30 31 5F 32 30 31 39 31 31 30 36
       if ((sxdata[7] == 0x56) && (sxdata[8] == 0x30) && (sxdata[9] == 0x31) && (sxdata[10] == 0x5F) && (sxdata[11] == 0x32)
           && (sxdata[12] == 0x30) && (sxdata[13] == 0x31) && (sxdata[14] == 0x39) && (sxdata[15] == 0x31) && (sxdata[16] == 0x31)
-          && (sxdata[17] == 0x30) && (sxdata[18] == 0x36)) {
+          && (sxdata[17] == 0x30) && (sxdata[18] == 0x36) && (enabled == DEVICE_DETECT)) {
         if (!connected) connect(sxdata[5], port);
         no_response_counter = 0;
       }

@@ -1,10 +1,13 @@
 #include "katana.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDebug>
+#include <QInputDialog>
+#include <QObject>
 
 void KTN_class::init()
 {
@@ -12,6 +15,8 @@ void KTN_class::init()
     full_device_name = "Boss KATANA";
     patch_min = KTN_PATCH_MIN;
     patch_max = KTN_PATCH_MAX;
+    patch_min_as_stored_on_VC = 9;
+    patch_max_as_stored_on_VC = KTN_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 2; // Default value: red
     MIDI_channel = KTN_MIDI_CHANNEL; // Default value
@@ -22,7 +27,7 @@ void KTN_class::init()
     my_device_page3 = KTN_DEFAULT_PAGE3; // Default value
     my_device_page4 = KTN_DEFAULT_PAGE4; // Default value
 
-    InitializePatchArea();
+    //InitializePatchArea();
 }
 
 bool KTN_class::check_command_enabled(uint8_t cmd)
@@ -461,22 +466,28 @@ uint8_t KTN_class::max_value(uint16_t par_no)
     return Max - 1;
 }
 
+
+
 // Patch memory structure on VController
-#define KTN_PATCH_NAME_INDEX     0  // Patch name (16 parameters)
-#define KTN_BOOST_INDEX         16  // Boost FX (15 parameters)
-#define KTN_AMP_INDEX           31  // Amp index (9 parameters)
-#define KTN_EQ_SW_INDEX         40  // Eq (1 parameters)
-#define KTN_EQ_GEQ_INDEX        41  // Eq or GEQ (11 parameters)
-#define KTN_MOD_BASE_INDEX      52  // Mod base (2 parameters: ON/OFF and type)
-#define KTN_MOD_INDEX           54  // MOD effect settings for active effect (max 15 parameters)
-#define KTN_FX_BASE_INDEX       69  // FX base (2 parameters: ON/OFF and type)
-#define KTN_FX_INDEX            71  // FX effect settings for active effect (max 15 parameters)
-#define KTN_DELAY1_INDEX        86  // Delay 1 (18 parameters)
+#define KTN_PATCH_HEADER         0  // Patch header (7 bytes)
+#define KTN_PATCH_NAME_INDEX     7  // Patch name (16 parameters)
+#define KTN_BOOST_INDEX         23  // Boost FX (15 parameters)
+#define KTN_AMP_INDEX           38  // Amp index (9 parameters)
+#define KTN_EQ_SW_INDEX         47  // Eq (1 parameters)
+#define KTN_EQ_GEQ_INDEX        48  // Eq or GEQ (11 parameters)
+#define KTN_MOD_BASE_INDEX      59  // Mod base (2 parameters: ON/OFF and type)
+#define KTN_MOD_INDEX           61  // MOD effect settings for active effect (max 15 parameters)
+#define KTN_FX_BASE_INDEX       76  // FX base (2 parameters: ON/OFF and type)
+#define KTN_FX_INDEX            78  // FX effect settings for active effect (max 15 parameters)
+#define KTN_DELAY1_INDEX        93  // Delay 1 (9 parameters)
+#define KTN_DELAY1_MOD_INDEX   102  // Delay 1 MOD (2 parameters)
 #define KTN_DELAY1_SDE_INDEX   104  // Delay 1 SDE-3000 settings (5)
-#define KTN_DELAY2_INDEX       109  // Delay 2 (18 parameters)
-#define KTN_DELAY2_SDE_INDEX   127  // Delay 2 SDE-3000 settings (5)// 074 - 084 Reverb (11 parameters)
-#define KTN_REVERB_INDEX       132  // Reverb (11 parameters)
-#define KTN_FOOT_VOL_INDEX     143  // Foot volume (4 parameters)
+#define KTN_DELAY2_INDEX       109  // Delay 2 (9 parameters)
+#define KTN_DELAY2_MOD_INDEX   118  // Delay 2 MOD (2 parameters)
+#define KTN_SPARE_BYTES_NO1    120  // 7 bytes here
+#define KTN_DELAY2_SDE_INDEX   127  // Delay 2 SDE-3000 settings (5)
+#define KTN_REVERB_INDEX       132  // Reverb (12 parameters)
+#define KTN_FOOT_VOL_INDEX     146  // Foot volume (1 parameter)
 #define KTN_S_R_LOOP_INDEX     147  // S/R loop (4 parameters)
 #define KTN_NOISE_GATE_INDEX   151  // Noise gate (4 parameters)
 #define KTN_MASTER_KEY_INDEX   155  // Master key
@@ -485,8 +496,8 @@ uint8_t KTN_class::max_value(uint16_t par_no)
 #define KTN_PEDAL_SW_INDEX     177  // Pedal sw  (1 parameters: ON/OFF)
 #define KTN_PEDAL_TYPE_INDEX   178  // Pedal type  (1 parameter)
 #define KTN_PEDAL_INDEX        179  // Wah type (6 parameters)
-#define KTN_EXP_ASSIGNS_INDEX  185  // Assignments for the expression pedals (3 bytes)
-#define KTN_SPARE_BYTES        188  // Four bytes left
+#define KTN_EXP_ASSIGNS_INDEX  185  // Assignments for the expression pedals, FS_functions and cabinet resonance (6 bytes)
+#define KTN_SPARE_BYTES_NO2    191  // One byte left
 
 // 192 Total memory size
 
@@ -503,73 +514,46 @@ QVector<KTN_patch_memory_struct> KTN_patch_memory = {
   { 0x0051, 9, KTN_AMP_INDEX, "AMP"             },  // Amp
   { 0x0030, 15, KTN_BOOST_INDEX, "BOOST"        },  // Boost effect
   { 0x0130, 1 + 11, KTN_EQ_SW_INDEX, "EQ"       },  // Eq + data
-  { 0x1104, 1, KTN_EQ_TYPE_INDEX, "EQ_TYPE"  },  // eq type
+  { 0x1104, 1, KTN_EQ_TYPE_INDEX, "EQ_TYPE"     },  // eq type
   { 0x0140, 2 + 15, KTN_MOD_BASE_INDEX, "MOD"   },  // Mod base
   { 0x034C, 2 + 15, KTN_FX_BASE_INDEX, "FX"     },  // FX base
-  { 0x0630, 4, KTN_FOOT_VOL_INDEX, "FOOTVOL"    },  // Foot volume
   { 0x0655, 4, KTN_S_R_LOOP_INDEX, "S_R_LOOP"   },  // S/R loop
-  { 0x0560, 18, KTN_DELAY1_INDEX, "DELAY1"      },  // Delay 1
-  { 0x0610, 11, KTN_REVERB_INDEX, "REVERB"      },  // Reverb
-  { 0x104E, 18, KTN_DELAY2_INDEX, "DELAY2"      },  // Delay 2
+  { 0x0560, 11, KTN_DELAY1_INDEX, "DELAY1"      },  // Delay 1
+  { 0x0610, 12, KTN_REVERB_INDEX, "REVERB"      },  // Reverb
+  { 0x104E, 11, KTN_DELAY2_INDEX, "DELAY2"      },  // Delay 2
+  { 0x0630, 1, KTN_FOOT_VOL_INDEX, "FOOTVOL"    },  // Foot volume
   { 0x0663, 4, KTN_NOISE_GATE_INDEX, "N_GATE"   },  // Noise gate
   { 0x0718, 1, KTN_MASTER_KEY_INDEX, "M_KEY"    },  // Master key
   { 0x1049, 5, KTN_DELAY1_SDE_INDEX, "DLY1_SDE" },  // Delay 1 - SDE3000 settings
   { 0x1049, 5, KTN_DELAY2_SDE_INDEX, "DLY2_SDE" },  // Delay 2 - SDE3000 settings
   { 0x0620, 1, KTN_PEDAL_SW_INDEX, "PEDAL SW"   },  // Pedal SW
   { 0x1111, 1 + 6, KTN_PEDAL_TYPE_INDEX, "PEDAL TP" },  // Pedal type
-  { 0x0626, 1, KTN_EXP_ASSIGNS_INDEX, "EXP ASGN"},  // Assigns for expression pedals
+  { 0x0626, 6, KTN_EXP_ASSIGNS_INDEX, "EXP ASGN"},  // Assigns for expression pedals
   { 0x0000, 16, KTN_PATCH_NAME_INDEX, "P_NAME"  },  // Patch name (1)
 };
 
 const uint8_t KTN_NUMBER_OF_PATCH_MESSAGES = KTN_patch_memory.size();
 
-QByteArray KTN_class::ReadPatch(int number)
+QString KTN_class::get_patch_info(uint16_t number)
 {
-    if (number >= KTN_MAX_NUMBER_OF_KATANA_PRESETS) return 0;
-    QByteArray patch;
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-        patch.append(KTN_patches[number][i]);
-    }
-    return patch;
-}
-
-QString KTN_class::ReadPatchName(int number)
-{
-    QString line = "";
+    uint8_t patch_no = (Device_patches[number][1] << 7) + Device_patches[number][2];
+    QString line = number_format(patch_no + 9);
+    line.append(" \t");
     for (int c = 0; c < 16; c++) {
-        line.append(static_cast<char>(KTN_patches[number][c]));
-    }
-    return line.trimmed();
-}
-
-QString KTN_class::ReadPatchStringForListWidget(int number)
-{
-    QString line = "";
-    line.append(number_format(number + 9));
-    line.append(":\t");
-    for (int c = 0; c < 16; c++) {
-        line.append(static_cast<char>(KTN_patches[number][c]));
+        line.append(static_cast<char>(Device_patches[number][c + KTN_PATCH_NAME_INDEX]));
     }
     line.append("   \t( Amp: ");
-    int amp_type = KTN_patches[number][KTN_AMP_INDEX];
+    int amp_type = Device_patches[number][KTN_AMP_INDEX];
     line.append(KTN_sublists[59 + amp_type]);
     line.append(",  Mod:");
-    int mod_type = KTN_patches[number][KTN_MOD_BASE_INDEX + 1];
+    int mod_type = Device_patches[number][KTN_MOD_BASE_INDEX + 1];
     line.append(KTN_sublists[22 + mod_type]);
     line.append(",  FX:");
-    int fx_type = KTN_patches[number][KTN_FX_BASE_INDEX + 1];
+    int fx_type = Device_patches[number][KTN_FX_BASE_INDEX + 1];
     line.append(KTN_sublists[22 + fx_type]);
     line.append(" )");
-    return line;
-}
 
-void KTN_class::WritePatch(int number, QByteArray patch)
-{
-    if (number >= KTN_MAX_NUMBER_OF_KATANA_PRESETS) return;
-    if (patch.size() > KTN_PATCH_SIZE) return;
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-        KTN_patches[number][i] = patch[i];
-    }
+    return line;
 }
 
 void KTN_class::WritePatchName(int number, QString name)
@@ -577,57 +561,49 @@ void KTN_class::WritePatchName(int number, QString name)
     int len = name.length();
     if (len > 16) len = 16;
     for (int c = 0; c < len; c++) {
-        KTN_patches[number][c] = name.at(c).toLatin1();
+        Device_patches[number][c + KTN_PATCH_NAME_INDEX] = name.at(c).toLatin1();
     }
     for (int c = len; c < 16; c++) {
-        KTN_patches[number][c] = 32; //space
+        Device_patches[number][c + KTN_PATCH_NAME_INDEX] = 32; //space
     }
 }
 
-void KTN_class::InitializePatchArea()
+QString KTN_class::ReadPatchName(int number)
 {
-    for (int p = 0; p < KTN_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
-        for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-            KTN_patches[p][i] = KTN_default_patch[i];
-        }
+    QString line = "";
+    for (int c = 0; c < 16; c++) {
+        line.append(static_cast<char>(Device_patches[number][c + KTN_PATCH_NAME_INDEX]));
     }
+    return line.trimmed();
 }
 
-void KTN_class::readAll(const QJsonObject &json)
+uint8_t KTN_class::supportPatchSaving()
 {
-    QJsonObject allPatches = json["KTN Patches"].toObject();
-    for (int p = 0; p < KTN_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
-        QJsonObject patchObject = allPatches["KTN_Patch_" + QString::number(p)].toObject();
-        if (!patchObject.isEmpty()) {
-            readPatchData(p, patchObject);
-        }
-    }
+    return 1;
 }
 
-void KTN_class::readPatchData(int patch_no, const QJsonObject &json)
+void KTN_class::readPatchData(int index, int patch_no, const QJsonObject &json)
 {
+    Device_patches[index][0] = my_device_number + 1;
+    Device_patches[index][1] = patch_no >> 8;
+    Device_patches[index][2] = patch_no & 0xFF;
     for (int m = 0; m < KTN_NUMBER_OF_PATCH_MESSAGES; m++) {
         QString blockName = KTN_patch_memory[m].Name;
         QJsonObject patchBlock = json[blockName].toObject();
         if (!patchBlock.isEmpty()) {
             for (int i = 0; i < KTN_patch_memory[m].Length; i++) {
                 int value = patchBlock["Data"+ QString::number(i)].toInt();
-                KTN_patches[patch_no][KTN_patch_memory[m].Index + i] = value;
+                Device_patches[index][KTN_patch_memory[m].Index + i] = value;
             }
         }
     }
-}
-
-void KTN_class::writeAll(QJsonObject &json) const
-{
-    QJsonObject allPatches;
-    for (int p = 0; p < KTN_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
-        QJsonObject patchObject;
-        writePatchData(p, patchObject);
-        allPatches["KTN_Patch_" + QString::number(p)] = patchObject;
-        //patchArray.append(patchObject);
+    // Backward comptibility for footvol which is stored in Data3 instead of Data1 in older Katana patch files
+    // without this older patches will load correctly but foot volume is turned low.
+    QJsonObject patchBlock = json["FOOTVOL"].toObject();
+    if (patchBlock.contains("Data3")) {
+        int value = patchBlock["Data3"].toInt();
+        Device_patches[index][KTN_FOOT_VOL_INDEX] = value;
     }
-    json["KTN Patches"] = allPatches;
 }
 
 void KTN_class::writePatchData(int patch_no, QJsonObject &json) const
@@ -635,50 +611,22 @@ void KTN_class::writePatchData(int patch_no, QJsonObject &json) const
     for (int m = 0; m < KTN_NUMBER_OF_PATCH_MESSAGES; m++) {
         QJsonObject patchBlock;
         for (int i = 0; i < KTN_patch_memory[m].Length; i++) {
-            int value = KTN_patches[patch_no][KTN_patch_memory[m].Index + i];
+            int value = Device_patches[patch_no][KTN_patch_memory[m].Index + i];
             patchBlock["Data"+ QString::number(i)] = value;
         }
         json[KTN_patch_memory[m].Name] = patchBlock;
     }
 }
 
-void KTN_class::swapPatch(int patch_no1, int patch_no2)
+QString KTN_class::patchFileHeader()
 {
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-        int temp = KTN_patches[patch_no1][i];
-        KTN_patches[patch_no1][i] = KTN_patches[patch_no2][i];
-        KTN_patches[patch_no2][i] = temp;
-    }
+    return "Katana"; // To ensure compatibility with older files
 }
 
-void KTN_class::movePatch(int source_patch, int dest_patch)
+QString KTN_class::DefaultPatchFileName(int number)
 {
-    if (dest_patch > source_patch) {
-        for (int i = source_patch; i < dest_patch; i++) {
-            swapPatch(i, i + 1);
-        }
-    }
-    if (dest_patch < source_patch) {
-        for (int i = source_patch; i --> dest_patch;) {
-            swapPatch(i, i + 1);
-        }
-    }
-}
-
-void KTN_class::pastePatch(int number)
-{
-    if (!copyBufferFilled) return;
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-       KTN_patches[number][i] = KTN_copy_buffer[i];
-    }
-    qDebug() << "Pasted Katana patch" << number;
-}
-
-void KTN_class::copyPatch(int number)
-{
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-        KTN_copy_buffer[i] = KTN_patches[number][i];
-    }
-    copyBufferFilled = true;
-    qDebug() << "Pasted Katana patch" << number;
+    QString name = device_name;
+    name.append('_');
+    name.append(ReadPatchName(number));
+    return name;
 }

@@ -19,7 +19,7 @@
 #define KTN_PATCH_MIN 1
 #define KTN_BANK_SIZE 8
 #endif
-#define KTN_PATCH_MAX 88
+#define KTN_PATCH_MAX 158
 
 #define KTN_EXP_CC1 81
 #define KTN_EXP_CC2 82
@@ -98,7 +98,7 @@ void MD_KTN_class::update() {
   if (!connected) return;
   if (midi_timer > 0) { // Check timer is running
     if (millis() > midi_timer) {
-      DEBUGMSG("M13 Midi timer expired!");
+      DEBUGMSG("Katana Midi timer expired!");
       request_patch_message(current_midi_message);
     }
   }
@@ -328,7 +328,7 @@ void MD_KTN_class::forward_PC_message(uint8_t program, uint8_t channel) { // For
 
 void MD_KTN_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a KATANA
-  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x33) && (sxdata[7] == 0x03)) {
+  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x33) && (sxdata[7] == 0x03) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
 
@@ -508,7 +508,7 @@ bool MD_KTN_class::request_patch_name(uint8_t sw, uint16_t number) {
   }
   else if (number < 89) {
     String patch_name = "";
-    EEPROM_read_KTN_title(number - 9, patch_name);
+    EEPROM_read_KTN_title(my_device_number + 1, number - 9, patch_name);
     LCD_set_SP_label(sw, patch_name);
     return true;
   }
@@ -602,22 +602,22 @@ void MD_KTN_class::direct_select_press(uint8_t number) {
 // All active parameters are stored, apart from the user scales of the harmonist effect
 
 // Patch memory structure on VController
-#define KTN_PATCH_NAME_INDEX     0  // Patch name (16 parameters)
-#define KTN_BOOST_INDEX         16  // Boost FX (15 parameters)
-#define KTN_AMP_INDEX           31  // Amp index (9 parameters)
-#define KTN_EQ_SW_INDEX         40  // Eq (1 parameters)
-#define KTN_EQ_GEQ_INDEX        41  // Eq or GEQ (11 parameters)
-#define KTN_MOD_BASE_INDEX      52  // Mod base (2 parameters: ON/OFF and type)
-#define KTN_MOD_INDEX           54  // MOD effect settings for active effect (max 15 parameters)
-#define KTN_FX_BASE_INDEX       69  // FX base (2 parameters: ON/OFF and type)
-#define KTN_FX_INDEX            71  // FX effect settings for active effect (max 15 parameters)
-#define KTN_DELAY1_INDEX        86  // Delay 1 (9 parameters)
-#define KTN_DELAY1_MOD_INDEX    95  // Delay 1 MOD (2 parameters)
-#define KTN_SPARE1_BYTES        97  // 7 bytes here
+#define KTN_PATCH_HEADER         0  // Patch header (7 bytes)
+#define KTN_PATCH_NAME_INDEX     7  // Patch name (16 parameters)
+#define KTN_BOOST_INDEX         23  // Boost FX (15 parameters)
+#define KTN_AMP_INDEX           38  // Amp index (9 parameters)
+#define KTN_EQ_SW_INDEX         47  // Eq (1 parameters)
+#define KTN_EQ_GEQ_INDEX        48  // Eq or GEQ (11 parameters)
+#define KTN_MOD_BASE_INDEX      59  // Mod base (2 parameters: ON/OFF and type)
+#define KTN_MOD_INDEX           61  // MOD effect settings for active effect (max 15 parameters)
+#define KTN_FX_BASE_INDEX       76  // FX base (2 parameters: ON/OFF and type)
+#define KTN_FX_INDEX            78  // FX effect settings for active effect (max 15 parameters)
+#define KTN_DELAY1_INDEX        93  // Delay 1 (9 parameters)
+#define KTN_DELAY1_MOD_INDEX   102  // Delay 1 MOD (2 parameters)
 #define KTN_DELAY1_SDE_INDEX   104  // Delay 1 SDE-3000 settings (5)
 #define KTN_DELAY2_INDEX       109  // Delay 2 (9 parameters)
 #define KTN_DELAY2_MOD_INDEX   118  // Delay 2 MOD (2 parameters)
-#define KTN_SPARE2_BYTES       120  // 7 bytes here
+#define KTN_SPARE_BYTES_NO1    120  // 7 bytes here
 #define KTN_DELAY2_SDE_INDEX   127  // Delay 2 SDE-3000 settings (5)
 #define KTN_REVERB_INDEX       132  // Reverb (12 parameters)
 #define KTN_FOOT_VOL_INDEX     146  // Foot volume (1 parameter)
@@ -630,7 +630,7 @@ void MD_KTN_class::direct_select_press(uint8_t number) {
 #define KTN_PEDAL_TYPE_INDEX   178  // Pedal type  (1 parameter)
 #define KTN_PEDAL_INDEX        179  // Wah type (6 parameters)
 #define KTN_EXP_ASSIGNS_INDEX  185  // Assignments for the expression pedals, FS_functions and cabinet resonance (6 bytes)
-#define KTN_SPARE3_BYTES       191  // One byte left
+#define KTN_SPARE_BYTES_NO2    191  // One byte left
 
 // 192 Total memory size
 
@@ -740,13 +740,13 @@ const PROGMEM KTN_pedal_memory_struct KTN_pedal_memory[KTN_NUMBER_OF_PEDAL_TYPES
 // Here is how I made the default patch: When a patch is saved, the contents of the current patch memory are shown in the Serial Monitor when DEBUG_NORMAL is on.
 // Copy it and paste it in a word document. Edit it by replacing the space with ", 0x", split it in chunks of 20 bytes and you have the default patch data!!!
 
-const PROGMEM uint8_t KTN_default_patch[KTN_PATCH_SIZE] = {
-  0x4e, 0x65, 0x77, 0x20, 0x50, 0x72, 0x65, 0x73, 0x65, 0x74, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x0c, 0x2e, 0x3c,
-  0x32, 0x00, 0x32, 0x41, 0x00, 0x03, 0x34, 0x32, 0x32, 0x32, 0x32, 0x0b, 0x1e, 0x0a, 0x32, 0x32, 0x32, 0x32, 0x32, 0x00,
-  0x00, 0x00, 0x14, 0x0e, 0x01, 0x14, 0x17, 0x01, 0x14, 0x14, 0x0e, 0x14, 0x00, 0x02, 0x00, 0x64, 0x00, 0x64, 0x64, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1d, 0x07, 0x15, 0x4d, 0x4b, 0x54, 0x09, 0x3a, 0x16, 0x49,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x05, 0x29, 0x19, 0x0a, 0x2e, 0x64, 0x32, 0x00, 0x64, 0x16, 0x0a, 0x32,
-  0x03, 0x10, 0x16, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x03, 0x7f, 0x1e, 0x0e, 0x50, 0x63, 0x00, 0x07, 0x68,
+const PROGMEM uint8_t KTN_default_patch[VC_PATCH_SIZE] = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x65, 0x77, 0x20, 0x50, 0x72, 0x65, 0x73, 0x65, 0x74, 0x20, 0x20, 0x20, 
+  0x20, 0x20, 0x20, 0x00, 0x0c, 0x2e, 0x3c, 0x32, 0x00, 0x32, 0x41, 0x00, 0x03, 0x34, 0x32, 0x32, 0x32, 0x32, 0x0b, 0x1e,
+  0x0a, 0x32, 0x32, 0x32, 0x32, 0x32, 0x00, 0x00, 0x00, 0x14, 0x0e, 0x01, 0x14, 0x17, 0x01, 0x14, 0x14, 0x0e, 0x14, 0x00, 
+  0x02, 0x00, 0x64, 0x00, 0x64, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1d, 0x07, 0x15, 
+  0x4d, 0x4b, 0x54, 0x09, 0x3a, 0x16, 0x49, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x05, 0x29, 0x19, 0x0a, 0x2e, 
+  0x64, 0x32, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x03, 0x7f, 0x1e, 0x0e, 0x50, 0x63, 0x00, 0x07, 0x68,
   0x0a, 0x0e, 0x03, 0x07, 0x68, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x1d, 0x00, 0x0a, 0x0e, 0x08, 0x05,
   0x32, 0x64, 0x05, 0x02, 0x00, 0x64, 0x64, 0x00, 0x00, 0x32, 0x32, 0x00, 0x05, 0x32, 0x00, 0x00, 0x11, 0x0b, 0x0f, 0x05,
   0x02, 0x0d, 0x0c, 0x04, 0x01, 0x07, 0x06, 0x08, 0x09, 0x12, 0x00, 0x03, 0x0a, 0x13, 0x0e, 0x10, 0x00, 0x00, 0x00, 0x00,
@@ -754,7 +754,7 @@ const PROGMEM uint8_t KTN_default_patch[KTN_PATCH_SIZE] = {
 };
 
 void MD_KTN_class::load_patch_buffer_with_default_patch() {
-  memcpy(KTN_patch_buffer, KTN_default_patch, KTN_PATCH_SIZE);
+  memcpy(KTN_patch_buffer, KTN_default_patch, VC_PATCH_SIZE);
 }
 
 void MD_KTN_class::load_patch(uint8_t number) {
@@ -762,8 +762,11 @@ void MD_KTN_class::load_patch(uint8_t number) {
   uint32_t geq_address, peq_address;
 
   // Load patch from EEPROM in KTN_patch_memory
-  EEPROM_load_KTN_patch(number, KTN_patch_buffer, KTN_PATCH_SIZE);
-
+  bool loaded = EEPROM_load_device_patch(my_device_number + 1, number, KTN_patch_buffer, VC_PATCH_SIZE);
+  if (!loaded) {
+    load_patch_buffer_with_default_patch();
+  }
+  
   sysex_delay_length = 0; //Speed up the MIDI data
   // Write the patch from KTN_patch_memory to the Katana
   current_mod_type = KTN_patch_buffer[KTN_MOD_BASE_INDEX + 1];
@@ -811,15 +814,28 @@ void MD_KTN_class::load_patch(uint8_t number) {
   save_patch_number = number; // Remember memory number for the next time we save a patch
 }
 
-void MD_KTN_class::update_patch() { // Will update from version 1 to version 2 of the Katana memory space
-  if ((KTN_patch_buffer[KTN_EQ_TYPE_INDEX] == 1) && (version > 2)) { // Move GEQ data to the regular patch block
-    for (uint8_t i = 0; i < 11; i++) KTN_patch_buffer[KTN_EQ_GEQ_INDEX + i] = KTN_patch_buffer[KTN_EQ_TYPE_INDEX + 1 + i];
-  }
-  else KTN_patch_buffer[KTN_EQ_TYPE_INDEX] = 0;
+void MD_KTN_class::update_patch(uint8_t version, uint16_t number) { // V2 - added GEQ block
+  if (version < 2) {
+    if ((KTN_patch_buffer[KTN_EQ_TYPE_INDEX] == 1) && (version > 2)) { // Move GEQ data to the regular patch block
+      for (uint8_t i = 0; i < 11; i++) KTN_patch_buffer[KTN_EQ_GEQ_INDEX + i] = KTN_patch_buffer[KTN_EQ_TYPE_INDEX + 1 + i];
+    }
+    else KTN_patch_buffer[KTN_EQ_TYPE_INDEX] = 0;
 
-  // Write default data to the last bit of memory.
-  for (uint8_t i = KTN_PEDAL_SW_INDEX; i < KTN_PATCH_SIZE; i++) {
-    KTN_patch_buffer[i] = KTN_default_patch[i];
+    // Write default data to the last bit of memory.
+    for (uint8_t i = KTN_PEDAL_SW_INDEX; i < VC_PATCH_SIZE; i++) {
+      KTN_patch_buffer[i] = KTN_default_patch[i];
+    }
+  }
+
+  if (version < 3) { // V3 - add patch header at beginning of Katana patch
+    for (uint8_t i = 96; i -- > 0; ) { // Move data into free space - back to front
+      KTN_patch_buffer[i + 7] = KTN_patch_buffer[i];
+    }
+
+    // Add header
+    KTN_patch_buffer[0] = my_device_number + 1;
+    KTN_patch_buffer[1] = 0; // Patch_number_MSB
+    KTN_patch_buffer[2] = number; // Patch_number_LSB
   }
 }
 
@@ -835,7 +851,6 @@ bool MD_KTN_class::FX_chain_changed() {
 }
 
 void MD_KTN_class::save_patch() {
-
   // Request the data from the Katana
   MIDI_disable_device_check();
   request_patch_message(1);
@@ -1003,30 +1018,33 @@ void MD_KTN_class::read_patch_message(uint8_t number, const unsigned char* sxdat
       midi_timer = 0;
 
       // Dump data (debug)
-      MIDI_debug_sysex(KTN_patch_buffer, KTN_PATCH_SIZE, 255, true);
+      MIDI_debug_sysex(KTN_patch_buffer, VC_PATCH_SIZE, 255, true);
 
-      open_menu_for_Katana_edit = true;
+      open_menu_for_Katana_patch_save = true;
       SCO_select_page(PAGE_MENU); // Open the menu
-      open_menu_for_Katana_edit = false;
+      open_menu_for_Katana_patch_save = false;
 
     }
   }
 }
 
 void MD_KTN_class::store_patch() {
+  // Add header
+  KTN_patch_buffer[0] = my_device_number + 1;
+  KTN_patch_buffer[1] = save_patch_number >> 8; // Patch_number_MSB
+  KTN_patch_buffer[2] = save_patch_number & 0xFF; // Patch_number_LSB
   // Store to EEPROM
-  EEPROM_save_KTN_patch(save_patch_number, KTN_patch_buffer, KTN_PATCH_SIZE);
+  bool saved = EEPROM_save_device_patch(my_device_number + 1, save_patch_number, KTN_patch_buffer, VC_PATCH_SIZE);
+  if (!saved) return;
   LCD_show_popup_label("Patch saved.", MESSAGE_TIMER_LENGTH);
+  delay(30); // Allow data to settle before reading the data again.
   select_patch(save_patch_number + 9); // Select the saved patch
 }
 
 bool MD_KTN_class::exchange_patch() {
   uint8_t old_save_number = patch_number - 9;
   if ((patch_number >= 9) && (old_save_number != save_patch_number)) {
-    uint8_t temp_patch[KTN_PATCH_SIZE];
-    EEPROM_load_KTN_patch(save_patch_number, temp_patch, KTN_PATCH_SIZE);
-    EEPROM_save_KTN_patch(old_save_number, temp_patch, KTN_PATCH_SIZE);
-    EEPROM_save_KTN_patch(save_patch_number, KTN_patch_buffer, KTN_PATCH_SIZE);
+    EEPROM_exchange_device_patch(my_device_number + 1, save_patch_number, old_save_number, VC_PATCH_SIZE);
     LCD_show_popup_label("Patches swapped", MESSAGE_TIMER_LENGTH);
     select_patch(save_patch_number + 9); // Select the saved patch
     return true; // Swap succesfull
@@ -1038,14 +1056,16 @@ bool MD_KTN_class::exchange_patch() {
 }
 
 void MD_KTN_class::read_patch_name_from_buffer(String &txt) { // Used for rename patch feature
+  uint8_t patch_index = KTN_PATCH_NAME_INDEX;
   for (uint8_t i = 0; i < 16; i++) {
-    txt += static_cast<char>(KTN_patch_buffer[i]);
+    txt += static_cast<char>(KTN_patch_buffer[patch_index++]);
   }
 }
 
 void MD_KTN_class::store_patch_name_to_buffer(String txt) { // Used for rename patch feature
+  uint8_t patch_index = KTN_PATCH_NAME_INDEX;
   for (uint8_t i = 0; i < 16; i++) {
-    KTN_patch_buffer[i] = txt[i];
+    KTN_patch_buffer[patch_index++] = txt[i];
   }
 }
 
@@ -1122,31 +1142,31 @@ struct KTN_parameter_struct { // Combines all the data we need for controlling a
 #define SHOW_CUT_BOOST_12DB 31758 // GEQ in EQ block has a different scale -12dB  - +24dB
 
 const PROGMEM KTN_parameter_struct KTN_parameters[] = {
-  {0x0620, 0x0550, 2, "PEDAL SW", 290 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4}, //00
-  {0x1111, 0x0551, 3, "PEDAL TYPE", 290, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4 },
+  {0x0620, 0x0550,   2, "PEDAL SW", 290 | SUBLIST_FROM_BYTE2, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4}, //00
+  {0x1111, 0x0551,   3, "PEDAL TYPE", 290, FX_FILTER_TYPE, KTN_CAT_PEDAL, 4 },
   {0xB000, 0xB000, 101, "PDL PAR 01", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB001, 0xB001, 101, "PDL PAR 02", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB002, 0xB002, 101, "PDL PAR 03", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB003, 0xB003, 101, "PDL PAR 04", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB004, 0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB005, 0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0x0030, 0x0010, 2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0031, 0x0011, 22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0030, 0x0010,   2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0031, 0x0011,  22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0032, 0x0012, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
   {0x0033, 0x0013, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0034, 0x0014, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0035, 0x0015, 2, "BST SOLO SW", 0, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0035, 0x0015,   2, "BST SOLO SW", 0, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0036, 0x0016, 101, "BST SOLO LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0037, 0x0017, 101, "BST FX LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0038, 0x0018, 101, "BST DIR LVL", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0039, 0x0019, 8,   "BST CUST.TP", 276, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0039, 0x0019,   8, "BST CUST.TP", 276, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x003A, 0x001A, 101, "BST CUST.BTM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x003B, 0x001B, 101, "BST CUST.TOP", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x003C, 0x001C, 101, "BST CUST.LOW", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 }, //20
   {0x003D, 0x001D, 101, "BST CUST.HI", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x003E, 0x001E, 101, "BST CUST.CHAR", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0140, 0x0100, 2, "MOD", 23 | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_MOD, 1 },
-  {0x0141, 0x0101, 40, "MOD TP", 23, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
+  {0x0140, 0x0100,   2, "MOD", 23 | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_MOD, 1 },
+  {0x0141, 0x0101,  40, "MOD TP", 23, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
   {0x8000, 0x8000, 101, "MOD PAR 01", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
   {0x8001, 0x8001, 101, "MOD PAR 02", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
   {0x8002, 0x8002, 101, "MOD PAR 03", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
@@ -1162,16 +1182,16 @@ const PROGMEM KTN_parameter_struct KTN_parameters[] = {
   {0x800C, 0x800C, 101, "MOD PAR 13", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
   {0x800D, 0x800D, 101, "MOD PAR 14", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
   {0x800E, 0x800E, 101, "MOD PAR 15", SHOW_NUMBER, KTN_MOD_TYPE_COLOUR, KTN_CAT_MOD, 1 },
-  {0x0051, 0x0021, 28, "AMP TP", 63, FX_AMP_TYPE, KTN_CAT_AMP, 1 },              // 40
+  {0x0051, 0x0021,  28, "AMP TP", 63, FX_AMP_TYPE, KTN_CAT_AMP, 1 },              // 40
   {0x0052, 0x0022, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
   {0x0054, 0x0024, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
   {0x0055, 0x0025, 101, "AMP MIDDLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
   {0x0056, 0x0026, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
   {0x0057, 0x0027, 101, "AMP PRESCENCE", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0059, 0x0029, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
+  {0x0059, 0x0029,   2, "AMP BRIGHT", 0, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
   {0x0058, 0x0028, 101, "AMP LEVEL", SHOW_NUMBER, FX_AMP_TYPE, KTN_CAT_AMP, 1 },
-  {0x0130, 0x0040, 2, "EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
-  {0x1104, 0x0041, 2, "EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_EQ, 3 },
+  {0x0130, 0x0040,   2, "EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
+  {0x1104, 0x0041,   2, "EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_EQ, 3 },
   {0xA000, 0xA000, 101, "L.Cut  /  31 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //50
   {0xA001, 0xA001, 101, "L.Lvl  /  62 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
   {0xA002, 0xA002, 101, "LM.Freq/ 125 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
@@ -1183,17 +1203,17 @@ const PROGMEM KTN_parameter_struct KTN_parameters[] = {
   {0xA008, 0xA008, 101, "H Lvl  /  8 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
   {0xA009, 0xA009, 101, "H.Cut  / 16 kHz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 },
   {0xA00A, 0xA00A, 101, "EQ LEVEL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_EQ, 2 }, //60
-  {0x0560, 0x0500, 2, "DLY1", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0561, 0x0501, 11, "DLY1 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0560, 0x0500,   2, "DLY1", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0561, 0x0501,  11, "DLY1 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0562, 0x0502, TIME_2000, "DLY1 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0564, 0x0504, 101, "DLY1 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x0565, 0x0505, 15, "DLY1 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
+  {0x0565, 0x0505,  15, "DLY1 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0566, 0x0506, 101, "DLY1 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0567, 0x0507, 101, "DLY1 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0573, 0x0513, 101, "DLY1 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
   {0x0574, 0x0514, 101, "DLY1 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY1, 1 },
-  {0x034C, 0x0300, 2, "FX", 23  | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_FX, 1 }, // 70
-  {0x034D, 0x0301, 40, "FX TYPE", 23, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
+  {0x034C, 0x0300,   2, "FX", 23  | SUBLIST_FROM_BYTE2, KTN_FX_COLOUR, KTN_CAT_FX, 1 }, // 70
+  {0x034D, 0x0301,  40, "FX TYPE", 23, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
   {0x9000, 0x9000, 101, "FX PAR 01", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
   {0x9001, 0x9001, 101, "FX PAR 02", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
   {0x9002, 0x9002, 101, "FX PAR 03", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
@@ -1209,46 +1229,46 @@ const PROGMEM KTN_parameter_struct KTN_parameters[] = {
   {0x900C, 0x900C, 101, "FX PAR 13", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
   {0x900D, 0x900D, 101, "FX PAR 14", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
   {0x900E, 0x900E, 101, "FX PAR 15", SHOW_NUMBER, KTN_FX_TYPE_COLOUR, KTN_CAT_FX, 1 },
-  {0x104E, 0x0520, 2, "DLY2", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x104F, 0x0521, 11, "DLY2 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x104E, 0x0520,   2, "DLY2", 91  | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x104F, 0x0521,  11, "DLY2 TP", 91, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1050, 0x0522, TIME_2000, "DLY2 TIME", SHOW_DELAY_TIME, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1052, 0x0524, 101, "DLY2 F.BACK", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 }, // 90
-  {0x1053, 0x0525, 15, "DLY2 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
+  {0x1053, 0x0525,  15, "DLY2 H.CUT", 128, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1054, 0x0526, 101, "DLY2 FX LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1055, 0x0527, 101, "DLY2 DIR LVL", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1061, 0x0533, 101, "DLY2 MOD RATE", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
   {0x1062, 0x0534, 101, "DLY2 MOD DPTH", SHOW_NUMBER, FX_DELAY_TYPE, KTN_CAT_DLY2, 2 },
-  {0x0610, 0x0540, 2, "RVB SW", 102  | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0611, 0x0541, 7, "RVB TP", 102, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0610, 0x0540,   2, "RVB SW", 102  | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0611, 0x0541,   7, "RVB TP", 102, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
   {0x0612, 0x0542, 100, "RVB TIME", SHOW_RVB_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
   {0x0613, 0x0543, TIME_500, "RVB PRE", SHOW_DELAY_TIME, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0615, 0x0545, 18, "RVB L.CUT", 112, FX_REVERB_TYPE, KTN_CAT_RVB, 1 }, // 100
-  {0x0616, 0x0546, 15, "RVB H.CUT", 128, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0617, 0x0547, 11, "RVB DENS", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0615, 0x0545,  18, "RVB L.CUT", 112, FX_REVERB_TYPE, KTN_CAT_RVB, 1 }, // 100
+  {0x0616, 0x0546,  15, "RVB H.CUT", 128, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
+  {0x0617, 0x0547,  11, "RVB DENS", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
   {0x0618, 0x0548, 101, "FX LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
   {0x0619, 0x0549, 101, "DIR LVL", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
   {0x061B, 0x054B, 101, "SPRING COLOR", SHOW_NUMBER, FX_REVERB_TYPE, KTN_CAT_RVB, 1 },
-  {0x0655, 0x0562, 2, "S/R LOOP", 0, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0656, 0x0563, 2, "S/R MODE", 149, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0655, 0x0562,   2, "S/R LOOP", 0, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
+  {0x0656, 0x0563,   2, "S/R MODE", 149, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
   {0x0657, 0x0564, 101, "S/R SEND LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
   {0x0658, 0x0565, 101, "S/R RET. LVL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x0663, 0x0566, 2, "N/S SW", 0, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 }, // 110
+  {0x0663, 0x0566,   2, "N/S SW", 0, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 }, // 110
   {0x0664, 0x0567, 101, "N/S THRESH", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
   {0x0665, 0x0568, 101, "N/S RLEASE", SHOW_NUMBER, FX_DYNAMICS_TYPE, KTN_CAT_MISC, 1 },
-  {0x121F, 0x063E, 9, "EXP ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
-  {0x1220, 0x063F, 9, "FC E1 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
-  {0x1221, 0x0640, 9, "FC E2 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x121F, 0x063E,   9, "EXP ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x1220, 0x063F,   9, "FC E1 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
+  {0x1221, 0x0640,   9, "FC E2 ASGN", 293, FX_FILTER_TYPE, KTN_CAT_MISC, 3 },
   {0x0633, 0x0561, 101, "FOOT VOL", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_MISC, 1 },
-  {0x1210, 0x0639, 3, "BOOST COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1211, 0x063A, 3, "MOD COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1213, 0x063B, 3, "FX COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },  // 120
-  {0x1212, 0x063C, 3, "DLY1 COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x1214, 0x063D, 3, "RVB COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
-  {0x7430, 0x7029, 3, "L/OUT AIR", 268, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 }, // Address 0x7xxx is translated to 0x00000xxx
-  {0x7431, 0x0643, 3, "CAB RESO", 271, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x7432, 0x7010, 2, "GLBL EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743E, 0x7012, 2, "GL EQ POS", 274, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
-  {0x743F, 0x7011, 2, "GL EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 3 },
+  {0x1210, 0x0639,   3, "BOOST COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1211, 0x063A,   3, "MOD COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1213, 0x063B,   3, "FX COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },  // 120
+  {0x1212, 0x063C,   3, "DLY1 COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x1214, 0x063D,   3, "RVB COLOR", 109, KTN_FX_BUTTON_COLOUR, KTN_CAT_MISC, 1 },
+  {0x7430, 0x7029,   3, "L/OUT AIR", 268, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 }, // Address 0x7xxx is translated to 0x00000xxx
+  {0x7431, 0x0643,   3, "CAB RESO", 271, FX_AMP_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x7432, 0x7010,   2, "GLBL EQ SW", 0, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x743E, 0x7012,   2, "GL EQ POS", 274, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
+  {0x743F, 0x7011,   2, "GL EQ TYPE", 288, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 3 },
   {0xC000, 0xC000, 101, "GEQ L.Cut/31 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
   {0xC001, 0xC001, 101, "GEQ L.Lvl/62 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
   {0xC002, 0xC002, 101, "GEQ LM.F/125 Hz", SHOW_NUMBER, FX_FILTER_TYPE, KTN_CAT_GLOBAL, 2 },
@@ -1287,77 +1307,77 @@ struct KTN_fx_parameter_struct { // Combines all the data we need for controllin
 // The order is dictated by the addressing inside the Katana, so it should not be changed.
 // Because of this, some lines are empty, because these parameters have no effect.
 const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
-  {0, 2,   "TW MODE", 151}, // "TOUCHWAH"
-  {0, 2,   "TW POLR", 153},
-  {0, 101, "TW SENS", SHOW_NUMBER},
-  {0, 101, "TW FREQ", SHOW_NUMBER},
-  {0, 101, "TW PEAK", SHOW_NUMBER},
-  {0, 101, "TW D.MIX", SHOW_NUMBER},
-  {0, 101, "TW FX.LVL", SHOW_NUMBER},
-  {1, 2,   "AW MODE", 151}, // "AUTO WAH"
-  {1, 101, "AW FREQ", SHOW_NUMBER},
-  {1, 101, "AW PEAK", SHOW_NUMBER},
-  {1, 101, "AW RATE", SHOW_NUMBER},
-  {1, 101, "AW DEPTH", SHOW_NUMBER},
-  {1, 101, "AW D.MIX", SHOW_NUMBER},
-  {1, 101, "AW FX.LVL", SHOW_NUMBER},
-  {2, 6,   "SW TYPE", 155}, // "SUB WAH"
-  {2, 101, "SW P.POS", SHOW_NUMBER},
-  {2, 101, "SW P.MIN", SHOW_NUMBER},
-  {2, 101, "SW P.MAX", SHOW_NUMBER},
-  {2, 101, "SW FX.LVL", SHOW_NUMBER},
-  {2, 101, "SW D.LVL", SHOW_NUMBER},
-  {3, 7,   "C TYPE", 161}, // "COMPRESSOR"
-  {3, 101, "C SUSTAIN", SHOW_NUMBER},
-  {3, 101, "C ATTACK", SHOW_NUMBER},
-  {3, 101, "C TONE", SHOW_TONE_NUMBER},
-  {3, 101, "C LEVEL", SHOW_NUMBER},
-  {4, 3,   "L TYPE", 169}, // "LIMITER"
-  {4, 101, "L ATTACK", SHOW_NUMBER},
-  {4, 101, "L THRESH.", SHOW_NUMBER},
-  {4, 101, "L RATIO", SHOW_NUMBER},
-  {4, 101, "L RELEASE", SHOW_NUMBER},
-  {4, 101, "L LEVEL", SHOW_NUMBER},
-  {5, 22,  "DST TYPE", 1}, // "DISTORTION"
-  {5, 121, "DST DRIVE", SHOW_NUMBER},
-  {5, 101, "DS BOTTOM", SHOW_TONE_NUMBER},
-  {5, 101, "DST TONE", SHOW_TONE_NUMBER},
-  {5, 2,   "D SOLO SW", 0},
-  {5, 101, "D SLO LVL", SHOW_NUMBER},
-  {5, 101, "DS FX LVL", SHOW_NUMBER},
-  {5, 101, "DIR LVL", SHOW_NUMBER},
-  {6, 41,  "GEQ 31 Hz", SHOW_CUT_BOOST_20DB}, // "GRAPHIC EQ"
-  {6, 41,  "GEQ 62 Hz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 125Hz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 250Hz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 500Hz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 1 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 2 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 4 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 8 kHz", SHOW_CUT_BOOST_20DB},
-  {6, 41,  "GEQ 16kHz", SHOW_CUT_BOOST_20DB},
-  {6, 41, "GEQ LEVEL", SHOW_CUT_BOOST_20DB},
-  {7, 18,  "PEQ L.CUT", 112, }, // "PARAMETRIC EQ"
-  {7, 41,  "PEQ L.LVL", SHOW_CUT_BOOST_20DB, },
-  {7, 26,  "PE LM FRQ", 113, },
-  {7, 6,   "PEQ LM Q", 143, },
-  {7, 41,  "PE LM LVL", SHOW_CUT_BOOST_20DB, },
-  {7, 26,  "PE HM FRQ", 113, },
-  {7, 6,   "PEQ HM Q", 143, },
-  {7, 41,  "PE HM LVL", SHOW_CUT_BOOST_20DB, },
-  {7, 41,  "PEQ HILVL", SHOW_CUT_BOOST_20DB, },
-  {7, 15,  "PEQ HICUT", 128, },
-  {7, 41, "PEQ LEVEL", SHOW_CUT_BOOST_20DB },
-  {8, 8,   "TM TYPE", 172}, // "TONE MOD"
-  {8, 101, "TM RESO", SHOW_NUMBER},
-  {8, 101, "TM LOW", SHOW_TONE_NUMBER},
-  {8, 101, "TM HIGH", SHOW_TONE_NUMBER},
-  {8, 101, "TM LEVEL", SHOW_NUMBER},
-  {9, 8,   "GS TYPE", 180}, // "GUITAR SIM"
-  {9, 101, "GS LOW", SHOW_TONE_NUMBER},
-  {9, 101, "GS HIGH", SHOW_TONE_NUMBER},
-  {9, 101, "GS LEVEL", SHOW_NUMBER},
-  {9, 101, "GS BODY", SHOW_NUMBER},
+  { 0,   2, "TW MODE", 151}, // "TOUCHWAH"
+  { 0,   2, "TW POLR", 153},
+  { 0, 101, "TW SENS", SHOW_NUMBER},
+  { 0, 101, "TW FREQ", SHOW_NUMBER},
+  { 0, 101, "TW PEAK", SHOW_NUMBER},
+  { 0, 101, "TW D.MIX", SHOW_NUMBER},
+  { 0, 101, "TW FX.LVL", SHOW_NUMBER},
+  { 1,   2, "AW MODE", 151}, // "AUTO WAH"
+  { 1, 101, "AW FREQ", SHOW_NUMBER},
+  { 1, 101, "AW PEAK", SHOW_NUMBER},
+  { 1, 101, "AW RATE", SHOW_NUMBER},
+  { 1, 101, "AW DEPTH", SHOW_NUMBER},
+  { 1, 101, "AW D.MIX", SHOW_NUMBER},
+  { 1, 101, "AW FX.LVL", SHOW_NUMBER},
+  { 2,   6, "SW TYPE", 155}, // "SUB WAH"
+  { 2, 101, "SW P.POS", SHOW_NUMBER},
+  { 2, 101, "SW P.MIN", SHOW_NUMBER},
+  { 2, 101, "SW P.MAX", SHOW_NUMBER},
+  { 2, 101, "SW FX.LVL", SHOW_NUMBER},
+  { 2, 101, "SW D.LVL", SHOW_NUMBER},
+  { 3,   7, "C TYPE", 161}, // "COMPRESSOR"
+  { 3, 101, "C SUSTAIN", SHOW_NUMBER},
+  { 3, 101, "C ATTACK", SHOW_NUMBER},
+  { 3, 101, "C TONE", SHOW_TONE_NUMBER},
+  { 3, 101, "C LEVEL", SHOW_NUMBER},
+  { 4,   3, "L TYPE", 169}, // "LIMITER"
+  { 4, 101, "L ATTACK", SHOW_NUMBER},
+  { 4, 101, "L THRESH.", SHOW_NUMBER},
+  { 4, 101, "L RATIO", SHOW_NUMBER},
+  { 4, 101, "L RELEASE", SHOW_NUMBER},
+  { 4, 101, "L LEVEL", SHOW_NUMBER},
+  { 5,  22, "DST TYPE", 1}, // "DISTORTION"
+  { 5, 121, "DST DRIVE", SHOW_NUMBER},
+  { 5, 101, "DS BOTTOM", SHOW_TONE_NUMBER},
+  { 5, 101, "DST TONE", SHOW_TONE_NUMBER},
+  { 5,   2, "D SOLO SW", 0},
+  { 5, 101, "D SLO LVL", SHOW_NUMBER},
+  { 5, 101, "DS FX LVL", SHOW_NUMBER},
+  { 5, 101, "DIR LVL", SHOW_NUMBER},
+  { 6,  41, "GEQ 31 Hz", SHOW_CUT_BOOST_20DB}, // "GRAPHIC EQ"
+  { 6,  41, "GEQ 62 Hz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 125Hz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 250Hz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 500Hz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 1 kHz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 2 kHz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 4 kHz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 8 kHz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ 16kHz", SHOW_CUT_BOOST_20DB},
+  { 6,  41, "GEQ LEVEL", SHOW_CUT_BOOST_20DB},
+  { 7, 18,  "PEQ L.CUT", 112, }, // "PARAMETRIC EQ"
+  { 7,  41, "PEQ L.LVL", SHOW_CUT_BOOST_20DB, },
+  { 7, 26,  "PE LM FRQ", 113, },
+  { 7, 6,   "PEQ LM Q", 143, },
+  { 7,  41, "PE LM LVL", SHOW_CUT_BOOST_20DB, },
+  { 7, 26,  "PE HM FRQ", 113, },
+  { 7, 6,   "PEQ HM Q", 143, },
+  { 7,  41, "PE HM LVL", SHOW_CUT_BOOST_20DB, },
+  { 7,  41, "PEQ HILVL", SHOW_CUT_BOOST_20DB, },
+  { 7, 15,  "PEQ HICUT", 128, },
+  { 7,  41, "PEQ LEVEL", SHOW_CUT_BOOST_20DB },
+  { 8, 8,   "TM TYPE", 172}, // "TONE MOD"
+  { 8, 101, "TM RESO", SHOW_NUMBER},
+  { 8, 101, "TM LOW", SHOW_TONE_NUMBER},
+  { 8, 101, "TM HIGH", SHOW_TONE_NUMBER},
+  { 8, 101, "TM LEVEL", SHOW_NUMBER},
+  { 9, 8,   "GS TYPE", 180}, // "GUITAR SIM"
+  { 9, 101, "GS LOW", SHOW_TONE_NUMBER},
+  { 9, 101, "GS HIGH", SHOW_TONE_NUMBER},
+  { 9, 101, "GS LEVEL", SHOW_NUMBER},
+  { 9, 101, "GS BODY", SHOW_NUMBER},
   {10, 101, "SG SENS", SHOW_NUMBER}, // SLOW GEAR
   {10, 101, "SG RISE T", SHOW_NUMBER},
   {10, 101, "SG LEVEL", SHOW_NUMBER},
@@ -1368,7 +1388,7 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {11, 101, "DF RESO", SHOW_NUMBER},
   {11, 101, "DF FX LVL", SHOW_NUMBER},
   {11, 101, "DF D.LVL", SHOW_NUMBER},
-  {12, 2,   "WS WAVE", 188}, // WAVE SYNTH
+  {12,   2, "WS WAVE", 188}, // WAVE SYNTH
   {12, 101, "WS CUTOFF", SHOW_NUMBER},
   {12, 101, "WS RESO", SHOW_NUMBER},
   {12, 101, "WS F.SENS", SHOW_NUMBER},
@@ -1383,47 +1403,47 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {13, 101, "SS BUZZ", SHOW_NUMBER},
   {13, 101, "SS FX LVL", SHOW_NUMBER},
   {13, 101, "SS D.LVL", SHOW_NUMBER},
-  {14, 4, "O RANGE", 190}, // OCTAVE
+  {14,   4, "O RANGE", 190}, // OCTAVE
   {14, 101, "O LEVEL", SHOW_NUMBER},
   {14, 101, "O DIR.MIX", SHOW_NUMBER},
-  {15, 2,   "PS VOICE1", 194}, // PITCH SHIFTER
-  {15, 4,   "PS MODE 1", 196},
-  {15, 50,  "PS PITCH1", SHOW_PITCH_NUMBER},
+  {15,   2, "PS VOICE1", 194}, // PITCH SHIFTER
+  {15,   4, "PS MODE 1", 196},
+  {15,  50, "PS PITCH1", SHOW_PITCH_NUMBER},
   {15, 101, "PS FINE 1", SHOW_TONE_NUMBER},
   {15, TIME_300, "PS PREDLY", SHOW_DELAY_TIME},
   {15, 0, "--", 0},
   {15, 101, "PS LEVEL1", SHOW_NUMBER},
-  {15, 2, "PS VOICE2", 194},
-  {15, 4, "PS MODE 2", 196},
-  {15, 50, "PS PITCH2", SHOW_PITCH_NUMBER},
+  {15,   2, "PS VOICE2", 194},
+  {15,   4, "PS MODE 2", 196},
+  {15,  50, "PS PITCH2", SHOW_PITCH_NUMBER},
   {15, 101, "PS FINE 2", SHOW_TONE_NUMBER},
   {15, TIME_300, "PS PREDLY", SHOW_DELAY_TIME},
-  {15, 0, "--", 0},
+  {15,   0, "--", 0},
   {15, 101, "PS F.BACK", SHOW_NUMBER},
   {15, 101, "PS LEVEL2", SHOW_NUMBER},
   {15, 101, "PS D.MIX", SHOW_NUMBER},
-  {16, 2, "H VOICE", 194}, // HARMONIST
+  {16,   2, "H VOICE", 194}, // HARMONIST
   {16, 30, "H HARM 1", 200},
   {16, TIME_300, "H PRE-DLY", SHOW_DELAY_TIME},
   {16, 12, "H KEY", 256}, // Is translated to master key!
   {16, 101, "H LEVEL 1", SHOW_NUMBER},
   {16, 30, "H HARM 2", 200},
   {16, TIME_300, "H PRE-DLY", SHOW_DELAY_TIME},
-  {16, 0, "--", 0},
+  {16,   0, "--", 0},
   {16, 101, "H LEVEL 2", SHOW_NUMBER},
   {16, 101, "H F.BACK", SHOW_NUMBER},
   {16, 101, "H DIR.MIX", SHOW_NUMBER},
-  {17, 2, "SH HOLD", 0}, // SOUND HOLD
+  {17,   2, "SH HOLD", 0}, // SOUND HOLD
   {17, 101, "SH RISE T", SHOW_NUMBER},
   {17, 121, "SH LEVEL", SHOW_NUMBER},
-  {18, 4, "AP TYPE", 230}, // AC. PROCESSOR
+  {18,   4, "AP TYPE", 230}, // AC. PROCESSOR
   {18, 101, "AP BASS", SHOW_TONE_NUMBER, },
   {18, 101, "AP MIDDLE", SHOW_TONE_NUMBER, },
   {18, 26, "AP M FRQ", 113 },
   {18, 101, "AP TREBLE", SHOW_TONE_NUMBER, },
   {18, 101, "AP PRES.", SHOW_TONE_NUMBER, },
   {18, 101, "AP LEVEL", SHOW_NUMBER },
-  {19, 4, "PH TYPE", 234}, // "PHASER"
+  {19,   4, "PH TYPE", 234}, // "PHASER"
   {19, 101, "PH RATE", SHOW_NUMBER },
   {19, 101, "PH DEPTH", SHOW_NUMBER },
   {19, 101, "PH MANUAL", SHOW_NUMBER },
@@ -1444,14 +1464,14 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {21, 101, "TRM DEPTH", SHOW_NUMBER },
   {21, 101, "TRM LEVEL", SHOW_NUMBER },
   {22, 101, "ROT RATE", SHOW_NUMBER }, // ROTARY 11
-  {22, 0, "--", 0 },
-  {22, 0, "--", 0 },
+  {22,   0, "--", 0 },
+  {22,   0, "--", 0 },
   {22, 101, "ROT DEPTH", SHOW_NUMBER },
   {22, 101, "ROT LEVEL", SHOW_NUMBER },
   {23, 101, "U-V RATE", SHOW_NUMBER }, // UNI-V
   {23, 101, "U-V DEPTH", SHOW_NUMBER },
   {23, 101, "U-V LEVEL", SHOW_NUMBER },
-  {24, 2, "PAN TYPE", 240 }, // PAN
+  {24,   2, "PAN TYPE", 240 }, // PAN
   {24, 101, "PAN POS", SHOW_PAN },
   {24, 101, "P W.SHAPE", SHOW_NUMBER },
   {24, 101, "PAN RATE", SHOW_NUMBER },
@@ -1467,13 +1487,13 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {26, 100, "VIB TRIG.", SHOW_NUMBER },
   {26, 100, "V RISE T.", SHOW_NUMBER },
   {26, 100, "VIB LEVEL", SHOW_NUMBER },
-  {27, 2, "RMOD MODE", 242 }, // RING MOD
+  {27,   2, "RMOD MODE", 242 }, // RING MOD
   {27, 100, "RMOD FREQ", SHOW_NUMBER },
   {27, 100, "RMOD FLVL", SHOW_NUMBER },
   {27, 100, "RMOD DMIX", SHOW_NUMBER },
-  {28, 2, "H MODE", 244 }, // HUMANIZER
-  {28, 5, "H VOWEL1", 246 },
-  {28, 5, "H VOWEL2", 246 },
+  {28,   2, "H MODE", 244 }, // HUMANIZER
+  {28,   5, "H VOWEL1", 246 },
+  {28,   5, "H VOWEL2", 246 },
   {28, 101, "H SENS", SHOW_NUMBER },
   {28, 101, "H RATE", SHOW_NUMBER },
   {28, 101, "H DEPTH", SHOW_NUMBER },
@@ -1488,9 +1508,9 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {29, 101, "2 H.DEPTH", SHOW_NUMBER },
   {29, 81, "2 H.PreD", SHOW_MILLIS },
   {29, 101, "2 H.LVL", SHOW_NUMBER },
-  {30, 2, "DLY TYPE", 251 }, // SUB DELAY
+  {30,   2, "DLY TYPE", 251 }, // SUB DELAY
   {30, TIME_1000, "DLY TIME", SHOW_DELAY_TIME },
-  {30, 0, "--", 0 },
+  {30,   0, "--", 0 },
   {30, 101, "DLY FBACK", SHOW_NUMBER },
   {30, 15,  "DLY H.CUT", 128 },
   {30, 101, "DLY FXLVL", SHOW_NUMBER },
@@ -1500,26 +1520,26 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {31, 101, "AG LOW", SHOW_TONE_NUMBER },
   {31, 101, "AG LEVEL", SHOW_NUMBER },
   {32, 101, "ROT2 BAL", SHOW_NUMBER }, // ROTARY 2
-  {32, 2, "ROT2SPEED", 238 },
+  {32,   2, "ROT2SPEED", 238 },
   {32, 101, "ROT2 RT-S", SHOW_NUMBER },
   {32, 101, "ROT2 RT-F", SHOW_NUMBER },
   {32, 101, "ROT2 RISE", SHOW_NUMBER },
   {32, 101, "ROT2 FALL", SHOW_NUMBER },
   {32, 101, "ROT2 DPTH", SHOW_NUMBER },
   {32, 101, "ROT2 LVL", SHOW_NUMBER },
-  {33, 3, "TE MODE", 253 }, // TERA ECHO
+  {33,   3, "TE MODE", 253 }, // TERA ECHO
   {33, 101, "TE S.TIME", SHOW_NUMBER },
   {33, 101, "TE F.BACK", SHOW_NUMBER },
   {33, 101, "TE TONE", SHOW_TONE_NUMBER },
   {33, 101, "TE FX LVL", SHOW_NUMBER },
   {33, 101, "TE D.LVL", SHOW_NUMBER },
-  {33, 2, "TE HOLD", 0 },
+  {33,   2, "TE HOLD", 0 },
   {34, 101, "OT DETUNE", SHOW_NUMBER }, // OVERTONE
   {34, 101, "OT TONE", SHOW_TONE_NUMBER },
   {34, 101, "OT UPPER", SHOW_NUMBER },
   {34, 101, "OT LOWER", SHOW_NUMBER },
   {34, 101, "OT DIRECT", SHOW_NUMBER },
-  {35, 2, "90 SCRIPT", 0 }, // PHASER 90E
+  {35,   2, "90 SCRIPT", 0 }, // PHASER 90E
   {35, 101, "90E SPEED", SHOW_NUMBER },
   {36, 101, "117MANUAL", SHOW_NUMBER }, // FLANGER 119E
   {36, 101, "117WIDTH", SHOW_NUMBER },
@@ -1530,33 +1550,33 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
   {37, 101, "95E P.MAX", SHOW_NUMBER },
   {37, 101, "95E F.LVL", SHOW_NUMBER },
   {37, 101, "95E D.LVL", SHOW_NUMBER },
-  {38, 2,   "DC SELECT", 284 },          // DC30
+  {38,   2,   "DC SELECT", 284 },          // DC30
   {38, 101, "DC INPUT", SHOW_NUMBER },
   {38, 101, "CH:INTSTY", SHOW_NUMBER },
   {38, RPT_600, "EC:RPT R", SHOW_DELAY_TIME },
-  {38, 0, "--", 0 },
+  {38,   0, "--", 0 },
   {38, 101, "EC:INSTY", SHOW_NUMBER },
   {38, 101, "EC:VOL", SHOW_NUMBER },
   {38, 101, "DC TONE", SHOW_NUMBER },
-  {38, 2, "DC OUT SL", 286 },
+  {38,   2, "DC OUT SL", 286 },
   {39, 101, "HO OCT -1", SHOW_NUMBER },  // HEAVY OCTAVE
   {39, 101, "HO OCT -2", SHOW_NUMBER },
   {39, 101, "HO DIRECT", SHOW_NUMBER },
-  {40, 49, "PB PITCH", SHOW_PITCH_NUMBER }, // PEDAL BEND (PEDAL BLOCK ONLY)
+  {40,  49, "PB PITCH", SHOW_PITCH_NUMBER }, // PEDAL BEND (PEDAL BLOCK ONLY)
   {40, 101, "PB POS", SHOW_NUMBER },
   {40, 101, "PB F.LVL", SHOW_NUMBER },
   {40, 101, "PB D.LVL", SHOW_NUMBER },
-  {41, 49,  "GEQ 31 Hz", SHOW_CUT_BOOST_12DB}, // GRAPHIC EQ (EQ BLOCK ONLY)"
-  {41, 49,  "GEQ 62 Hz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 125Hz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 250Hz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 500Hz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 1 kHz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 2 kHz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 4 kHz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 8 kHz", SHOW_CUT_BOOST_12DB},
-  {41, 49,  "GEQ 16kHz", SHOW_CUT_BOOST_12DB},
-  {41, 49, "GEQ LEVEL", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 31 Hz", SHOW_CUT_BOOST_12DB}, // GRAPHIC EQ (EQ BLOCK ONLY)"
+  {41,  49, "GEQ 62 Hz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 125Hz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 250Hz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 500Hz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 1 kHz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 2 kHz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 4 kHz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 8 kHz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ 16kHz", SHOW_CUT_BOOST_12DB},
+  {41,  49, "GEQ LEVEL", SHOW_CUT_BOOST_12DB},
 };
 
 const uint16_t KTN_NUMBER_OF_FX_PARAMETERS = sizeof(KTN_fx_parameters) / sizeof(KTN_fx_parameters[0]);

@@ -16,6 +16,8 @@ void StartFreeTimer();
 //#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
 
+#define DEBUG_SYSEX_MAX_LENGTH 256 // The maximum numbers of bytes shown in the debug window
+
 // Check for free memory - to detect memory leaks
 //#define DEBUG_FREE
 
@@ -71,8 +73,8 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
 #endif
 
 #ifdef DEBUG_SYSEX
-  if (is_out) Serial.print("=>");
-  else Serial.print("<=");
+  if (is_out) Serial.print("SND ");
+  else Serial.print("RCV ");
   uint8_t VCbridge_port = (port & 0x0F);
   switch (port & 0xF0) {
     case USBMIDI_PORT:
@@ -94,9 +96,9 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
       Serial.print("multiple:" + String(VCbridge_port) + ' ');
   }
   Serial.print('(' + String(sxlength) + " bytes) ");
-  if (sxlength > 32) {
-    sxlength = 32; // limit the largest messages
-    Serial.print("(first 32 bytes) ");
+  if (sxlength > DEBUG_SYSEX_MAX_LENGTH) {
+    sxlength = DEBUG_SYSEX_MAX_LENGTH; // limit the largest messages
+    Serial.print("(first " + String(DEBUG_SYSEX_MAX_LENGTH) + " bytes) ");
   }
   for (uint8_t i = 0; i < sxlength; i++) {
     if (sxdata[i] < 0x10) Serial.print("0" + String(sxdata[i], HEX) + ' ');

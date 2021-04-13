@@ -149,8 +149,8 @@ void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
     // Read GP10 assign area
     if (checksum_ok) read_complete_assign_area(last_requested_sysex_switch, address, sxdata, sxlength);
 
-    // Check if it is the guitar on/off states
-    if (checksum_ok) check_guitar_switch_states(sxdata, sxlength);
+    // Check if it is the instrument on/off states
+    if (checksum_ok) check_inst_switch_states(sxdata, sxlength);
 
     // Check if it is some other stompbox function and copy the status to the right LED
     //GP10_check_stompbox_states(sxdata, sxlength);
@@ -178,7 +178,7 @@ void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
 void MD_GP10_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a GP-10
-  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x05) && (sxdata[7] == 0x03)) {
+  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x05) && (sxdata[7] == 0x03) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -299,7 +299,7 @@ void MD_GP10_class::request_guitar_switch_states() {
   request_onoff = true;
 }
 
-void MD_GP10_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_GP10_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[8] << 24) + (sxdata[9] << 16) + (sxdata[10] << 8) + sxdata[11]; // Make the address 32 bit
     if (address == GP10_COSM_GUITAR_SW) {
@@ -315,10 +315,10 @@ void MD_GP10_class::check_guitar_switch_states(const unsigned char* sxdata, shor
 
 void MD_GP10_class::unmute() {
   is_on = connected;
-  //GP10_select_LED = GP10_PATCH_COLOUR; //Switch the LED on
-  //write_sysex(GP10_FOOT_VOL, 100); // Switching guitars does not work - the wrong values are read from the GP-10. ?????
-  write_sysex(GP10_COSM_GUITAR_SW, COSM_onoff); // Switch COSM guitar on
-  write_sysex(GP10_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+  if (is_on) {
+    write_sysex(GP10_COSM_GUITAR_SW, COSM_onoff); // Switch COSM guitar on
+    write_sysex(GP10_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+  }
 }
 
 void MD_GP10_class::mute() {
@@ -344,7 +344,7 @@ struct GP10_parameter_struct { // Combines all the data we need for controlling 
   uint16_t Target; // Target of the assign as given in the assignments of the GP10 / GR55
   uint32_t Address; // The address of the parameter
   uint8_t NumVals; // The number of values for this parameter
-  char Name[17]; // The name for the label
+  char Name[11]; // The name for the label
   uint16_t Sublist; // Which sublist to read for the FX or amp type - 0 if second byte does not contain the type or if there is no sublist +100 Show value from sublist.
   uint8_t Colour; // The colour for this effect.
 };
@@ -358,53 +358,53 @@ struct GP10_parameter_struct { // Combines all the data we need for controlling 
 #define SHOW_PAN 31765 // Special number for showing the pan- set in sublist
 
 const PROGMEM GP10_parameter_struct GP10_parameters[] = {
-  {0x166, 0x20016000, 2, "WAH SW", 180 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE}, // 00
-  {0x0F1, 0x20005800, 2, "FX SW", 1 | SUBLIST_FROM_BYTE2, GP10_FX_COLOUR},
-  {0x16D, 0x20016800, 2, "Chorus SW", 17 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE},
-  {0x176, 0x20017000, 2, "DLY SW", 20 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE},
-  {0x188, 0x20017800, 2, "RVB SW", 30 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE},
-  {0x192, 0x20020000, 2, "EQ SW", 0, FX_FILTER_TYPE},
-  {0x0F2, 0x20005801, 16, "FX Type", 1, GP10_FX_TYPE_COLOUR},
-  {0x167, 0x20016001, 6, "WAH TP", 180, FX_WAH_TYPE},
+  {0x166, 0x20016000,   2, "WAH SW", 180 | SUBLIST_FROM_BYTE2, FX_WAH_TYPE}, // 00
+  {0x0F1, 0x20005800,   2, "FX SW", 1 | SUBLIST_FROM_BYTE2, GP10_FX_COLOUR},
+  {0x16D, 0x20016800,   2, "Chorus SW", 17 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE},
+  {0x176, 0x20017000,   2, "DLY SW", 20 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE},
+  {0x188, 0x20017800,   2, "RVB SW", 30 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE},
+  {0x192, 0x20020000,   2, "EQ SW", 0, FX_FILTER_TYPE},
+  {0x0F2, 0x20005801,  16, "FX Type", 1, GP10_FX_TYPE_COLOUR},
+  {0x167, 0x20016001,   6, "WAH TP", 180, FX_WAH_TYPE},
   {0x168, 0x20016002, 101, "WAH POS", SHOW_NUMBER, FX_WAH_TYPE},
-  {0x161, 0x20016801, 3, "CHS Type", 17, FX_MODULATE_TYPE},
-  {0x177, 0x20017001, 10, "DLY TYPE", 20, FX_DELAY_TYPE}, // 10
-  {0x189, 0x20017801, 7, "RVB TYPE", 30, FX_REVERB_TYPE},
+  {0x161, 0x20016801,   3, "CHS Type", 17, FX_MODULATE_TYPE},
+  {0x177, 0x20017001,  10, "DLY TYPE", 20, FX_DELAY_TYPE}, // 10
+  {0x189, 0x20017801,   7, "RVB TYPE", 30, FX_REVERB_TYPE},
   {0xFFF, 0x20000800, 101, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_DEFAULT_TYPE},
-  {0x000, 0x20001000, 2, "COSM GUITAR", 0, FX_GTR_TYPE},
-  {0x001, 0x20001001, 4, "COSM Type", 115, FX_GTR_TYPE},
-  {0x0A5, 0x20000804, 2, "NORMAL PU", 0, FX_GTR_TYPE},
+  {0x000, 0x20001000,   2, "COSM GTR", 0, FX_GTR_TYPE},
+  {0x001, 0x20001001,   4, "COSM Type", 115, FX_GTR_TYPE},
+  {0x0A5, 0x20000804,   2, "NORMAL PU", 0, FX_GTR_TYPE},
   {0x002, 0x20001800, 12, "E.GTR TP", 119, FX_GTR_TYPE},
   {0x003, 0x20001801, 101, "E.GTR LVL", SHOW_NUMBER, FX_GTR_TYPE},
   {0xFFF, 0x20002001, 101, "A.GTR LVL", SHOW_NUMBER, FX_GTR_TYPE},
   {0xFFF, 0x20002801, 101, "BASS LVL", SHOW_NUMBER, FX_GTR_TYPE},
   {0xFFF, 0x20003001, 101, "SYNTH LVL", SHOW_NUMBER, FX_GTR_TYPE}, // 20
   {0xFFF, 0x20003801, 101, "POLYFX LVL", SHOW_NUMBER, FX_GTR_TYPE},
-  {0x0CF, 0x20001002, 2, "COSM NS SW", 0, FX_GTR_TYPE},
-  {0x09F, 0x20004000, 2, "TUN SW", 143  | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE},
-  {0x0A0, 0x20004001, 37, "TUNING", 143, FX_PITCH_TYPE},
-  {0x0AD, 0x2000400E, 2, "12 STRING SW", 0, FX_PITCH_TYPE},
-  {0x0DE, 0x20005000, 2, "Amp SW", 37 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE},
-  {0x0DF, 0x20005001, 30, "Amp Type", 37, FX_AMP_TYPE},
+  {0x0CF, 0x20001002,   2, "COSM NS SW", 0, FX_GTR_TYPE},
+  {0x09F, 0x20004000,   2, "TUN SW", 143  | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE},
+  {0x0A0, 0x20004001,  37, "TUNING", 143, FX_PITCH_TYPE},
+  {0x0AD, 0x2000400E,   2, "12 STR SW", 0, FX_PITCH_TYPE},
+  {0x0DE, 0x20005000,   2, "Amp SW", 37 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE},
+  {0x0DF, 0x20005001,  30, "Amp Type", 37, FX_AMP_TYPE},
   {0x0E0, 0x20005002, 101, "Amp Gain", SHOW_NUMBER, FX_AMP_TYPE},
   {0x0E2, 0x20005004, 101, "Amp LVL", SHOW_NUMBER, FX_AMP_TYPE},
-  {0x0E8, 0x2000500B, 2, "Amp solo", 0, FX_AMP_TYPE}, // 30
-  {0x0EC, 0x2000500A, 3, "Amp Gain SW", 131, FX_AMP_TYPE},
-  {0xFFF, 0x20005028, 2, "Bend SW", 131, FX_AMP_TYPE},
-  {0xFFF, 0x2000500E, 9, "Amp SP TP", 134, FX_AMP_TYPE},
+  {0x0E8, 0x2000500B,   2, "Amp solo", 0, FX_AMP_TYPE}, // 30
+  {0x0EC, 0x2000500A,   3, "Amp GainSW", 131, FX_AMP_TYPE},
+  {0xFFF, 0x20005028,   2, "Bend SW", 131, FX_AMP_TYPE},
+  {0xFFF, 0x2000500E,   9, "Amp SP TP", 134, FX_AMP_TYPE},
   {0xFFF, 0x20020803, 101, "Foot Vol", SHOW_NUMBER, FX_AMP_TYPE}, // 34
-  {0xFFF, 0x20021800, 18, "CTL1", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021802, 18, "CTL2", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021804, 17, "CTL3", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021806, 17, "CTL4", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021808, 17, "GK S1", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x2002180A, 17, "GK S2", 67, FX_DEFAULT_TYPE}, // 40
-  {0xFFF, 0x2002180C, 15, "EXP SW", 85, FX_DEFAULT_TYPE}, // 41
-  {0xFFF, 0x2002180E, 15, "EXP", 100, FX_DEFAULT_TYPE}, // 42
-  {0xFFF, 0x2002180F, 15, "EXP ON", 100, FX_DEFAULT_TYPE}, // 43
-  {0xFFF, 0x20021810, 15, "EXP2", 100, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021811, 15, "GK VOL", 100, FX_DEFAULT_TYPE},
-  {0xFFF, 0x10001000, 2, "Guitar2MIDI", 0, FX_DEFAULT_TYPE},  // 46. Can not be controlled from assignment, but can be from GP10_PARAMETER!!!
+  {0xFFF, 0x20021800,  18, "CTL1", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021802,  18, "CTL2", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021804,  17, "CTL3", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021806,  17, "CTL4", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021808,  17, "GK S1", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x2002180A,  17, "GK S2", 67, FX_DEFAULT_TYPE}, // 40
+  {0xFFF, 0x2002180C,  15, "EXP SW", 85, FX_DEFAULT_TYPE}, // 41
+  {0xFFF, 0x2002180E,  15, "EXP", 100, FX_DEFAULT_TYPE}, // 42
+  {0xFFF, 0x2002180F,  15, "EXP ON", 100, FX_DEFAULT_TYPE}, // 43
+  {0xFFF, 0x20021810,  15, "EXP2", 100, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021811,  15, "GK VOL", 100, FX_DEFAULT_TYPE},
+  {0xFFF, 0x10001000,   2, "Gtr2MIDI", 0, FX_DEFAULT_TYPE},  // 46. Can not be controlled from assignment, but can be from GP10_PARAMETER!!!
 };
 
 #define GP10_EXP_SW 41
@@ -666,12 +666,12 @@ uint8_t MD_GP10_class::number_of_values(uint16_t parameter) {
 
 void MD_GP10_class::read_assign_name(uint8_t number, String & Output) {
   if (number < GP10_NUMBER_OF_ASSIGNS)  Output += "ASSIGN " + String(number + 1);
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_GP10_class::read_assign_short_name(uint8_t number, String & Output) {
   if (number < GP10_NUMBER_OF_ASSIGNS)  Output += "ASG" + String(number + 1);
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_GP10_class::read_assign_trigger(uint8_t number, String & Output) {

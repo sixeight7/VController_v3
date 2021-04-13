@@ -108,6 +108,18 @@ void main_switch_control()  // Checks if a button has been pressed and check out
 #endif
   switch_extra_long_pressed = 0;
 
+  if ((current_cmd == 0) && (arm_page_cmd_exec > 0)) { // Execute any commands on page selection
+    // We do this when current_cmd is 0, to allow running commands to finish first.
+    current_cmd_switch_action = SWITCH_PRESSED;
+    current_cmd = EEPROM_first_cmd(arm_page_cmd_exec, 0);
+    if (current_cmd > 0) {
+      DEBUGMAIN("** Trigger execution of default commands for page " + String(arm_page_cmd_exec));
+    }
+    current_cmd_switch = 0;
+    current_cmdbuf_index = 0;
+    arm_page_cmd_exec = 0;
+  }
+
   if (current_cmd > 0) { // If current_cmd points to a command we can execute, do it. Then check if there is another command to execute.
     SCO_execute_cmd(current_cmd_switch, current_cmd_switch_action, current_cmdbuf_index);
     current_cmd = EEPROM_next_cmd(current_cmd); //Find the next command - will be executed on the next cycle
@@ -116,17 +128,6 @@ void main_switch_control()  // Checks if a button has been pressed and check out
   }
   else {
     prev_switch_pressed = current_cmd_switch & SWITCH_MASK; // Will stop the reading of switch commands from EEPROM
-  }
-
-  if ((current_cmd == 0) && (arm_page_cmd_exec > 0)) { // Execute any commands on page selection
-    // We do this when current_cmd is 0, because the arm_page_exec variable is set from another command that is running.
-    current_cmd_switch_action = SWITCH_PRESSED;
-    prev_switch_pressed = 0;
-    current_cmd = EEPROM_first_cmd(arm_page_cmd_exec, 0);
-    DEBUGMSG("Trigger execution of default command for page " + String(arm_page_cmd_exec));
-    current_cmd_switch = 0;
-    current_cmdbuf_index = 0;
-    arm_page_cmd_exec = 0;
   }
 
   SCO_check_update_tempo();
@@ -427,15 +428,15 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         }
         if (Data1 == BANKUP) {
           if (SC_switch_is_expr_pedal()) break;
-          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data1);
-          else Device[Dev]->asgn_bank_updown(1, Data1);
+          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data2);
+          else Device[Dev]->asgn_bank_updown(1, Data2);
           update_main_lcd = true;
           switch_controlled_by_master_exp_pedal = 0;
         }
         if (Data1 == BANKDOWN) {
           if (SC_switch_is_expr_pedal()) break;
-          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data1);
-          else Device[Dev]->asgn_bank_updown(-1, Data1);
+          if (SC_switch_is_encoder()) Device[Dev]->asgn_bank_updown(Enc_value, Data2);
+          else Device[Dev]->asgn_bank_updown(-1, Data2);
           update_main_lcd = true;
           switch_controlled_by_master_exp_pedal = 0;
         }
@@ -480,14 +481,15 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         break;
       case SNAPSCENE:
         if (SC_switch_is_expr_pedal()) break;
+        mute_all_but_me(Dev); // mute all the other devices
         if (SC_switch_triggered_by_PC()) {
-          Device[Dev]->set_snapscene(PC_value);
+          Device[Dev]->set_snapscene(Sw, PC_value);
           update_page = REFRESH_PAGE;
           switch_controlled_by_master_exp_pedal = 0;
           break;
         }
-        if (first_cmd) Device[Dev]->set_snapscene(SP[Sw].PP_number);
-        else Device[Dev]->set_snapscene(Data1);  // When not the first command, the first snapshot value set in the command is sent.
+        if (first_cmd) Device[Dev]->set_snapscene(Sw, SP[Sw].PP_number);
+        else Device[Dev]->set_snapscene(Sw, Data1);  // When not the first command, the first snapshot value set in the command is sent.
         update_page = REFRESH_PAGE;
         update_main_lcd = true;
         switch_controlled_by_master_exp_pedal = 0;
@@ -504,6 +506,9 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if (SC_switch_triggered_by_PC()) break;
         if (Dev == KTN) {
           My_KTN.save_patch();
+        }
+        if (Dev == SY1000) {
+          My_SY1000.save_scene();
         }
         switch_controlled_by_master_exp_pedal = 0;
         break;
@@ -1197,17 +1202,19 @@ void SCO_global_tuner_stop() {
 #define NUMBER_OF_TAPS 4 // When tapping a new tempo, this is the number of taps that are sent
 uint8_t tap = 0;
 
-#define NUMBER_OF_TAPMEMS 5 // Tap tempo will do the average of five taps
+#define NUMBER_OF_TAPMEMS 5
 uint32_t tap_time[NUMBER_OF_TAPMEMS];
 uint8_t tap_time_index = 0;
 uint32_t new_time, time_diff, avg_time;
 uint32_t prev_time = 0;
 bool tap_array_full = false;
 bool send_new_bpm_value = false;
+
+#define NUMBER_OF_MIDI_CLOCK_MEMS 10
 uint8_t do_not_tap_port = 255;
 uint32_t ignore_midi_clock_timer = 0;
-#define IGNORE_MIDI_CLOCK_TIMER_LENGTH 5000 // Time midi clock messages are ignored after tapping tap tempo
-uint8_t MIDI_CLOCK_BPM_MEMS[NUMBER_OF_TAPMEMS] = { 0 };
+#define IGNORE_MIDI_CLOCK_TIMER_LENGTH 500000 // Time midi clock messages are ignored after tapping tap tempo
+uint8_t MIDI_CLOCK_BPM_MEMS[NUMBER_OF_MIDI_CLOCK_MEMS] = { 0 };
 uint8_t MIDI_clock_bpm_mem_index = 0;
 uint32_t previous_midi_clock_time = 0;
 bool MIDI_clock_received = false;
@@ -1233,8 +1240,11 @@ void SCO_check_update_tempo() {
 }
 
 void SCO_MIDI_clock_timer_expired() {
+  __disable_irq();
   MIDI_send_clock();
   update_tempo = true;
+  //My_HLX.update_sequencer = true;
+  __enable_irq();
 }
 
 void SCO_global_tap_external() { // For external tapping sources
@@ -1306,6 +1316,8 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
 }
 
 void SCO_set_global_tempo_press(uint8_t new_bpm) {
+  if (new_bpm < 40) return;
+  if (new_bpm > 250) return;
   Setting.Bpm = new_bpm;
   // Send it to the devices
   send_new_bpm_value = true; // Will delay sending the data, but also hangs the VC-mini when using the encoder for tempo change
@@ -1338,19 +1350,30 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
   }
 
   if (previous_midi_clock_time > 0) {
+    if (current_time - previous_midi_clock_time < 9999) return; // time too short
+    if (millis() < ignore_midi_clock_timer) return;
     uint16_t bpm_course = 25000000 / (current_time - previous_midi_clock_time);
     uint8_t bpm_new = (bpm_course + 5) / 10; // Calculate a correct average
     MIDI_CLOCK_BPM_MEMS[MIDI_clock_bpm_mem_index] = bpm_new;
     MIDI_clock_bpm_mem_index++;
-    if (MIDI_clock_bpm_mem_index >= NUMBER_OF_TAPMEMS) {
+    if (MIDI_clock_bpm_mem_index >= NUMBER_OF_MIDI_CLOCK_MEMS) {
       MIDI_clock_bpm_mem_index = 0;
       uint16_t total = 0;
-      for (uint8_t i = 0; i < NUMBER_OF_TAPMEMS; i++) {
+      /*for (uint8_t i = 0; i < NUMBER_OF_TAPMEMS; i++) {
         total += MIDI_CLOCK_BPM_MEMS[i];
       }
-      uint8_t avg_bpm = total / NUMBER_OF_TAPMEMS;
+      */
+      uint8_t bpm = MIDI_CLOCK_BPM_MEMS[0];
+      total = bpm;
+      uint8_t dev = bpm / 5;
+      for (uint8_t i = 1; i < NUMBER_OF_MIDI_CLOCK_MEMS; i++) {
+        if ((MIDI_CLOCK_BPM_MEMS[i] < bpm - dev) || (MIDI_CLOCK_BPM_MEMS[i] > bpm + dev)) return; // Quit if tempo deviates too much
+        bpm = MIDI_CLOCK_BPM_MEMS[i];
+        total += bpm;
+      }
+      uint8_t avg_bpm = total / NUMBER_OF_MIDI_CLOCK_MEMS;
       if ((avg_bpm < Setting.Bpm - 1) || (avg_bpm > Setting.Bpm + 1)) { // Check if tempo has changed
-        if (millis() < ignore_midi_clock_timer) return;
+      //if (avg_bpm != Setting.Bpm) {
         Setting.Bpm = avg_bpm; // Smooth out the values, so they don't jitter
         SCO_MIDI_clock_update();
         MIDI_clock_received = true;
@@ -1368,6 +1391,7 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
 
 void SCO_delay_receiving_MIDI_clock() {
   ignore_midi_clock_timer = IGNORE_MIDI_CLOCK_TIMER_LENGTH + millis();
+  MIDI_clock_bpm_mem_index = 0;
 }
 
 void SCO_update_tap_tempo_LED() {
@@ -1461,7 +1485,7 @@ uint8_t top_string = 5; // remebers the highest string played
 bool string_on[6] = { false }; // remember the current state of every string
 
 void SCO_bass_mode_note_on(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
-  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
+  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 5)) {
     uint8_t string_played = channel - Setting.Bass_mode_G2M_channel;
 
     if (velocity >= Setting.Bass_mode_min_velocity) {
@@ -1479,7 +1503,7 @@ void SCO_bass_mode_note_on(uint8_t note, uint8_t velocity, uint8_t channel, uint
 }
 
 void SCO_bass_mode_note_off(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
-  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
+  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 5)) {
     uint8_t string_played = channel - Setting.Bass_mode_G2M_channel;
     string_on[string_played] = false;
     SCO_bass_mode_check_string();

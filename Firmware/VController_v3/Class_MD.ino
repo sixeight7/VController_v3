@@ -23,6 +23,8 @@
 // The base class is MD_base_class. For each device there is a derived class, where certain functions are replaced to add device specific functionality.
 // For a derived function to work, "virtual" must be declared in the header of the base class! I have forgotten this a number of times, so this is a reminder to self!
 
+#define VC_PATCH_SIZE 192 // The size of a patch for Katana or SY1000
+
 // ********************************* Section 1: MD_base_class declaration (base) ********************************************
 
 #define NUMBER_OF_DEVICE_SETTINGS 11
@@ -142,10 +144,12 @@ class MD_base_class
     uint8_t select_next_device_page();
 
     // Snapshot/sceme selection procedures
-    virtual void set_snapscene_title(uint8_t number, String &Output);
+    virtual void get_snapscene_title(uint8_t number, String &Output);
+    virtual void get_snapscene_label(uint8_t number, String &Output);
     virtual bool request_snapscene_name(uint8_t sw, uint8_t number);
-    virtual void set_snapscene(uint8_t number);
+    virtual void set_snapscene(uint8_t sw, uint8_t number);
     virtual void snapscene_number_format(String &Output);
+    virtual bool check_snapscene_active(uint8_t scene);
 
     // Looper procedures
     virtual bool looper_active();
@@ -296,7 +300,7 @@ class MD_GP10_class : public MD_base_class
     virtual void direct_select_format(uint16_t number, String &Output);
 
     void request_guitar_switch_states();
-    void check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
+    void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
 
@@ -368,7 +372,7 @@ class MD_GR55_class : public MD_base_class
     virtual void set_bpm();
     virtual void start_tuner();
     virtual void stop_tuner();
-    void sendGR55BankPatch(uint16_t patchno);
+    //void sendGR55BankPatch(uint16_t patchno);
 
     // Patch selection procedures
     virtual void select_patch(uint16_t new_patch);
@@ -389,7 +393,7 @@ class MD_GR55_class : public MD_base_class
 
     // Device mute procedures
     void request_guitar_switch_states();
-    void check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
+    void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
     void mute_now();
@@ -485,7 +489,7 @@ class MD_VG99_class : public MD_base_class
 
     // Device mute procedures
     void request_guitar_switch_states();
-    void check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
+    void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
     void mute_now();
@@ -752,6 +756,7 @@ class MD_HLX_class : public MD_base_class
     virtual void do_after_connect();
 
     // Midi out procedures
+    virtual void set_bpm();
     virtual void bpm_tap();
     virtual void start_tuner();
     virtual void stop_tuner();
@@ -766,6 +771,9 @@ class MD_HLX_class : public MD_base_class
     virtual bool valid_direct_select_switch(uint8_t number);
     virtual void direct_select_start();
     virtual void direct_select_press(uint8_t number);
+
+    virtual void unmute();
+    virtual void mute();
 
     // Parameter control procedures
     virtual void read_parameter_title(uint16_t number, String &Output);
@@ -785,14 +793,22 @@ class MD_HLX_class : public MD_base_class
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
 
     // Snapshot/sceme selection procedures
-    virtual void set_snapscene_title(uint8_t number, String &Output);
+    virtual void get_snapscene_title(uint8_t number, String &Output);
     //virtual bool request_snapscene_name(uint8_t sw, uint8_t number);
-    virtual void set_snapscene(uint8_t number);
+    virtual void set_snapscene(uint8_t sw, uint8_t number);
     virtual void snapscene_number_format(String &Output);
 
     // Looper procedures
     virtual bool looper_active();
     virtual void send_looper_cmd(uint8_t cmd);
+
+    // MIDI sequencer
+    void set_sequence(uint8_t pattern);
+    void stop_sequence();
+    void set_sequence_beats(uint8_t beats);
+    void send_sequence_step_CC();
+    void setup_random_number_generator();
+    uint8_t generate_random_number();
 
     // MIDI forwarding
     void PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port);
@@ -806,6 +822,12 @@ class MD_HLX_class : public MD_base_class
     uint8_t MIDI_Helix_received_msg_no = 0;
     uint8_t MIDI_Helix_sent_msg_no = 0;
     uint8_t MIDI_Helix_current_program = 0;
+    uint8_t current_sequence = 0;
+    uint8_t beat_divider = 1;
+    uint8_t number_of_sequence_steps;
+    uint8_t current_sequence_step = 0;
+    uint8_t previous_sequence_value = 0;
+    bool update_sequencer = false;
 };
 
 // ********************************* Section 9: MD_FAS_class declaration (derived) ********************************************
@@ -877,9 +899,9 @@ class MD_FAS_class : public MD_base_class
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
 
     // Snapshot/sceme selection procedures
-    virtual void set_snapscene_title(uint8_t number, String &Output);
+    virtual void get_snapscene_title(uint8_t number, String &Output);
     //virtual bool request_snapscene_name(uint8_t sw, uint8_t number);
-    virtual void set_snapscene(uint8_t number);
+    virtual void set_snapscene(uint8_t sw, uint8_t number);
 
     // Looper procedures
     virtual bool looper_active();
@@ -945,7 +967,7 @@ class MD_KTN_class : public MD_base_class
     // Patch loading and saving
     void load_patch(uint8_t number);
     void save_patch();
-    void update_patch();
+    void update_patch(uint8_t version, uint16_t number);
     void store_patch();
     bool exchange_patch();
     void request_patch_message(uint8_t number);
@@ -989,8 +1011,7 @@ class MD_KTN_class : public MD_base_class
     // Variables:
     bool is_mk2;
     uint8_t version;
-#define KTN_PATCH_SIZE 192
-    uint8_t KTN_patch_buffer[KTN_PATCH_SIZE];
+    uint8_t KTN_patch_buffer[VC_PATCH_SIZE];
 #define KTN_FX_CHAIN_SIZE 20
     uint8_t KTN_FX_chain[KTN_FX_CHAIN_SIZE];
     bool mod_enabled = false;
@@ -1060,9 +1081,9 @@ class MD_KPA_class : public MD_base_class
     virtual void direct_select_press(uint8_t number);
 
     // Snapshot/sceme selection procedures
-    //virtual void set_snapscene_title(uint8_t number, String &Output);
+    //virtual void get_snapscene_title(uint8_t number, String &Output);
     //virtual bool request_snapscene_name(uint8_t sw, uint8_t number);
-    //virtual void set_snapscene(uint8_t number);
+    //virtual void set_snapscene(uint8_t sw, uint8_t number);
     //virtual bool flash_LEDs_for_patch_bank_switch(uint8_t sw);
 
     // Parameter control procedures
@@ -1167,28 +1188,42 @@ class MD_SY1000_class : public MD_base_class
 
     // Basic procedures
     virtual void init();
+    virtual void update();
 
     // Midi in procedures
     virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
     virtual void check_PC_in(uint8_t program, uint8_t channel, uint8_t port);
+    virtual void check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port);
+    void check_note_in(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port);
+    uint16_t sx_index(uint8_t data3, uint16_t index);
 
     // Device connection procedures
     virtual void identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port);
     virtual void do_after_connect();
+    void request_first_data_item();
+    void request_next_data_item();
+    void request_current_data_item();
+    void check_midi_timer();
 
     // Midi out procedures
     void write_sysex(uint32_t address, uint8_t value);
     void write_sysex(uint32_t address, uint8_t value1, uint8_t value2);
     void write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4);
+    void write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4, uint8_t value5, uint8_t value6, uint8_t value7, uint8_t value8);
     void request_sysex(uint32_t address, uint8_t no_of_bytes);
+    void control_edit_mode();
+    void check_edit_mode_return_timer();
+    void set_editor_mode(bool state);
     virtual void set_bpm();
     virtual void start_tuner();
     virtual void stop_tuner();
+    void check_send_tempo_timer();
 
     // Patch selection procedures
     virtual void select_patch(uint16_t new_patch);
+    void set_patch_gap_timer();
+    void check_patch_gap_timer();
     virtual void do_after_patch_selection();
-    //virtual uint32_t calculate_patch_address(uint16_t number);
     virtual bool request_patch_name(uint8_t sw, uint16_t number);
     virtual void request_current_patch_name();
     void request_current_patch_number();
@@ -1205,7 +1240,7 @@ class MD_SY1000_class : public MD_base_class
     virtual void direct_select_press(uint8_t number);
 
     void request_guitar_switch_states();
-    void check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
+    void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
 
@@ -1213,14 +1248,24 @@ class MD_SY1000_class : public MD_base_class
     virtual void read_parameter_title(uint16_t number, String &Output);
     virtual void read_parameter_name(uint16_t number, String &Output);
     virtual void read_parameter_value_name(uint16_t number, uint16_t value, String &Output);
+    uint32_t read_parameter_address(uint16_t number);
     virtual void parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
     virtual void parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number);
+    void write_parameter_value(uint16_t number, uint8_t value);
     virtual bool request_parameter(uint8_t sw, uint16_t number);
     void read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2);
     void check_update_label(uint8_t Sw, uint8_t value);
     virtual uint16_t number_of_parameters();
     virtual uint8_t number_of_values(uint16_t parameter);
-    uint32_t check_address_for_bass_mode(uint32_t address);
+    void set_switch_mode(uint8_t mode);
+    void request_switch_mode();
+    void check_switch_mode(uint32_t address, const unsigned char* sxdata, short unsigned int sxlength);
+    void cc_operate_switch_mode(uint8_t sw, uint8_t value);
+    void auto_return_switch_mode();
+    void update_leds_on_SY1000();
+    void set_LED_colour(uint8_t sw, uint8_t colour);
+    void set_all_LED_colours(uint8_t * colour);
+    void update_switches_on_page(uint32_t address, uint8_t data);
 
     // Assign control procedures
     uint32_t calculate_assign_address(uint8_t number);
@@ -1231,32 +1276,128 @@ class MD_SY1000_class : public MD_base_class
     virtual uint8_t trigger_follow_assign(uint8_t number);
     virtual void assign_press(uint8_t Sw, uint8_t value);
     virtual void assign_release(uint8_t Sw);
+    void check_delayed_release_assignments();
     virtual void assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number);
     virtual void request_current_assign(uint8_t sw);
     void read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength);
     void assign_request(uint8_t sw);
+    bool ctl_target_lookup(uint8_t sw, uint16_t target);
     bool target_lookup(uint8_t sw, uint16_t target);
+    void request_full_assign(uint8_t number);
+    void read_full_assign(uint8_t number, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength);
+    void change_active_assign_sources(uint8_t from_value, uint8_t to_value);
+    void set_assign_settings(uint8_t assign, uint16_t target, uint8_t mode, uint8_t trigger);
+    void restore_assign_settings(uint8_t assign);
+    uint32_t calculate_full_assign_address(uint8_t number);
+    uint8_t check_for_scene_assign_source(uint8_t cc);
+    void initialize_scene_assigns();
+    void toggle_scene_assign(uint8_t number);
+    void set_scene_assign_states(uint8_t my_byte);
+    uint8_t read_scene_assign_state();
+    void check_scene_assigns_with_new_state(uint8_t new_byte);
+    void show_scene_assign_LEDs();
+
+    // Snapshot/sceme selection procedures
+    uint32_t get_scene_inst_parameter_address(uint16_t number);
+    uint32_t get_scene_parameter_address(uint16_t number);
+    virtual void get_snapscene_title(uint8_t number, String &Output);
+    virtual void get_snapscene_label(uint8_t number, String &Output);
+    virtual bool request_snapscene_name(uint8_t sw, uint8_t number);
+    virtual void set_snapscene(uint8_t sw, uint8_t number);
+    void set_snapscene_number_and_LED(uint8_t number);
+    bool load_scene(uint8_t prev_scene, uint8_t new_scene);
+    uint8_t get_scene_index(uint8_t scene);
+    uint8_t read_scene_data(uint8_t scene, uint8_t parameter);
+    uint8_t read_temp_scene_data(uint8_t parameter);
+    void save_scene();
+    void request_scene_message(uint8_t number);
+    void check_read_scene_midi_timer();
+    void read_scene_message(uint8_t number, uint8_t data);
+    void store_scene();
+    void update_change_on_all_scenes();
+    void check_delta_and_update_scenes();
+    void exchange_scene(uint8_t new_scene, uint8_t prev_scene);
+    void initialize_scene(uint8_t scene);
+    virtual bool check_snapscene_active(uint8_t scene);
+    void set_scene_active(uint8_t scene);
+    void clear_scene_active(uint8_t scene);
+    void read_scene_name_from_buffer(uint8_t scene);
+    void store_scene_name_to_buffer(uint8_t scene);
+    bool store_patch(uint16_t number);
+    bool exchange_patches(uint16_t number);
+    bool insert_patch(uint16_t number);
+    bool initialize_patch(uint16_t number);
+    void load_patch(uint16_t number);
+    void initialize_patch_space();
 
     // Master expression pedal procedures
     virtual void move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal);
-    void send_expression_value(uint8_t exp_type, uint8_t value);
+    uint16_t send_expression_value(uint8_t exp_pedal, uint8_t exp_type, uint8_t value);
     virtual void toggle_expression_pedal(uint8_t sw);
     virtual bool request_exp_pedal(uint8_t sw, uint8_t exp_pedal);
     void update_exp_label(uint8_t sw);
 
+    // Special functions
+    void check_patch_midi(uint8_t cc, uint8_t value);
+    void reset_special_functions();
+    void set_harmony_interval(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port);
+    uint8_t calculate_interval(uint8_t my_type, uint8_t my_interval, uint8_t my_note);
+    void add_bass_string_assigns();
+    //void control_slow_gear(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port);
+    //void update_slow_gear();
+    //void update_string_level(uint8_t string, uint8_t level);
+
     // Variables:
-    uint8_t INST1_onoff;
-    uint8_t INST2_onoff;
-    uint8_t INST3_onoff;
-    uint8_t INST1_type;
-    uint8_t INST2_type;
-    uint8_t INST3_type;
+    uint32_t patch_gap_timer = 0;
+    bool patch_gap_timer_running = false;
+#define PATCH_GAP_TIME 500 // The time that the SY1000 blocks sysex messages after sending a PC message
+    bool edit_return_timer_running = false;
+    uint8_t data_item = 0;
+    uint8_t INST_onoff[3];
+    uint8_t INST_type[3];
     uint8_t nrml_pu_onoff;
     uint8_t exp1_type;
     uint8_t exp2_type;
     uint8_t flash_bank_of_four = 255;
     bool bass_mode = false;
     bool tuner_active = false;
+#define NUMBER_OF_SCENE_ASSIGNS 8
+    bool scene_assign_state[NUMBER_OF_SCENE_ASSIGNS];
+    uint8_t assign_area[16][43];
+    uint8_t read_full_assign_number = 16;
+    uint32_t assign_return_target_timer = 0;
+    uint8_t assign_return_target = 0;
+#define SY1000_ASSIGN_RETURN_TIME 1000
+    uint32_t edit_mode_return_timer = 0;
+#define SY1000_EDIT_MODE_RETURN_TIME 100 //2500
+    uint8_t SY1000_patch_buffer[VC_PATCH_SIZE];
+    uint8_t save_scene_number;
+    uint8_t last_loaded_scene = 0;
+#define SY1000_SCENE_DATA_BUFFER_SIZE 15
+    uint8_t scene_data_buffer[SY1000_SCENE_DATA_BUFFER_SIZE];
+    char scene_label_buffer[8];
+    uint16_t read_scene_parameter_number;
+    uint32_t read_scene_parameter_address;
+    uint32_t read_scene_midi_timer;
+    uint32_t check_ample_time_between_pc_messages_timer = 0;
+#define CHECK_AMPLE_TIME_BETWEEN_PC_MESSAGES_TIME 1000
+    uint8_t switch_mode = 0;
+    uint8_t prev_switch_mode = 0;
+    bool request_LED_state = false;
+    bool manual_mode = false;
+    bool edit_mode = false;
+    bool edit_mode_always_on = true;
+    uint8_t prev_switch_mode_cc = 0;
+    uint32_t send_tempo_timer = 0;
+#define CHECK_SEND_TEMPO_TIME 500
+    uint8_t inst_harmony_type[3] = { 0 };
+    uint8_t inst_harmony_interval[3] = { 0 };
+    uint8_t master_key = 0;
+    uint8_t current_string_interval[3][6] = {{ 0 }};
+#define SY1000_MIDI_TIME 500
+    //uint32_t slow_gear_timer = 0;
+    //uint8_t slow_gear_string_level[6] = { 0 };
+    //bool slow_gear_string_updown[6] = { true };
 };
 
 // ********************************* Section 14: MD_GM2_class declaration (derived) ********************************************
@@ -1356,6 +1497,7 @@ class MD_MG300_class : public MD_base_class
     // Patch selection procedures
     virtual void select_patch(uint16_t new_patch);
     virtual void do_after_patch_selection();
+    void delayed_after_connect_and_patch_selection();
     virtual bool request_patch_name(uint8_t sw, uint16_t number);
     virtual void number_format(uint16_t number, String &Output);
 

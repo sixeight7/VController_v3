@@ -36,9 +36,11 @@
 #define VC_SET_COMMAND 11
 #define VC_FINISH_COMMANDS_DUMP 12
 #define VC_REQUEST_KATANA_PATCHES 14
-#define VC_SET_KATANA_PATCH 15
+#define VC_SET_DEVICE_PATCH 15
 #define VC_SAVE_SETTINGS 16
-#define VC_FINISH_KATANA_PATCH_DUMP 17
+#define VC_FINISH_DEVICE_PATCH_DUMP 17
+#define VC_REQUEST_SEQ_PATTERNS 18
+#define VC_SET_SEQ_PATTERN 19
 
 class Midi : public QObject
 {
@@ -55,16 +57,18 @@ public:
     void MIDI_editor_request_settings();
     void MIDI_editor_request_all_commands();
     void MIDI_editor_request_all_KTN_patches();
+    void MIDI_editor_request_sequence_patterns();
     void MIDI_send_data(uint8_t cmd, uint8_t *my_data, uint16_t my_len);
     void MIDI_editor_send_settings();
     void MIDI_editor_send_device_settings(uint8_t dev);
     void MIDI_editor_send_midi_switch_settings(uint8_t sw);
+    void MIDI_editor_send_seq_pattern(uint8_t pattern);
     void MIDI_editor_send_save_settings();
     void MIDI_editor_send_finish_commands_dump();
     void MIDI_editor_send_start_commands_dump();
     void MIDI_editor_send_command(uint16_t cmd_no);
-    void MIDI_send_KTN_patch(uint8_t patch_no);
-    void MIDI_editor_send_finish_KTN_patch_dump();
+    void MIDI_send_device_patch(uint16_t patch_no);
+    void MIDI_editor_finish_device_patch_dump();
     void send_universal_identity_request();
 
 signals:
@@ -93,8 +97,11 @@ private:
     void MIDI_editor_receive_finish_commands_dump(std::vector< unsigned char > *message);
     void MIDI_editor_receive_command(std::vector< unsigned char > *message);
     void MIDI_editor_receive_midi_switch_settings(std::vector< unsigned char > *message);
-    void MIDI_editor_receive_KTN_patch(std::vector< unsigned char > *message);
-    void MIDI_editor_receive_finish_KTN_patch_dump(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_seq_pattern(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_device_patch(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_finish_device_patch_dump(std::vector< unsigned char > *message);
+    QByteArray ReadPatch(int number);
+    void WritePatch(int number, QByteArray patch);
 };
 
 #endif // MIDI_H

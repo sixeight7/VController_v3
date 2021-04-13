@@ -2,7 +2,7 @@
 #include "VController/config.h"
 #include "VController/globals.h"
 #include "VController/globaldevices.h"
-#include "devices/katana.h"
+#include "vcdevices.h"
 #include <QDebug>
 #include <QThread>
 
@@ -183,17 +183,20 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
         case VC_SET_MIDI_SWITCH_SETTINGS:
             MIDI_editor_receive_midi_switch_settings(message);
             break;
+        case VC_SET_SEQ_PATTERN:
+            MIDI_editor_receive_seq_pattern(message);
+            break;
         case VC_FINISH_COMMANDS_DUMP:
             MIDI_editor_receive_finish_commands_dump(message);
             break;
         case VC_SET_COMMAND:
             MIDI_editor_receive_command(message);
             break;
-        case VC_SET_KATANA_PATCH:
-            MIDI_editor_receive_KTN_patch(message);
+        case VC_SET_DEVICE_PATCH:
+            MIDI_editor_receive_device_patch(message);
             break;
-        case VC_FINISH_KATANA_PATCH_DUMP:
-            MIDI_editor_receive_finish_KTN_patch_dump(message);
+        case VC_FINISH_DEVICE_PATCH_DUMP:
+            MIDI_editor_receive_finish_device_patch_dump(message);
             break;
         }
     }
@@ -214,6 +217,11 @@ void Midi::MIDI_editor_request_all_commands()
 void Midi::MIDI_editor_request_all_KTN_patches()
 {
     sendSysexCommand(1, VC_REQUEST_KATANA_PATCHES);
+}
+
+void Midi::MIDI_editor_request_sequence_patterns()
+{
+    sendSysexCommand(1, VC_REQUEST_SEQ_PATTERNS);
 }
 
 
@@ -249,6 +257,16 @@ void Midi::MIDI_editor_send_midi_switch_settings(uint8_t sw)
     mssettings[3] = MIDI_switch[sw].channel;
     mssettings[4] = MIDI_switch[sw].cc;
     MIDI_send_data(VC_SET_MIDI_SWITCH_SETTINGS, mssettings, 5);
+}
+
+void Midi::MIDI_editor_send_seq_pattern(uint8_t pattern)
+{
+    uint8_t mpatterndata[EEPROM_SEQ_PATTERN_SIZE + 1];
+    mpatterndata[0] = pattern;
+    for (uint8_t i = 0; i < EEPROM_SEQ_PATTERN_SIZE; i++) {
+        mpatterndata[i + 1] = MIDI_seq_pattern[pattern][i];
+    }
+    MIDI_send_data(VC_SET_SEQ_PATTERN, mpatterndata, EEPROM_SEQ_PATTERN_SIZE + 1);
 }
 
 void Midi::MIDI_editor_send_save_settings()
@@ -290,7 +308,9 @@ void Midi::MIDI_editor_send_command(uint16_t cmd_no)
     MIDI_send_data(VC_SET_COMMAND, cmdbytes, sizeof(cmd));
 }
 
-void Midi::MIDI_send_KTN_patch(uint8_t patch_no)
+// Device patch data is sent using the overflow byte system from Zoom
+// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
+void Midi::MIDI_send_device_patch(uint16_t patch_no)
 {
     if (_midiOut && !_midiOut->isPortOpen()) return; // Exit if port is not open.
 
@@ -301,22 +321,43 @@ void Midi::MIDI_send_KTN_patch(uint8_t patch_no)
     message.push_back( VC_FAMILY_CODE );
     message.push_back( VC_MODEL_NUMBER );
     message.push_back( VC_DEVICE_ID );
-    message.push_back( VC_SET_KATANA_PATCH);
-    message.push_back( patch_no );
-    QByteArray patch = My_KTN.ReadPatch(patch_no);
-    for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
-        message.push_back(patch[i] & 0x7F);
+    message.push_back( VC_SET_DEVICE_PATCH);
+    message.push_back( patch_no >> 7 );
+    message.push_back( patch_no & 0x7F );
+
+    QByteArray patch_buffer = ReadPatch(patch_no);
+    uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
+    //uint16_t messagesize = VC_PATCH_SIZE + number_of_overflow_bytes + 9;
+
+    int buffer_index = 0;
+    for (int obi = 0; obi < number_of_overflow_bytes; obi++) {
+      uint8_t overflow_byte = 0;
+      for (uint8_t i = 0; i < 7; i++) {
+        if (buffer_index < VC_PATCH_SIZE) {
+          if (patch_buffer[buffer_index] & 0x80) overflow_byte |= (1 << i);
+        }
+        buffer_index++;
+      }
+      message.push_back(overflow_byte);
+      buffer_index -= 7;
+      for (uint8_t i = 0; i < 7; i++) {
+        if (buffer_index < VC_PATCH_SIZE) {
+          message.push_back(patch_buffer[buffer_index] & 0x7F);
+        }
+        buffer_index++;
+      }
     }
+
     message.push_back( 0xF7 );
     _midiOut->sendMessage(&message);
     MIDI_debug_data(&message, false);
     QThread::msleep(10);
 }
 
-void Midi::MIDI_editor_send_finish_KTN_patch_dump()
+void Midi::MIDI_editor_finish_device_patch_dump()
 {
     uint8_t dummy[1] = {0};
-    MIDI_send_data(VC_FINISH_KATANA_PATCH_DUMP, dummy, 1);
+    MIDI_send_data(VC_FINISH_DEVICE_PATCH_DUMP, dummy, 1);
 }
 
 void Midi::send_universal_identity_request()
@@ -396,6 +437,8 @@ void Midi::MIDI_show_error()
     qDebug() << "MIDI read error!";
 }
 
+// Device patch data is sent using the overflow byte system from Zoom
+// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
 void Midi::MIDI_editor_receive_device_settings(std::vector<unsigned char> *message)
 {
     if (message->size() != NUMBER_OF_DEVICE_SETTINGS * 2 + 9) {
@@ -463,25 +506,54 @@ void Midi::MIDI_editor_receive_midi_switch_settings(std::vector<unsigned char> *
     }
 }
 
-void Midi::MIDI_editor_receive_KTN_patch(std::vector<unsigned char> *message)
+void Midi::MIDI_editor_receive_seq_pattern(std::vector<unsigned char> *message)
 {
-    if (message->size() != KTN_PATCH_SIZE + 8) {
+    if (message->size() != EEPROM_SEQ_PATTERN_SIZE * 2 + 9) {
+        MIDI_show_error();
+        return;
+      }
+      uint8_t mpatterndata[EEPROM_SEQ_PATTERN_SIZE + 1];
+      MIDI_read_data(message, mpatterndata, EEPROM_SEQ_PATTERN_SIZE + 1);
+      uint8_t pattern = mpatterndata[0];
+      qDebug() << "Receiving pattern" << pattern;
+      if (pattern < NUMBER_OF_SEQ_PATTERNS) {
+          for (uint8_t i = 0; i < EEPROM_SEQ_PATTERN_SIZE; i++) {
+              MIDI_seq_pattern[pattern][i] = mpatterndata[i + 1];
+          }
+      }
+      if (pattern == NUMBER_OF_SEQ_PATTERNS - 1) emit updateSettings();
+}
+
+void Midi::MIDI_editor_receive_device_patch(std::vector<unsigned char> *message)
+{
+    uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
+
+    if (message->size() != VC_PATCH_SIZE + number_of_overflow_bytes + 9) {
         MIDI_show_error();
         return;
     }
     QByteArray patch;
-    int patch_no = message->at(6);
-    for (int i = 0; i < KTN_PATCH_SIZE; i++) {
-        int pos = i + 7;
-        patch.append(message->at(pos));
-    }
-    My_KTN.WritePatch(patch_no, patch);
-    if (patch_no == 0) emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving Katana patches");
-    emit updateProgressBar(patch_no);
+    int patch_index = (message->at(6) << 7) + message->at(7);
+      uint8_t buffer_index = 0;
+      for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
+        uint8_t overflow_byte = message->at(8 + (obi * 8));
+        uint8_t byte_index = 9 + (obi * 8);
+        for (uint8_t i = 0; i < 7; i++) {
+          if (buffer_index < VC_PATCH_SIZE) {
+            uint8_t new_byte = message->at(byte_index++);
+            if ((overflow_byte & (1 << i)) != 0) new_byte |= 0x80;
+            patch.append(new_byte);
+          }
+          buffer_index++;
+        }
+      }
+    WritePatch(patch_index, patch);
+    if (patch_index == 0) emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving device patches");
+    emit updateProgressBar(patch_index);
     emit updatePatchListBox();
 }
 
-void Midi::MIDI_editor_receive_finish_KTN_patch_dump(std::vector<unsigned char> *message)
+void Midi::MIDI_editor_receive_finish_device_patch_dump(std::vector<unsigned char> *message)
 {
     emit closeProgressBar("Patch download succesful");
     emit updatePatchListBox();
@@ -497,4 +569,23 @@ void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)
     MIDI_read_data(message, settingbytes, sizeof(Setting));
     emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving settings");
     emit updateSettings();
+}
+
+QByteArray Midi::ReadPatch(int number)
+{
+    if (number >= MAX_NUMBER_OF_DEVICE_PRESETS) return 0;
+    QByteArray patch;
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        patch.append(Device_patches[number][i]);
+    }
+    return patch;
+}
+
+void Midi::WritePatch(int number, QByteArray patch)
+{
+    if (number >= MAX_NUMBER_OF_DEVICE_PRESETS) return;
+    if (patch.size() > VC_PATCH_SIZE) return;
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        Device_patches[number][i] = patch[i];
+    }
 }

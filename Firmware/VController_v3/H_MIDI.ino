@@ -57,10 +57,12 @@
 #define VC_START_COMMANDS_DUMP 10
 #define VC_SET_COMMAND 11
 #define VC_FINISH_COMMANDS_DUMP 12
-#define VC_REQUEST_KATANA_PATCHES 14
-#define VC_SET_KATANA_PATCH 15
+#define VC_REQUEST_DEVICE_PATCHES 14
+#define VC_SET_DEVICE_PATCH 15
 #define VC_SAVE_SETTINGS 16
-#define VC_FINISH_KATANA_PATCH_DUMP 17
+#define VC_FINISH_DEVICE_PATCH_DUMP 17
+#define VC_REQUEST_SEQ_PATTERNS 18
+#define VC_SET_SEQ_PATTERN 19
 
 
 #define CHECK4DEVICES_TIMER_LENGTH 250 // Check every second which Roland devices are connected
@@ -221,6 +223,7 @@ void OnNoteOn(byte channel, byte note, byte velocity)
 {
   uint8_t VCbridge_index = Current_MIDI_port >> 4;
   DEBUGMIDI("NoteOn #" + String(note) + " with velocity " + String(velocity) + " received on channel " + String(channel) + " and port " + String(Current_MIDI_port >> 4) + ':' + String(VCbridge_in_port[VCbridge_index])); // Show on serial debug screen
+  My_SY1000.check_note_in(note, velocity, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
   SCO_bass_mode_note_on(note, velocity, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
 }
 
@@ -228,6 +231,7 @@ void OnNoteOff(byte channel, byte note, byte velocity)
 {
   uint8_t VCbridge_index = Current_MIDI_port >> 4;
   DEBUGMIDI("NoteOff #" + String(note) + " with velocity " + String(velocity) + " received on channel " + String(channel) + " and port " + String(Current_MIDI_port >> 4) + ':' + String(VCbridge_in_port[VCbridge_index])); // Show on serial debug screen
+  My_SY1000.check_note_in(note, 0, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
   SCO_bass_mode_note_off(note, velocity, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
 }
 
@@ -247,19 +251,20 @@ void OnControlChange(byte channel, byte control, byte value)
   uint8_t VCbridge_index = Current_MIDI_port >> 4;
   if (value & 0x80) value = 0; // Check for false values - seems to happen with the FCB1010
 
-  DEBUGMIDI("CC #" + String(control) + " Value:" + String(value) + " received on channel " + String(channel) + " and port " + String(Current_MIDI_port >> 4) + ':' + String(VCbridge_in_port[VCbridge_index])); // Show on serial debug screen
 
   if ((channel == VCONTROLLER_MIDI_CHANNEL) && (control == LINE_SELECT_CC_NUMBER)) {
     VCbridge_in_port[VCbridge_index] = value;
+#ifdef DEBUG_SYSEX_UNIVERSAL
     DEBUGMIDI("Changed virtual input channel for port " + String(VCbridge_index) + " to: " + String(VCbridge_in_port[VCbridge_index]));
+#endif
   }
   else {
+    DEBUGMIDI("CC #" + String(control) + " Value:" + String(value) + " received on channel " + String(channel) + " and port " + String(Current_MIDI_port >> 4) + ':' + String(VCbridge_in_port[VCbridge_index])); // Show on serial debug screen
     for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
       Device[d]->check_CC_in(control, value, channel, Current_MIDI_port | VCbridge_in_port[VCbridge_index]);
     }
+    MIDI_check_switch_cc(control, value, channel, Current_MIDI_port);
   }
-
-  MIDI_check_switch_cc(control, value, channel, Current_MIDI_port);
 }
 
 void OnSysEx(const unsigned char* sxdata, short unsigned int sxlength, bool sx_comp)
@@ -411,7 +416,7 @@ void MIDI_forward_CC_to_all_ports_but_mine(uint8_t Controller, uint8_t Value, ui
   for (uint8_t p = 0; p < NUMBER_OF_MIDI_PORTS; p++) {
     if (MIDI_set_port_number_from_menu(p) != Exclude_port) {
       MIDI_send_CC(Controller, Value, Channel, MIDI_set_port_number_from_menu(p));
-      
+
     }
   }
 }
@@ -877,6 +882,9 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
           MIDI_editor_send_midi_switch_settings(s);
           //MIDI_show_dump_progress(NUMBER_OF_DEVICES + s, NUMBER_OF_DEVICES + TOTAL_NUMBER_OF_SWITCHES);
         }
+        for (uint8_t p = 0; p <= EXT_MAX_NUMBER_OF_SEQ_PATTERNS; p++) {
+          MIDI_editor_send_seq_pattern(p);
+        }
         //LCD_show_popup_label("Settings sent!");
         break;
       case VC_SET_GENERAL_SETTINGS:
@@ -887,6 +895,15 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         break;
       case VC_SET_MIDI_SWITCH_SETTINGS:
         MIDI_editor_receive_midi_switch_settings(sxdata, sxlength);
+        break;
+      case VC_SET_SEQ_PATTERN:
+        MIDI_editor_receive_pattern_data(sxdata, sxlength);
+        break;
+      case VC_REQUEST_SEQ_PATTERNS:
+        for (uint8_t p = 0; p <= EXT_MAX_NUMBER_OF_SEQ_PATTERNS; p++) {
+          MIDI_editor_send_seq_pattern(p);
+          MIDI_show_dump_progress(p, EXT_MAX_NUMBER_OF_SEQ_PATTERNS);
+        }
         break;
       case VC_SAVE_SETTINGS:
         EEP_write_eeprom_common_data(); // Save settings to EEPROM
@@ -908,13 +925,16 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         MIDI_editor_receive_finish_commands_dump(sxdata, sxlength);
         editor_dump_size = 0;
         break;
-      case VC_REQUEST_KATANA_PATCHES:
-        MIDI_send_Katana_patch_dump();
+      case VC_REQUEST_DEVICE_PATCHES:
+        MIDI_send_device_patch_dump();
         break;
-      case VC_SET_KATANA_PATCH:
-        MIDI_editor_receive_Katana_patch(sxdata, sxlength);
+      case VC_SET_DEVICE_PATCH:
+        MIDI_editor_receive_device_patch(sxdata, sxlength);
         break;
-      case VC_FINISH_KATANA_PATCH_DUMP:
+      case VC_FINISH_DEVICE_PATCH_DUMP:
+        //Reload patches after patch dump from editor
+        if (My_KTN.connected) My_KTN.load_patch(My_KTN.patch_number);
+        if (My_SY1000.connected) My_SY1000.load_patch(My_SY1000.patch_number);
         update_page = RELOAD_PAGE;
         break;
     }
@@ -1036,6 +1056,26 @@ void MIDI_editor_receive_midi_switch_settings(const unsigned char* sxdata, short
   //  update_page = RELOAD_PAGE;
 }
 
+void MIDI_editor_send_seq_pattern(uint8_t pattern) {
+  uint8_t mpatterndata[EEPROM_SEQ_PATTERN_SIZE + 1];
+  mpatterndata[0] = pattern;
+  EEPROM_load_seq_pattern(pattern, mpatterndata + 1);
+  MIDI_send_data(VC_SET_SEQ_PATTERN, mpatterndata, EEPROM_SEQ_PATTERN_SIZE + 1);
+}
+
+void MIDI_editor_receive_pattern_data(const unsigned char* sxdata, short unsigned int sxlength) {
+  if (sxlength != EEPROM_SEQ_PATTERN_SIZE * 2 + 9) {
+    MIDI_show_error();
+    return;
+  }
+  uint8_t mpatterndata[EEPROM_SEQ_PATTERN_SIZE + 1];
+  MIDI_read_data(sxdata, sxlength, mpatterndata, EEPROM_SEQ_PATTERN_SIZE + 1);
+  uint8_t pattern = mpatterndata[0];
+  if (pattern > EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return;
+  EEPROM_store_seq_pattern(pattern, mpatterndata + 1);
+  DEBUGMSG("!!! Received seq pattern #" + String(pattern));
+}
+
 void MIDI_editor_send_start_commands_dump() {
   uint8_t sysexmessage[9] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_START_COMMANDS_DUMP,
                               (uint8_t)((number_of_cmds >> 7) & 0x7F), (uint8_t)(number_of_cmds & 0x7F), 0xF7
@@ -1084,22 +1124,36 @@ void MIDI_editor_send_command(uint16_t cmd_no) {
   MIDI_send_data(VC_SET_COMMAND, cmdbytes, sizeof(cmd));
 }
 
-void MIDI_send_Katana_patch_dump() {
-  for (uint16_t p = 0; p < EXT_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
-    MIDI_editor_send_Katana_patch(p);
-    MIDI_show_dump_progress(p, EXT_MAX_NUMBER_OF_KATANA_PRESETS);
+void MIDI_send_device_patch_dump() {
+  for (uint16_t p = 0; p < EXT_MAX_NUMBER_OF_PATCH_PRESETS; p++) {
+    MIDI_editor_send_patch(p);
+    MIDI_show_dump_progress(p, EXT_MAX_NUMBER_OF_PATCH_PRESETS);
     delay(10); // Matching progress bar speed with the editor
   }
-  MIDI_editor_send_finish_KTN_patch_dump();
+  MIDI_editor_send_finish_device_patch_dump();
   LCD_show_popup_label("Upload complete", MESSAGE_TIMER_LENGTH);
 }
 
-void MIDI_editor_send_Katana_patch(uint8_t patch_no) {
-  EEPROM_load_KTN_patch(patch_no, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
-  uint16_t messagesize = KTN_PATCH_SIZE + 8;
-  uint8_t sysexmessage[messagesize] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_SET_KATANA_PATCH, patch_no };
-  for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
-    sysexmessage[i + 7] = My_KTN.KTN_patch_buffer[i];
+// Device patch data is sent using the overflow byte system from Zoom
+// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
+void MIDI_editor_send_patch(uint16_t index) {
+  uint8_t patch_buffer[VC_PATCH_SIZE];
+  EEPROM_load_device_patch_by_index(index, patch_buffer, VC_PATCH_SIZE);
+  uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
+  uint16_t messagesize = VC_PATCH_SIZE + number_of_overflow_bytes + 9;
+  uint8_t sysexmessage[messagesize] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_SET_DEVICE_PATCH, (uint8_t)(index >> 7), (uint8_t)(index & 0x7F) };
+  uint8_t buffer_index = 0;
+  for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
+    uint8_t overflow_byte = 0;
+    uint8_t byte_index = 9 + (obi * 8);
+    for (uint8_t i = 0; i < 7; i++) {
+      if (buffer_index < VC_PATCH_SIZE) {
+        overflow_byte |= (patch_buffer[buffer_index] >> 7) << i;
+        sysexmessage[byte_index++] = patch_buffer[buffer_index] & 0x7F;
+      }
+      buffer_index++;
+    }
+    sysexmessage[8 + (obi * 8)] = overflow_byte;
   }
   sysexmessage[messagesize - 1] = 0xF7;
   MIDI_send_sysex(sysexmessage, messagesize, remote_control_port);
@@ -1118,21 +1172,39 @@ void MIDI_editor_receive_command(const unsigned char* sxdata, short unsigned int
   EEPROM_write_command_from_editor(&cmd);
 }
 
-void MIDI_editor_receive_Katana_patch(const unsigned char* sxdata, short unsigned int sxlength) {
-  if (sxlength < KTN_PATCH_SIZE + 8) return;
-  uint8_t number = sxdata[6];
-  if (number >= EXT_MAX_NUMBER_OF_KATANA_PRESETS) return;
-  for (uint8_t i = 0; i < KTN_PATCH_SIZE; i++) {
-    uint8_t pos = i + 7;
-    My_KTN.KTN_patch_buffer[i] = sxdata[pos];
+// Device patch data is sent using the overflow byte system from Zoom
+// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
+void MIDI_editor_receive_device_patch(const unsigned char* sxdata, short unsigned int sxlength) {
+  uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
+  if (sxlength < VC_PATCH_SIZE + number_of_overflow_bytes + 9) return;
+  uint16_t number = (sxdata[6] << 7) + sxdata[7];
+  if (number >= EXT_MAX_NUMBER_OF_PATCH_PRESETS) return;
+
+  uint8_t patch_buffer[VC_PATCH_SIZE];
+  uint8_t buffer_index = 0;
+  for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
+    uint8_t overflow_byte = sxdata[8 + (obi * 8)];
+    uint8_t byte_index = 9 + (obi * 8);
+    for (uint8_t i = 0; i < 7; i++) {
+      if (buffer_index < VC_PATCH_SIZE) {
+        uint8_t new_byte = sxdata[byte_index++];
+        if ((overflow_byte & (1 << i)) != 0) new_byte |= 0x80;
+        patch_buffer[buffer_index] = new_byte;
+      }
+      buffer_index++;
+    }
   }
-  EEPROM_save_KTN_patch(number, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  
+  EEPROM_save_device_patch_by_index(number, patch_buffer, VC_PATCH_SIZE);
+  patch_data_index[number].Type = patch_buffer[0];
+  patch_data_index[number].Patch_number = (patch_buffer[1] << 8) + patch_buffer[2];
 }
 
-void MIDI_editor_send_finish_KTN_patch_dump() {
-  uint8_t sysexmessage[7] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_FINISH_KATANA_PATCH_DUMP, 0xF7
+void MIDI_editor_send_finish_device_patch_dump() {
+  uint8_t sysexmessage[7] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, VC_MODEL_NUMBER, VC_DEVICE_ID, VC_FINISH_DEVICE_PATCH_DUMP, 0xF7
                             };
   MIDI_send_sysex(sysexmessage, 7, remote_control_port);
+  update_page = RELOAD_PAGE;
 }
 
 // ********************************* Section 7: MIDI switch command reading ********************************************

@@ -394,6 +394,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
                 else LCD_clear_SP_label(Current_switch);
               }
               else { // Assign number out of range
+                SP[Current_switch].Assign_number = asgn_num;
                 SP[Current_switch].PP_number = 0;
                 SP[Current_switch].Latch = TGL_OFF;
                 SP[Current_switch].Colour = 0;
@@ -502,6 +503,10 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
   }
 }
 
+bool PAGE_update_running() {
+  return (active_update_type != OFF);
+}
+
 // Sysex watchdog will request the data for the current switch again in case the device did not respond in time.
 void PAGE_start_sysex_watchdog() {
   SysexWatchdog = millis() + SYSEX_WATCHDOG_LENGTH;
@@ -541,7 +546,7 @@ void PAGE_check_disconnect(uint8_t dev) {
 bool PAGE_check_on_page(uint8_t dev, uint16_t patch) { // Will check if the patch mentioned is currently on the page
   bool dev_on_page = false;
   for (uint8_t s = 1; s < NUMBER_OF_SWITCHES + 1; s++) { // Run through the switches on the current page
-    if ((SP[s].Type == PATCH) && (SP[s].Device == dev)) {
+    if ((SP[s].Type == PATCH) && (SP[s].Sel_type == BANKSELECT) && (SP[s].Device == dev)) {
       dev_on_page = true;
       if (SP[s].PP_number == patch) return true;
     }

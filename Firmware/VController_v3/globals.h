@@ -97,7 +97,7 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // The colour scheme of the backlight - Adafruit
   0,     // Main_display_show_top_right: show current device
   16,    // HNP_mode_cc_number
-  2,     // CURNUM_action: Tap tempo
+  2,     // CURNUM_action: Tap temp
 };
 
 Setting_struct Setting;

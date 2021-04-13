@@ -37,7 +37,7 @@ QLabel { color : white; background-color: rgb(0 ,0 ,100)}
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_PageCommands">
        <attribute name="title">
@@ -1390,7 +1390,7 @@ border-radius: 10px;</string>
         <bool>true</bool>
        </property>
        <attribute name="title">
-        <string>Katana patches</string>
+        <string>Device patches</string>
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_4">
         <item>
@@ -1445,6 +1445,9 @@ border-radius: 10px;</string>
            </widget>
           </item>
           <item>
+           <widget class="QComboBox" name="patchTypeComboBox"/>
+          </item>
+          <item>
            <spacer name="verticalSpacer_3">
             <property name="orientation">
              <enum>Qt::Vertical</enum>
@@ -1483,7 +1486,7 @@ border-radius: 10px;</string>
           <item>
            <widget class="QPushButton" name="readSysexButton">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -1558,6 +1561,46 @@ border-radius: 10px;</string>
              </size>
             </property>
            </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="readPatternsButton">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 grey);
+border-style: solid;
+border-color: black;
+border-width: 2px;
+border-radius: 10px;</string>
+            </property>
+            <property name="text">
+             <string>Read patterns from VController</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="writePatternsButton">
+            <property name="minimumSize">
+             <size>
+              <width>200</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 grey);
+border-style: solid;
+border-color: black;
+border-width: 2px;
+border-radius: 10px;</string>
+            </property>
+            <property name="text">
+             <string>Write patterns to VController</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
@@ -1941,7 +1984,7 @@ border-radius: 10px;</string>
      <x>0</x>
      <y>0</y>
      <width>962</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <property name="styleSheet">
@@ -1999,6 +2042,7 @@ border-radius: 10px;</string>
     <addaction name="actionRename"/>
     <addaction name="actionImport"/>
     <addaction name="actionExport"/>
+    <addaction name="actionInitialize_patch"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuPage"/>
@@ -2183,6 +2227,11 @@ border-radius: 10px;</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+I</string>
+   </property>
+  </action>
+  <action name="actionInitialize_patch">
+   <property name="text">
+    <string>Initialize patch</string>
    </property>
   </action>
  </widget>

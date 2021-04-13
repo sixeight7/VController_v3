@@ -1,7 +1,7 @@
 #ifndef VCSWICHSETTINGS_H
 #define VCSWICHSETTINGS_H
 
-// VCSWICHSETTINGS is the interface with the Device[] class objects. Device settings are stored in the class objects.
+// VCSWICHSETTINGS is the interface with the Midi_switch array.
 
 #include "customcombobox.h"
 #include "customspinbox.h"

@@ -151,6 +151,7 @@ uint8_t switch_held = 0;
 uint8_t switch_held_times_triggered = 0;
 uint32_t Hold_timer = 0;
 uint32_t Hold_time;
+bool switch_was_held = false;
 bool inta_triggered = false;
 uint8_t skip_release_and_hold_until_next_press = 0;
 #define SKIP_RELEASE 1
@@ -551,6 +552,7 @@ void SC_update_long_presses_and_hold() {
     if (switch_was_long_pressed) switch_released |= ON_LONG_PRESS; // Activate the proper release
     Long_press_timer = 0;  //Reset the timer on switch released
     switch_was_long_pressed = false;
+    switch_was_held = false;
     Extra_long_press_timer = 0;
     Hold_timer = 0;
 
@@ -578,6 +580,7 @@ void SC_update_long_presses_and_hold() {
       update_LEDS = true;
       multi_switch_booleans |= (1 << (switch_pressed - 1)); // Set this bit
 
+
       if (multi_switch_booleans & (1 << switch_pressed)) { // Switch on the right is also pressed
         DEBUGMAIN("Dual switches " + String(switch_pressed) + " and " + String(switch_pressed + 1) + " pressed");
         multi_switch_pressed = switch_pressed | ON_DUAL_PRESS;
@@ -585,18 +588,23 @@ void SC_update_long_presses_and_hold() {
 
         switch_pressed = multi_switch_pressed;
       }
-      if ((switch_pressed > 1) && (multi_switch_booleans & (1 << (switch_pressed - 2)))) { // Switch on the left is also pressed
+      else if ((switch_pressed > 1) && (multi_switch_booleans & (1 << (switch_pressed - 2)))) { // Switch on the left is also pressed
         DEBUGMAIN("Dual switches " + String(switch_pressed - 1) + " and " + String(switch_pressed) + " pressed");
         multi_switch_pressed = (switch_pressed - 1) | ON_DUAL_PRESS;
         DEBUGMSG("MS pressed: " + String(multi_switch_pressed));
         switch_pressed = multi_switch_pressed;
       }
-
-      if (multi_switch_booleans == MENU_KEY_COMBINATION) {
+      else if (multi_switch_booleans == MENU_KEY_COMBINATION) {
         SCO_select_page(PAGE_SELECT);
         //multi_switch_booleans = MENU_KEY_COMBINATION;
         multi_switch_pressed = SPECIAL_KEY_COMBINATION;
       }
+      else if (multi_switch_booleans & ~(1 << (switch_pressed - 1))) {
+        // Multiple switched pressed
+        DEBUGMAIN("More than one switch pressed. Multi switch booleans: 0x" + String(multi_switch_booleans & ~(1 << (switch_pressed - 1)), HEX));
+        switch_pressed = 0; // No valid combination. Switch press discarded.
+      }
+
     }
 
     switch (switch_type) {
@@ -655,6 +663,8 @@ void SC_update_long_presses_and_hold() {
       if (switch_held_times_triggered > 5) Hold_time = 150; // Increase speed when switch is held longer
       if (switch_held_times_triggered > 15) Hold_time = 75;
       if (switch_held_times_triggered > 45) Hold_time = 38;
+      switch_was_held = true;
+      
       DEBUGMAIN("Switch held: " + String(switch_held));
     }
   }
@@ -729,21 +739,22 @@ void SC_set_enc1_acceleration(bool state) {
 
 uint16_t update_encoder_value(signed int delta, uint16_t value, uint16_t min, uint16_t max) {
   setAccelerationRange(max - min);
-
+  bool hold_at_the_end = ((SC_switch_is_encoder()) || (switch_was_held));
+  
   if (delta > 0) {
     for (uint16_t i = 0; i < delta; i++) {
       if (value >= max) { // Check if we've reached the top
-        if ((encoder_timer + ENCODER_TURN_TIME > millis()) || (delta > 1)) value = max;
-        else value = min;
-      }
-      else value++;
-    }
+        if (((encoder_timer + ENCODER_TURN_TIME > millis()) && (hold_at_the_end)) || (delta > 1)) value = max;
+            else value = min;
+        }
+    else value++;
   }
-  // Perform bank down:
-  if (delta < 0) {
+}
+// Perform bank down:
+if (delta < 0) {
     for (uint16_t i = 0; i < abs(delta); i++) {
       if (value <= min) { // Check if we've reached the bottom
-        if ((encoder_timer + ENCODER_TURN_TIME > millis()) || (delta < -1)) value = min;
+        if (((encoder_timer + ENCODER_TURN_TIME > millis()) && (hold_at_the_end)) || (delta < -1)) value = min;
         else value = max;
       }
       else value--;

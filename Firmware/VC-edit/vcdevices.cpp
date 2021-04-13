@@ -1,4 +1,5 @@
 #include "vcdevices.h"
+#include "VController/globals.h"
 
 #include <QDebug>
 #include <QJsonObject>
@@ -7,7 +8,8 @@
 
 VCdevices::VCdevices(QObject *parent) : QObject(parent)
 {
-   setup_devices();
+    InitializePatchArea();
+    setup_devices();
 }
 
 void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
@@ -145,3 +147,284 @@ void VCdevices::setup_devices()
       Device[d]->init();
     }
 }
+
+QByteArray VCdevices::ReadPatch(int number)
+{
+    if (number >= MAX_NUMBER_OF_DEVICE_PRESETS) return 0;
+    QByteArray patch;
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        patch.append(Device_patches[number][i]);
+    }
+    return patch;
+}
+
+QString VCdevices::ReadPatchStringForListWidget(int number, int type)
+{
+    QString line;
+    int my_index;
+    if (type & BASS_MODE_NUMBER_OFFSET) number |= BASS_MODE_NUMBER_OFFSET;
+    uint8_t my_type = getDevicePatchType(number, type);
+    uint8_t dev = getDevicePatchDeviceNumber(number, type);
+    if (type == 0) {
+        line = QString::number(number);
+        my_index = number;
+    }
+    else {
+        int n = number - Device[dev]->patch_min_as_stored_on_VC;
+        line = Device[dev]->number_format(number);
+        my_index = findIndex(type, n);
+    }
+
+    line.append(":\t");
+    if (my_type == 0) {
+        line.append("-empty-");
+    }
+    else {
+        if (dev < NUMBER_OF_DEVICES) {
+            line.append(Device[dev]->device_name);
+            line.append(" \t");
+            line.append(Device[dev]->get_patch_info(my_index));
+        }
+    }
+
+    return line;
+}
+
+int VCdevices::findIndex(int type, int patch_no)
+{
+    if (type == 0) return patch_no;
+    if (type & BASS_MODE_NUMBER_OFFSET) patch_no |= BASS_MODE_NUMBER_OFFSET;
+    for (int i = 0; i < MAX_NUMBER_OF_DEVICE_PRESETS; i++) {
+        int n = (Device_patches[i][1] << 8) + Device_patches[i][2];
+        if ((Device_patches[i][0] == (type & 0xFF)) && (n == patch_no)) return i;
+    }
+    return PATCH_INDEX_NOT_FOUND;
+}
+
+int VCdevices::newIndex()
+{
+    for (int i = 0; i < MAX_NUMBER_OF_DEVICE_PRESETS; i++) {
+        if (Device_patches[i][0] == 0) return i;
+    }
+    return PATCH_INDEX_NOT_FOUND;
+}
+
+int VCdevices::numberOfPatches()
+{
+    int count = 0;
+    for (int i = 0; i < MAX_NUMBER_OF_DEVICE_PRESETS; i++) {
+        if (Device_patches[i][0] > 0) count++;
+    }
+    return count;
+}
+
+int VCdevices::indexFromMode(int type, int number)
+{
+    if (type == 0) return number;
+    return findIndex(type, number);
+
+}
+
+int VCdevices::getDevicePatchDeviceNumber(int number, int type)
+{
+    if (type == 0) return Device_patches[number][0] - 1;
+    else return (type & 0xFF) - 1;
+}
+
+int VCdevices::getDevicePatchType(int number, int type)
+{
+    if (type == 0) return Device_patches[number][0];
+    uint8_t dev = (type &= 0xFF) - 1;
+    if (type & BASS_MODE_NUMBER_OFFSET) number |= BASS_MODE_NUMBER_OFFSET;
+    if (findIndex(type, number - Device[dev]->patch_min_as_stored_on_VC) == PATCH_INDEX_NOT_FOUND) return 0;
+    else return type;
+}
+
+int VCdevices::getDevicePatchNumber(int number, int type)
+{
+    if (type == 0) return (Device_patches[number][1] << 8) + Device_patches[number][2];
+    if (type & BASS_MODE_NUMBER_OFFSET) return number | BASS_MODE_NUMBER_OFFSET;
+    return number;
+}
+
+
+void VCdevices::WritePatch(int type, int number, QByteArray patch)
+{
+    if (number >= MAX_NUMBER_OF_DEVICE_PRESETS) return;
+    if (patch.size() > VC_PATCH_SIZE) return;
+    int index = indexFromMode(type, number);
+    if (index == PATCH_INDEX_NOT_FOUND) return;
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        Device_patches[index][i] = patch[i];
+    }
+}
+
+void VCdevices::InitializePatchArea()
+{
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        for (int i = 0; i < VC_PATCH_SIZE; i++) {
+            Device_patches[p][i] = 0;
+        }
+    }
+}
+
+void VCdevices::readAll(const QJsonObject &json)
+{
+    int my_type, patch_no;
+    QJsonObject allPatches = json["Device Patches"].toObject();
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        QJsonObject patchObject = allPatches["Patch_" + QString::number(p)].toObject();
+        if (!patchObject.isEmpty()) {
+            my_type = patchObject["Device type"].toInt();
+            patch_no = patchObject["Device patch number"].toInt();
+            readPatchData(patch_no, patchObject, my_type);
+        }
+    }
+}
+
+void VCdevices::readPatchData(int patch_no, const QJsonObject &json, int my_type)
+{
+    if (my_type > 0) {
+        if (my_type & BASS_MODE_NUMBER_OFFSET) patch_no |= BASS_MODE_NUMBER_OFFSET;
+        int index = findIndex(my_type, patch_no);
+        if (index == PATCH_INDEX_NOT_FOUND) index = newIndex();
+        if (index == PATCH_INDEX_NOT_FOUND) return; // Out of memory
+
+        uint8_t dev = my_type - 1;
+        if (dev < NUMBER_OF_DEVICES) Device[dev]->readPatchData(index, patch_no, json);
+    }
+}
+
+void VCdevices::readAllLegacyKatana(const QJsonObject &json)
+{
+    QJsonObject allPatches = json["KTN Patches"].toObject();
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        QJsonObject patchObject = allPatches["KTN_Patch_" + QString::number(p)].toObject();
+        if (!patchObject.isEmpty()) {
+            readPatchData(p, patchObject, KTN + 1); // Read existing patch data
+        }
+    }
+}
+
+void VCdevices::writeAll(QJsonObject &json) const
+{
+    QJsonObject allPatches;
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        uint8_t my_type = Device_patches[p][0];
+        int patch_no = (Device_patches[p][1] << 8) + Device_patches[p][2];
+        if (my_type > 0) {
+            QJsonObject patchObject;
+            patchObject["Device type"] = my_type;
+            patchObject["Device patch number"] = patch_no;
+            writePatchData(p, patchObject);
+            allPatches["Patch_" + QString::number(p)] = patchObject;
+        }
+        //patchArray.append(patchObject);
+    }
+    json["Device Patches"] = allPatches;
+}
+
+void VCdevices::writePatchData(int patch_no, QJsonObject &json) const
+{
+    uint8_t my_type = Device_patches[patch_no][0];
+    if (my_type > 0) {
+        uint8_t dev = (my_type & 0xFF) - 1;
+        if (dev < NUMBER_OF_DEVICES) Device[dev]->writePatchData(patch_no, json);
+    }
+}
+
+void VCdevices::swapPatch(int patch_no1, int patch_no2, int type)
+{
+    if (patch_no1 == patch_no2) return;
+
+    if (type & BASS_MODE_NUMBER_OFFSET) {
+        patch_no1 |= BASS_MODE_NUMBER_OFFSET;
+        patch_no2 |= BASS_MODE_NUMBER_OFFSET;
+    }
+
+    int index1 = findIndex(type, patch_no1);
+    int index2 = findIndex(type, patch_no2);
+
+    if (index1 != PATCH_INDEX_NOT_FOUND) {
+        Device_patches[index1][1] = patch_no2 >> 8;
+        Device_patches[index1][2] = patch_no2 & 0xFF;
+    }
+    if (index2 != PATCH_INDEX_NOT_FOUND) {
+        Device_patches[index2][1] = patch_no1 >> 8;
+        Device_patches[index2][2] = patch_no1 & 0xFF;
+    }
+}
+
+void VCdevices::movePatch(int source_patch, int dest_patch, int type)
+{
+    if (type == 0) return;
+    if (dest_patch > source_patch) {
+        for (int i = source_patch; i < dest_patch; i++) {
+            swapPatch(i, i + 1, type);
+        }
+    }
+    if (dest_patch < source_patch) {
+        for (int i = source_patch; i --> dest_patch;) {
+            swapPatch(i, i + 1, type);
+        }
+    }
+}
+
+void VCdevices::pastePatch(int number, int type)
+{
+    if (type == 0) return;
+
+    if (!copyBufferFilled) return;
+    int len = Patch_copy_buffer.length() / VC_PATCH_SIZE;
+    qDebug() << "Copy buffer length:" << len;
+
+    for (int p = 0; p < len; p++) {
+        int buffer_index = p * VC_PATCH_SIZE;
+        if (Patch_copy_buffer.at(buffer_index) == (type & 0xFF)) {
+
+            if (type & BASS_MODE_NUMBER_OFFSET) number |= BASS_MODE_NUMBER_OFFSET;
+
+            int index = findIndex(type, number);
+            if (index == PATCH_INDEX_NOT_FOUND) index = newIndex();
+            if (index == PATCH_INDEX_NOT_FOUND) return; // Out of memory
+
+            Device_patches[index][0] = Patch_copy_buffer.at(buffer_index);
+            Device_patches[index][1] = number >> 8;
+            Device_patches[index][2] = number & 0xFF;
+
+            for (int i = 3; i < VC_PATCH_SIZE; i++) {
+                Device_patches[index][i] = Patch_copy_buffer.at(buffer_index + i);
+            }
+            qDebug() << "Pasted patch" << number;
+        }
+        number++;
+    }
+}
+
+void VCdevices::clearCopyBuffer()
+{
+    Patch_copy_buffer.clear();
+}
+
+void VCdevices::initializePatch(int number, int type)
+{
+    int index = findIndex(type, number);
+    if (index == PATCH_INDEX_NOT_FOUND) return;
+
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        Device_patches[index][i] = 0;
+    }
+}
+
+void VCdevices::copyPatch(int number, int type)
+{
+    int index = findIndex(type, number);
+    if (index == PATCH_INDEX_NOT_FOUND) return;
+
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        Patch_copy_buffer.append(Device_patches[index][i]);
+    }
+    copyBufferFilled = true;
+    qDebug() << "Copied patch" << number;
+}
+

@@ -6,7 +6,7 @@
 // Section 3: HLX common MIDI out functions
 // Section 4: HLX program change
 // Section 5: HLX parameter control
-// Section 6: HLX assign control
+// Section 6: HLX special functions
 // Section 7: HELIX MIDI forward messaging
 
 // ********************************* Section 1: HLX Initialization ********************************************
@@ -57,6 +57,10 @@
 
 #define HLX_SNAPSHOT_SELECT_CC 69
 
+#define HLX_EXP_PEDAL_VALUE_FOR_TUNER_CC 2
+#define HLX_SET_SEUENCER_BEATS 3
+#define HLX_SET_SEQUENCER_PATTERN_CC 4
+
 void MD_HLX_class::init() { // Default values for variables
   MD_base_class::init();
 
@@ -77,11 +81,16 @@ void MD_HLX_class::init() { // Default values for variables
   my_device_page4 = HLX_DEFAULT_PAGE4; // Default value
   tuner_active = false;
   max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
+  setup_random_number_generator();
 }
 
 void MD_HLX_class::update() {
   if (!connected) return;
   looper_timer_check();
+  if (update_sequencer) { // Is triggered from the device_sequencer_timer_expired().
+    send_sequence_step_CC();
+    update_sequencer = false;
+  }
 }
 
 // ********************************* Section 2: HLX common MIDI in functions ********************************************
@@ -105,13 +114,19 @@ void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
   if (!connected) return;
   if ((port == MIDI_port) && (channel == MIDI_channel)) {
     switch (control) {
-      case 2: // EXP pedal 2 - must be set in Command Center on each patch
+      case HLX_EXP_PEDAL_VALUE_FOR_TUNER_CC: // EXP pedal minimized will start tuner - must be set in Command Center on each patch
         if ((!tuner_active) && (value == 0)) {
           start_tuner();
         }
         else if ((tuner_active) && (value > 0)) {
           stop_tuner();
         }
+        break;
+      case HLX_SET_SEQUENCER_PATTERN_CC: // set the pattern for the MIDI sequencer
+        set_sequence(value);
+        break;
+      case HLX_SET_SEUENCER_BEATS:
+        set_sequence_beats(value);
         break;
       case 32: // Current setlist
         current_setlist = value;
@@ -156,7 +171,7 @@ void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
 
 void MD_HLX_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Helix
-  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x21)) {
+  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x21) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -167,6 +182,11 @@ void MD_HLX_class::do_after_connect() {
 }
 
 // ********************************* Section 3: HLX common MIDI out functions ********************************************
+
+void MD_HLX_class::set_bpm() {
+  device_sequencer_update(number_of_sequence_steps, beat_divider);
+}
+
 void MD_HLX_class::bpm_tap() {
   if (connected) {
     MIDI_send_CC(64, 127, MIDI_channel, MIDI_port); // Tap tempo on HLX
@@ -174,16 +194,14 @@ void MD_HLX_class::bpm_tap() {
 }
 
 void MD_HLX_class::start_tuner() {
-  if (connected) {
-    //MIDI_send_CC(68, 0, MIDI_channel, MIDI_port);
+  if ((connected) && (!tuner_active)) {
     MIDI_send_CC(68, 127, MIDI_channel, MIDI_port);
     tuner_active = true;
   }
 }
 
 void MD_HLX_class::stop_tuner() {
-  if (connected) {
-    //MIDI_send_CC(68, 127, MIDI_channel, MIDI_port);
+  if ((connected) && (tuner_active) && (is_on)) {
     MIDI_send_CC(68, 0, MIDI_channel, MIDI_port);
     tuner_active = false;
   }
@@ -193,6 +211,7 @@ void MD_HLX_class::stop_tuner() {
 
 void MD_HLX_class::do_after_patch_selection() {
   is_on = connected;
+  unmute();
   if (Setting.Send_global_tempo_after_patch_change == true) {
     SCO_retap_tempo();
   }
@@ -200,6 +219,7 @@ void MD_HLX_class::do_after_patch_selection() {
   current_exp_pedal = 2; // Helix has pedal 2 default on
   current_snapscene = 0;
   //looper_reset();
+  stop_sequence();
   update_LEDS = true;
   update_main_lcd = true;
   if ((flash_bank_of_four != 255) && (Current_page != read_current_device_page())) SCO_select_page(read_current_device_page()); // When in direct select, go back to the current_device_page
@@ -272,10 +292,22 @@ void MD_HLX_class::direct_select_press(uint8_t number) {
   }
 }
 
+void MD_HLX_class::unmute() {
+  is_on = connected;
+  stop_tuner();
+}
+
+void MD_HLX_class::mute() {
+  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
+    is_on = false;
+    start_tuner();
+  }
+}
+
 // ********************************* Section 5: HLX parameter control ********************************************
 // Define array for HLX effeect names and colours
 struct HLX_CC_type_struct { // Combines all the data we need for controlling a parameter in a device
-  char Name[17]; // The name for the label
+  char Name[11]; // The name for the label
   uint8_t CC; // The colour for this effect.
   uint8_t NumVals; // The number of values for this parameter
 };
@@ -432,7 +464,7 @@ bool MD_HLX_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   return true;
 }
 
-void MD_HLX_class::set_snapscene_title(uint8_t number, String &Output) {
+void MD_HLX_class::get_snapscene_title(uint8_t number, String &Output) {
   Output += "SNAPSHOT " + String(number);
 }
 
@@ -440,7 +472,8 @@ void MD_HLX_class::set_snapscene_title(uint8_t number, String &Output) {
   Output += "SNAPSHOT " + String(number);
   }*/
 
-void MD_HLX_class::set_snapscene(uint8_t number) {
+void MD_HLX_class::set_snapscene(uint8_t sw, uint8_t number) {
+  if (!is_on) unmute();
   current_snapscene = number;
   MIDI_send_CC(HLX_SNAPSHOT_SELECT_CC, number - 1, MIDI_channel, MIDI_port);
 }
@@ -484,6 +517,132 @@ void MD_HLX_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < HLX_LOOPER_NUMBER_OF_CCS) {
     if (HLX_looper_cc[cmd].cc > 0) MIDI_send_CC(HLX_looper_cc[cmd].cc, HLX_looper_cc[cmd].value, MIDI_channel, MIDI_port);
   }
+}
+
+// ********************************* Section 6: HLX special MIDI functions **********************************************
+
+// Function 1: MIDI sequencer
+// There are 32 patterns that can be stored in EEPROM. Furthermore there are some more patterns defined here
+
+// Every pattern consists of 36 bytes
+// Byte 01: The beat divider
+// Byte 02: The number of steps in this sequence
+// Byte 03: Spare
+// Byte 04: Spare
+// Byte 05 - 36: The steps of the sequence.
+
+const PROGMEM uint8_t HLX_sequencer_pattern[][36] = {
+  // First value is the beat divider for this pattern.
+  { 1, 24, 0, 0, 64, 80, 95, 108, 118, 125, 127, 125, 118, 108, 95, 80, 64, 47, 32, 19, 9, 2, 0, 2, 9, 19, 32, 47 },   // 33: Sine wave
+  { 1, 24, 0, 0, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },     // 34: Block wave
+  { 1, 24, 0, 0, 11, 21, 32, 42, 53, 64, 74, 85, 95, 106, 116, 127, 116, 106, 95, 85, 74, 64, 53, 42, 32, 21, 11, 0 }, // 35: Triangle wave
+  { 1, 24, 0, 0, 0, 6, 11, 17, 22, 28, 33, 39, 44, 50, 55, 61, 66, 72, 77, 83, 88, 94, 99, 105, 110, 116, 121, 127 },  // 36: Saw tooth
+  { 1, 24, 0, 0, 127, 127, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },                       // 37: Single 8th beat
+  { 2, 24, 0, 0, 127, 127, 0, 32, 32, 0, 32, 0, 0, 127, 64, 0, 127, 127, 0, 32, 32, 0, 32, 32, 0, 32, 32, 0 },         // 38: Beat 1
+  { 4, 24, 0, 0, 127, 0, 0, 64, 0, 0, 64, 0, 0, 127, 127, 127, 127, 0, 0, 64, 0, 0, 64, 0, 0, 64, 0, 0 },              // 39: Beat 2
+  { 1, 24, 0, 0, 127, 127, 127, 127, 127, 127, 0, 0, 32, 32, 32, 32, 32, 32, 0, 0, 95, 95, 95, 95, 95, 95, 0, 0 },     // 40: Beat 3
+};                                                                                                           // 41: Random pattern
+
+#define HLX_NUMBER_OF_SEQUENCER_PATTERNS sizeof(HLX_sequencer_pattern) / sizeof(HLX_sequencer_pattern[0])
+
+#define PATTERN_EEPROM 254
+#define PATTERN_RANDOM 255
+
+void MD_HLX_class::set_sequence(uint8_t pattern) {
+  if (pattern == 0) { // Stop sequencer
+    current_sequence = 0;
+    number_of_sequence_steps = 0;
+  }
+
+  else if (pattern <= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) { // Load from EEPROM
+    EEPROM_load_seq_pattern(pattern - 1, EEPROM_seq_pattern);
+    current_sequence = PATTERN_EEPROM;
+    beat_divider = EEPROM_seq_pattern[0];
+    number_of_sequence_steps = EEPROM_seq_pattern[1];
+  }
+
+  else if (pattern <= EXT_MAX_NUMBER_OF_SEQ_PATTERNS + HLX_NUMBER_OF_SEQUENCER_PATTERNS) { // Load HLX_sequence_pattern
+    current_sequence = pattern - EXT_MAX_NUMBER_OF_SEQ_PATTERNS;
+    beat_divider = HLX_sequencer_pattern[current_sequence - 1][0];
+    number_of_sequence_steps = HLX_sequencer_pattern[current_sequence - 1][1];
+  }
+
+  else { // Load ramdom pattern
+    current_sequence = PATTERN_RANDOM;
+    beat_divider = 12;
+    number_of_sequence_steps = 24;
+  }
+
+  device_sequencer_update(number_of_sequence_steps, beat_divider);
+  Serial.println("current_sequence:" + String(current_sequence) + ", number_of_sequence_steps:" + String(number_of_sequence_steps) + ", beat_divider:" + String(beat_divider));
+}
+
+void MD_HLX_class::set_sequence_beats(uint8_t beats) {
+  if (beats == 0) return;
+  beat_divider = beats;
+  device_sequencer_update(number_of_sequence_steps, beat_divider);
+}
+
+void MD_HLX_class::stop_sequence() {
+  current_sequence = 0;
+  beat_divider = 1;
+}
+
+void MD_HLX_class::send_sequence_step_CC() {
+  uint8_t value;
+  if (current_sequence == 0) return;
+  if (current_sequence == PATTERN_EEPROM) value = EEPROM_seq_pattern[current_sequence_step + 4];
+  else if (current_sequence <= HLX_NUMBER_OF_SEQUENCER_PATTERNS) value = HLX_sequencer_pattern[current_sequence - 1][current_sequence_step + 4];
+  else if (current_sequence == PATTERN_RANDOM) value = generate_random_number();
+  else return;
+  if (value != previous_sequence_value) {
+    MIDI_send_CC(HLX_SET_SEQUENCER_PATTERN_CC, value, MIDI_channel, MIDI_port);
+    previous_sequence_value = value;
+  }
+  current_sequence_step++;
+  if (current_sequence_step >= number_of_sequence_steps) current_sequence_step = 0;
+}
+
+// Random number generator
+
+// T3.6/T3.5 Random Number Generator
+//==================================
+//Thanks and acknowledgement to "manitou" for original test code
+//Modifications by "TelephoneBill" dated 23 FEB 2017
+#define RNG_CR_GO_MASK          0x1u
+#define RNG_CR_HA_MASK          0x2u
+#define RNG_CR_INTM_MASK        0x4u
+#define RNG_CR_CLRI_MASK        0x8u
+#define RNG_CR_SLP_MASK         0x10u
+#define RNG_SR_OREG_LVL_MASK    0xFF00u
+#define RNG_SR_OREG_LVL_SHIFT   8
+#define RNG_SR_OREG_LVL(x)      (((uint32_t)(((uint32_t)(x))<<RNG_SR_OREG_LVL_SHIFT))&RNG_SR_OREG_LVL_MASK)
+#define SIM_SCGC6_RNGA          ((uint32_t)0x00000200)
+
+void MD_HLX_class::setup_random_number_generator() {
+
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
+  SIM_SCGC6 |= SIM_SCGC6_RNGA;                  //enable RNG
+  RNG_CR &= ~RNG_CR_SLP_MASK;
+  RNG_CR |= RNG_CR_HA_MASK;                     //high assurance, not needed
+#else
+  // Teensy 3.2
+  // A10 is an unconnected pad on Teensy 3.2, random analog
+  // noise will cause the call to randomSeed() to generate
+  // different seed numbers each time the sketch runs.
+  // randomSeed() will then shuffle the random function.
+  randomSeed(analogRead(A10));
+#endif
+}
+
+uint8_t MD_HLX_class::generate_random_number() {
+#if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
+  RNG_CR |= RNG_CR_GO_MASK;
+  while ((RNG_SR & RNG_SR_OREG_LVL(0xF)) == 0); //wait for RN to be generated
+  return RNG_OR & 0x7F;                                //return RN
+#else
+  return random(127);
+#endif
 }
 
 // ********************************* Section 7: HELIX MIDI forward messaging ********************************************

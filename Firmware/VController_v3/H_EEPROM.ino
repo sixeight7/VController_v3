@@ -6,25 +6,27 @@
 // Section 3: External EEPROM (24LC512) Functions
 // Section 4: Command and index functions
 // Section 5: Reading/writing titles to EEPROM
-// Section 6: Reading/writing Katana data to EEPROM
+// Section 6: Reading/writing Patch data to EEPROM
 // Section 7: HELIX forward messaging storage
 // Section 8: MG300 effect type storage
+// Section 9: Sequencer patterns storage
 
 #include "globals.h"
 
 // ********************************* Section 1: EEPROM Initialization ********************************************
 // The Teensy 3.2 has 2 kB of EEPROM on board - this storage memory is used for VController settings.
-// The external 24LC512 chip has 64 kB of EEPROM - this storage memory is used for VController commands, BOSS Katana presets and Line6 Helix forward messaging
+// The external 24LC512 chip has 64 kB of EEPROM - this storage memory is used for VController commands, BOSS Patch presets and Line6 Helix forward messaging
 
 #include <EEPROM.h>
 //#include <Wire.h>
 #include <i2c_t3.h>
 
 #define CURRENT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the internal EEPROM structure 
-#define CURRENT_EXT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
-#define CURRENT_KATANA_MEMORY_VERSION 2 // Increase this value whenever there is an update of the Katana EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION 5 // Increase this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXT_EEPROM_PATCH_DATA_VERSION 3 // Increase this value whenever there is an update of the Patch EEPROM structure - data will be overwritten!!!!
 #define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Increase this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
-#define CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION 2 // Increase this value whenever there is an update of the MG300 EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXT_EEPROM_MG300_DATA_VERSION 2 // Increase this value whenever there is an update of the MG300 EEPROM structure - data will be overwritten!!!!
+#define CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION 1 // Increase this value whenever there is an update of the sequencer patterns structure - data will be overwritten!!!!
 
 // ************************ Internal EEPROM data addresses ***********************
 // Total size: 2048 bytes (Teensy 3.2), 4096 bytes (Teensy 3.6)
@@ -61,9 +63,10 @@
 // 24LC512 has 64 kByte of memory
 // These are writable in pages of 128 bytes = 500 pages
 // Page 0 - 249:  Commands
-// Page 250 - 369 Katana presets
+// Page 250 - 369 Patch presets
 // Page 370 - 374 MG-300 FX data
 // Page 375 - 390 Helix messages
+// Page 391 - 399 Sequencer patterns
 
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
 #define EEPROM_DELAY_LENGTH 5  // time between EEPROM writes (usually 5 ms is OK)
@@ -71,18 +74,21 @@ unsigned long WriteDelay = 0;
 
 // Addressing of programmed commands for switches
 #define EXT_EEP_CMD_BASE_ADDRESS 32    // Commands are stored from address 32 - 31999
-#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 2997
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 1737
 #define EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR 0
 #define EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR 1
-#define EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR 2
+#define EXT_EEP_PATCH_DATA_VERSION_ADDR 2
 #define EXT_EEP_HELIX_MSG_SPACE_ADDR 3
-#define EXT_EEP_VERSION_ADDR 4
+#define EXT_EEP_COMMAND_DATA_VERSION_ADDR 4
 #define EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR 5
-#define EXP_EEP_MG300_EFFECT_TYPE_ADDR 6
+#define EXT_EEP_MG300_DATA_VERSION_ADDR 6
+#define EXP_EEP_SEQ_PATTERNS_ADDR 7
 #define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
 
-#define EXT_EEP_KATANA_PRESETS_BASE_ADDRESS 32000 // Katana presets are stored from address 320000 - 47359 (80 presets of 192 bytes)
-#define EXT_MAX_NUMBER_OF_KATANA_PRESETS 80
+#define EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS 18560 // Patch presets are stored from address 18560 - 47359 (150 presets of 192 bytes)
+//#define EXT_MAX_NUMBER_OF_KATANA_PRESETS 150
+#define EXT_MAX_NUMBER_OF_PATCH_PRESETS 150
+#define EXT_PATCH_PRESET_SIZE 192
 
 #define EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS 47360 // MG-300 effect types are stored from address 47360 - 47935 (36 presets of 16 bytes)
 #define EXT_MAX_NUMBER_OF_MG300_PRESETS 36
@@ -90,6 +96,9 @@ unsigned long WriteDelay = 0;
 #define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 48000 // Helix MIDI messages are stored from address 48000 - 50047 (128 messages of 16 bytes)
 #define EXT_MAX_NUMBER_OF_HELIX_MESSAGES 128
 #define MIDI_HLX_MESSAGES 5 // number of messages per patch that are stored
+
+#define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 50048 // Patterns are stored from 50048 - 51199 (32 patterns of 36 bytes = 1152 bytes)
+#define EXT_MAX_NUMBER_OF_SEQ_PATTERNS 32
 
 // RAM indexes
 #define MAX_NUMBER_OF_PAGES 256
@@ -106,24 +115,39 @@ uint16_t number_of_cmds; // Contains the total number of commands stored in EEPR
 uint8_t HLX_messages[MIDI_HLX_MESSAGES][3]; // Space to store Helix forwarding messages
 uint8_t HLX_message_setlist;
 
+#define EEPROM_SEQ_PATTERN_SIZE 36
+uint8_t EEPROM_seq_pattern[EEPROM_SEQ_PATTERN_SIZE]; // Space to store the sequencer pattern
+
 uint32_t EEPROM_update_timer = 0;
 #define EEPROM_UPDATE_TIMER_LENGTH 2000 // Time between reading the display boards
+
+struct patch_data_index_struct {
+  uint8_t Type;
+  uint16_t Patch_number;
+};
+
+patch_data_index_struct patch_data_index[EXT_MAX_NUMBER_OF_PATCH_PRESETS];
+
+#define PATCH_INDEX_NOT_FOUND 0xFFFF
 
 void setup_eeprom()
 {
   if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
   else EEP_check_internal_eeprom_data(false);
-  if (read_ext_EEPROM(EXT_EEP_VERSION_ADDR) != CURRENT_EXT_EEPROM_VERSION) EEP_initialize_external_eeprom_data();
-  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != CURRENT_KATANA_MEMORY_VERSION) EEP_update_katana_preset_memory();
-  if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEPROM_initialize_HELIX_message_space();
-  if (read_ext_EEPROM(EXP_EEP_MG300_EFFECT_TYPE_ADDR) != CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION) EEPROM_initialize_MG300_message_space();
+  if (read_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION) EEP_initialize_command_data();
+  if (read_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_PATCH_DATA_VERSION) EEP_initialize_patch_data();
+  if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEP_initialize_Helix_data();
+  if (read_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_MG300_DATA_VERSION) EEP_initialize_MG300_data();
+  if (read_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR) != CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION) EEPROM_EEP_initialize_seq_patterns_data();
+  //if (read_ext_EEPROM(EXT_EEP_SY1000_PRESETS_INITIALIZED_ADDR) != CURRENT_SY1000_MEMORY_VERSION) EEP_initialize_SY1000_data();
 
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
   Current_page = EEPROM.read(EEPROM_CURRENT_PAGE_ADDR);
   set_current_device(EEPROM.read(EEPROM_CURRENT_DEVICE_ADDR));
 
-  EEPROM_create_indexes();
+  EEPROM_create_command_indexes();
+  EEPROM_create_patch_data_index();
 }
 
 void main_eeprom()
@@ -386,8 +410,8 @@ void copy_cmd(const Cmd_struct* source, Cmd_struct* dest) {
 
 // ********************************* Section 4: Command and index functions ********************************************
 
-void EEP_initialize_external_eeprom_data() {
-  write_ext_EEPROM(EXT_EEP_VERSION_ADDR, CURRENT_EXT_EEPROM_VERSION); // Save the current eeprom version
+void EEP_initialize_command_data() {
+  write_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION); // Save the current eeprom version
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
 
@@ -398,7 +422,7 @@ void EEP_initialize_external_eeprom_data() {
   EEP_write_number_of_commands(NUMBER_OF_INIT_COMMANDS);
   delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
 
-  EEPROM_create_indexes();
+  EEPROM_create_command_indexes();
   LED_turn_all_off();
 }
 
@@ -407,7 +431,7 @@ void EEP_write_number_of_commands(uint16_t number) {
   write_ext_EEPROM(EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR, number & 0xFF);
 }
 
-void EEPROM_create_indexes() {
+void EEPROM_create_command_indexes() {
   memset(First_cmd_index, 0, sizeof(First_cmd_index));
   memset(Next_cmd_index, 0, sizeof(Next_cmd_index));
   memset(Next_internal_cmd_index, 0, sizeof(Next_internal_cmd_index));
@@ -490,7 +514,7 @@ void EEPROM_purge_cmds() { // Will delete any empty commands
     number_of_cmds -= number_of_deleted_cmds;
     EEP_write_number_of_commands(number_of_cmds);
     DEBUGMSG("New number of commands is " + String(number_of_cmds));
-    EEPROM_create_indexes();
+    EEPROM_create_command_indexes();
   }
 }
 
@@ -517,7 +541,7 @@ void EEPROM_check_data_received(uint8_t check_number_of_pages, uint16_t check_nu
   }
   EEP_write_number_of_commands(number_of_cmds);
 
-  EEPROM_create_indexes();
+  EEPROM_create_command_indexes();
 }
 
 uint8_t EEPROM_count_cmds(uint8_t pg, uint8_t sw) { // Counts the number of commands for this switch. Excludes the commands from the defaut bank, unless pg is the default bank
@@ -611,7 +635,7 @@ void EEPROM_write_cmd(uint8_t pg, uint8_t sw, uint8_t number, Cmd_struct *cmd) {
 
   write_cmd_EEPROM(cmd_index, cmd); // Write this command
 
-  if (new_command) EEPROM_create_indexes();
+  if (new_command) EEPROM_create_command_indexes();
 }
 
 void EEPROM_clear_page(uint8_t pg) { // Will delete all commands for this page
@@ -731,45 +755,60 @@ void EEPROM_delete_title(uint8_t pg, uint8_t sw) {
   write_cmd_EEPROM(cmd_index, &empty_cmd);
 }
 
-// ********************************* Section 6: Reading/writing Katana data to EEPROM ********************************************
+// ********************************* Section 6: Reading/writing Device patch data to EEPROM ********************************************
 
-void EEP_update_katana_preset_memory() {
-  if (read_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR) != 1) {
-    EEP_initialize_katana_preset_memory();
+/*void EEP_update_patch_preset_memory() {
+
+  uint8_t current_version = read_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR);
+  if ((current_version != 1) && (current_version != 2)) {
+    EEP_initialize_patch_data();
     return;
   }
 
-  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_KATANA_PRESETS; i++) {
-    EEPROM_load_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
-    My_KTN.update_patch();
-    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    EEPROM_load_KTN_patch(i, My_KTN.KTN_patch_buffer, VC_PATCH_SIZE);
+    My_KTN.update_patch(current_version, i);
+    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, VC_PATCH_SIZE);
   }
-  write_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR, CURRENT_KATANA_MEMORY_VERSION);
-}
+  write_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_PATCH_DATA_VERSION);
+  }*/
 
-void EEP_initialize_katana_preset_memory() {
-  write_ext_EEPROM(EXT_EEP_KATANA_PRESETS_INITIALIZED_ADDR, CURRENT_KATANA_MEMORY_VERSION);
+void EEP_initialize_patch_data() {
+  write_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_PATCH_DATA_VERSION);
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
 
-  My_KTN.load_patch_buffer_with_default_patch();
+  uint8_t empty_buffer[VC_PATCH_SIZE];
+  memset(empty_buffer, 0, VC_PATCH_SIZE);
 
-  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_KATANA_PRESETS; i++) {
-    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, KTN_PATCH_SIZE);
+  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    EEPROM_save_device_patch_by_index(i, empty_buffer, VC_PATCH_SIZE);
   }
 
-  delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
+  //delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
   LED_turn_all_off();
 }
 
-void EEPROM_read_KTN_title(uint8_t number, String &title) {
+void EEPROM_initialize_device_patch(uint8_t type, uint16_t number) {
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) return;
+
+  uint8_t empty_buffer[VC_PATCH_SIZE] = { 0 };
+  EEPROM_save_device_patch_by_index(index, empty_buffer, VC_PATCH_SIZE);
+  delay(30);
+}
+
+void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) return;
+
   // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
   // Page 1 contains the first 128 bytes of patch 1
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
   // The patch name is stored in the first 16 bytes of a patch.
-  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
+  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
 
   DEBUGMSG("Reading patch name for number " + String(number) + " at Addr1:" + String(part1_address));
 
@@ -779,7 +818,7 @@ void EEPROM_read_KTN_title(uint8_t number, String &title) {
   Wire.endTransmission();
 
   Wire.requestFrom (EEPROM_ADDRESS, (int) 16);
-  for (uint8_t c = 0; c < 16; c++) {
+  for (uint8_t c = 7; c < 23; c++) {
     uint8_t newbyte = Wire.receive();
     if ((newbyte > 31) && (newbyte < 128)) title += static_cast<char>(newbyte);
     else title += ' ';
@@ -787,16 +826,61 @@ void EEPROM_read_KTN_title(uint8_t number, String &title) {
   DEBUGMSG("Read title from memory: " + String(title));
 }
 
-void EEPROM_load_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_length) {
+void EEPROM_create_patch_data_index() {
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((i / 2) * 384); // Point to the base address of 2 patches
+    uint16_t part1_address = base_address + ((i % 2) * 128); // Point to the first or second page
+
+    Wire.beginTransmission(EEPROM_ADDRESS);
+    Wire.send((int)(part1_address >> 8));   // MSB
+    Wire.send((int)(part1_address & 0xFF)); // LSB
+    Wire.endTransmission();
+
+    Wire.requestFrom (EEPROM_ADDRESS, (int) 3);
+
+    uint8_t type = Wire.receive();
+    uint8_t msb = Wire.receive();
+    uint8_t lsb = Wire.receive();
+    patch_data_index[i].Type = type;
+    patch_data_index[i].Patch_number = (msb << 8) + lsb;
+  }
+}
+
+uint16_t EEPROM_find_patch_data_index(uint8_t type, uint16_t number) {
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    if ((patch_data_index[i].Type == type) && (patch_data_index[i].Patch_number == number)) return i;
+  }
+  return PATCH_INDEX_NOT_FOUND;
+}
+
+uint16_t EEPROM_create_new_patch_data_index() {
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    if (patch_data_index[i].Type == 0) return i;
+  }
+  return PATCH_INDEX_NOT_FOUND;
+}
+
+bool EEPROM_load_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data, uint8_t data_length) {
+  // Look for index
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) return false;
+
+  EEPROM_load_device_patch_by_index(index, patch_data, data_length);
+
+  return true;
+}
+
+void EEPROM_load_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint8_t data_length) {
+
   // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
   // Page 1 contains the first 128 bytes of patch 1
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
-  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
-  uint16_t part2_address = base_address + 256 + ((number % 2) * 64); // Point to the first or second half of the third page
+  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
+  uint16_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
 
-  DEBUGMSG("Loading patch number " + String(number) + " from Addr1:" + String(part1_address) + "Addr2:" + String(part2_address));
+  DEBUGMSG("Readng patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
   Wire.beginTransmission(EEPROM_ADDRESS);
   Wire.send((int)(part1_address >> 8));   // MSB
@@ -805,9 +889,7 @@ void EEPROM_load_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_len
 
   Wire.requestFrom (EEPROM_ADDRESS, (int) 128);
   for (uint8_t i = 0; i < 128; i++) {
-    uint b = Wire.receive();
-    if (b & 0x80) b = 0; // Check for uninitialized values
-    patch_data[i] = b;
+    patch_data[i] = Wire.receive();
   }
 
   Wire.beginTransmission(EEPROM_ADDRESS);
@@ -821,17 +903,39 @@ void EEPROM_load_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_len
   }
 }
 
-void EEPROM_save_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_length) {
+bool EEPROM_save_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data, uint8_t data_length) {
+  // Look for index
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) {
+    index = EEPROM_create_new_patch_data_index();
+    if (index == PATCH_INDEX_NOT_FOUND) return false; // Out of storage space!
+  }
+
+  // Write header
+  patch_data[0] = type;
+  patch_data[1] = number >> 8;
+  patch_data[2] = number & 0xFF;
+
+  EEPROM_save_device_patch_by_index(index, patch_data, data_length);
+
+  patch_data_index[index].Type = type;
+  patch_data_index[index].Patch_number = number;
+  delay(30); // Time for data to settle
+  return true;
+}
+
+void EEPROM_save_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint8_t data_length) {
+
   // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
   // Page 1 contains the first 128 bytes of patch 1
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
 
-  uint16_t base_address = EXT_EEP_KATANA_PRESETS_BASE_ADDRESS + ((number / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((number % 2) * 128); // Point to the first or second page
-  uint16_t part2_address = base_address + 256 + ((number % 2) * 64); // Point to the first or second half of the third page
+  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
+  uint16_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
 
-  DEBUGMSG("Storing patch number " + String(number) + " at Addr1:" + String(part1_address) + "Addr2:" + String(part2_address));
+  DEBUGMSG("Storing patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
   EEPROM_delay();
   Wire.beginTransmission(EEPROM_ADDRESS);
@@ -842,7 +946,8 @@ void EEPROM_save_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_len
   }
   Wire.endTransmission();
 
-  EEPROM_delay();
+  delay(30); // Allow extra time for the data to settle
+
   Wire.beginTransmission(EEPROM_ADDRESS);
   Wire.send((int)(part2_address >> 8));   // MSB
   Wire.send((int)(part2_address & 0xFF)); // LSB
@@ -852,6 +957,32 @@ void EEPROM_save_KTN_patch(uint8_t number, uint8_t *patch_data, uint8_t data_len
   Wire.endTransmission();
 
   EEPROM_delay();
+}
+
+void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2, uint8_t patch_size) {
+  uint16_t index1 = EEPROM_find_patch_data_index(type, patch1);
+  uint16_t index2 = EEPROM_find_patch_data_index(type, patch2);
+  uint8_t patch_buffer[patch_size];
+
+  if (index1 != PATCH_INDEX_NOT_FOUND)  {
+    // Change patch number of patch 1 to patch 2
+    EEPROM_load_device_patch_by_index(index1, patch_buffer, patch_size);
+    patch_buffer[1] = patch2 >> 8;
+    patch_buffer[2] = patch2 & 0xFF;
+    EEPROM_save_device_patch_by_index(index1, patch_buffer, patch_size);
+    patch_data_index[index1].Patch_number = patch2;
+    delay(30); // Time for data to settle
+  }
+
+  if (index2 != PATCH_INDEX_NOT_FOUND)  {
+    // Change patch number of patch 2 to patch 1
+    EEPROM_load_device_patch_by_index(index2, patch_buffer, patch_size);
+    patch_buffer[1] = patch1 >> 8;
+    patch_buffer[2] = patch1 & 0xFF;
+    EEPROM_save_device_patch_by_index(index2, patch_buffer, patch_size);
+    patch_data_index[index2].Patch_number = patch1;
+    delay(30); // Time for data to settle
+  }
 }
 
 // ********************************* Section 7: HELIX forward messaging storage ********************************************
@@ -900,7 +1031,7 @@ void EEPROM_load_HELIX_message(uint8_t number) { // Read HLX_messages[5][3] arra
   DEBUGMSG("EEPROM: Read Helix program " + String(number) + " and setlist " + String(HLX_message_setlist));
 }
 
-void EEPROM_initialize_HELIX_message_space() {
+void EEP_initialize_Helix_data() {
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR, CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION); // Save the current eeprom version
@@ -1031,10 +1162,10 @@ void EEPROM_exchange_MG300_patches(uint8_t patch1, uint8_t patch2) {
   Wire.endTransmission();
 }
 
-void EEPROM_initialize_MG300_message_space() {
+void EEP_initialize_MG300_data() {
   LED_show_initializing_data();
   LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
-  write_ext_EEPROM(EXP_EEP_MG300_EFFECT_TYPE_ADDR, CURRENT_EXP_EEPROM_MG300_EFFECT_TYPE_VERSION); // Save the current eeprom version
+  write_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_MG300_DATA_VERSION); // Save the current eeprom version
   EEPROM_clear_MG300_message_array();
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_MG300_PRESETS; i++) {
     EEPROM_store_MG300_effect_types(i, 0);
@@ -1043,4 +1174,95 @@ void EEPROM_initialize_MG300_message_space() {
 
 void EEPROM_clear_MG300_message_array() {
   memset(My_MG300.fx_type, 0, MG300_NUMBER_OF_FX);
+}
+
+// ********************************* Section 9: Sequencer patterns storage ********************************************
+
+void EEPROM_store_seq_pattern(uint8_t number, uint8_t * data) { // Store MG300 effect types array to location number.
+  if (number >= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return; // Exit if number is too large
+  //const uint8_t* msg_ptr = (uint8_t*)EEPROM_seq_pattern;
+
+  // Store first four bytes on first page.
+  uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
+  EEPROM_delay();
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+
+  for (uint8_t c = 0; c < 4; c++) {
+    DEBUGMSG("Writing byte " + String(c) + ": " + String(*data));
+    Wire.send(*data++);
+  }
+  Wire.endTransmission();
+
+  // Store the rest on page 2 - 9
+  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
+  EEPROM_delay();
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+
+  for (uint8_t c = 0; c < 32; c++) {
+    DEBUGMSG("Writing byte " + String(c) + ": " + String(*data));
+    Wire.send(*data++);
+  }
+  Wire.endTransmission();
+
+  DEBUGMSG("EEPROM: Wrote sequencer pattern " + String(number));
+}
+
+bool EEPROM_load_seq_pattern(uint8_t number, uint8_t *data) {
+  if (number >= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return false; // Exit if number is too large
+  //uint8_t* msg_ptr = (uint8_t*)EEPROM_seq_pattern;
+
+  // Read first four bytes from first page.
+  uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
+  EEPROM_wait_ready();
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) 4);
+  for (uint8_t c = 0; c < 4; c++) {
+    uint8_t newbyte = Wire.receive();
+    *data++ = newbyte;
+  }
+
+  // Read the rest from page 2 - 9
+  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
+
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(eeaddress >> 8));   // MSB
+  Wire.send((int)(eeaddress & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) 32);
+  for (uint8_t c = 0; c < 32; c++) {
+    uint8_t newbyte = Wire.receive();
+    *data++ = newbyte;
+  }
+
+  DEBUGMSG("EEPROM: Read sequencer pattern " + String(number));
+  return true;
+}
+
+
+void EEPROM_EEP_initialize_seq_patterns_data() {
+  LED_show_initializing_data();
+  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  write_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR, CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION); // Save the current eeprom version
+  EEPROM_initialize_seq_patterns_message_array();
+  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_SEQ_PATTERNS; i++) {
+    EEPROM_store_seq_pattern(i, EEPROM_seq_pattern);
+  }
+}
+
+const PROGMEM uint8_t EEPROM_default_seq_pattern[36] = { 4, 4, 0, 0, 127, 32, 64, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+void EEPROM_initialize_seq_patterns_message_array() {
+  memcpy(EEPROM_seq_pattern, EEPROM_default_seq_pattern, 36);
 }

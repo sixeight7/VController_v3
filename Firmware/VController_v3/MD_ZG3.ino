@@ -148,7 +148,7 @@ void MD_ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 
 void MD_ZG3_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Zoom G3
-  if ((sxdata[5] == 0x52) && (sxdata[6] == ZG3_MODEL_NUMBER) && (sxdata[7] == 0x00)) {
+  if ((sxdata[5] == 0x52) && (sxdata[6] == ZG3_MODEL_NUMBER) && (sxdata[7] == 0x00) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }

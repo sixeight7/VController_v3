@@ -252,7 +252,7 @@ void MD_M13_class::check_still_connected() { // Started from MIDI/MIDI_check_all
 
 void MD_M13_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a M13
-  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x0E)) {
+  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x0E) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -463,7 +463,7 @@ const PROGMEM M13_FX_type_struct M13_FX_types[] = { // Table with the name of ev
   {10, 23, "Comet trails" },
   {10, 19, "Slow Filter" },
   {10, 24, "Octisynth" },
-  {10, 26, "Synth o matic" },
+  {10, 26, "Synthomatic" },
   {10, 27, "Attack synth" },
   {10, 28, "Synth String" },
   {10, 25, "Growler" },
@@ -476,7 +476,7 @@ const PROGMEM M13_FX_type_struct M13_FX_types[] = { // Table with the name of ev
   {6, 16, "Throaty" },
   {6, 17, "Conductor" },
   {6, 18, "Colorful" },
-  {9, 2, "Smart Harmony" },
+  {9, 2,  "Smart Harmony" },
   {9, 3 , "Pitch Glide" },
   {4, 28, "63 spring" },
   {4, 29, "Spring" },

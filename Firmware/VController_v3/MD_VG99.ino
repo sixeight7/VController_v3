@@ -79,6 +79,7 @@ void MD_VG99_class::init() // Default values for variables
   my_device_page3 = VG99_DEFAULT_PAGE3; // Default value
   my_device_page4 = VG99_DEFAULT_PAGE4; // Default value
   count_parameter_categories();
+  is_on = false;
 }
 
 // ********************************* Section 2: VG99 common MIDI in functions ********************************************
@@ -146,8 +147,8 @@ void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
       }
     }
 
-    // Check if it is the guitar on/off states
-    if (checksum_ok) check_guitar_switch_states(sxdata, sxlength);
+    // Check if it is the instrument on/off states
+    if (checksum_ok) check_inst_switch_states(sxdata, sxlength);
   }
 
   // Also check messages for the FC300 mode of the VG99
@@ -202,7 +203,7 @@ void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
 void MD_VG99_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a VG-99
-  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x1C) && (sxdata[7] == 0x02)) {
+  if ((sxdata[5] == 0x41) && (sxdata[6] == 0x1C) && (sxdata[7] == 0x02) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -358,7 +359,7 @@ void MD_VG99_class::request_guitar_switch_states() {
   request_onoff = true;
 }
 
-void MD_VG99_class::check_guitar_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+void MD_VG99_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
@@ -375,10 +376,7 @@ void MD_VG99_class::check_guitar_switch_states(const unsigned char* sxdata, shor
 
 void MD_VG99_class::unmute() {
   is_on = connected;
-  //VG99_select_LED = VG99_PATCH_COLOUR; //Switch the LED on
-  //write_sysex(VG99_COSM_GUITAR_A_SW, COSM_A_onoff); // Switch COSM guitar on
-  //write_sysex(VG99_COSM_GUITAR_B_SW, COSM_B_onoff); // Switch normal pu on
-  select_patch(patch_number); //Just sending the program change will put the sound back on
+  if (is_on) select_patch(patch_number); //Just sending the program change will put the sound back on
 }
 
 void MD_VG99_class::mute() {
@@ -1110,12 +1108,12 @@ const PROGMEM uint16_t FC300_CTL[12] = {0x2100, 0x2101, 0x2402, 0x2102, 0x2403, 
 
 void MD_VG99_class::read_assign_name(uint8_t number, String & Output) {
   if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title;
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_VG99_class::read_assign_short_name(uint8_t number, String & Output) {
   if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title_short;
-  else Output += "?";
+  else Output += "--";
 }
 
 void MD_VG99_class::read_assign_trigger(uint8_t number, String & Output) {

@@ -125,7 +125,7 @@ void MD_SVL_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
 
 void MD_SVL_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a Strymon Volante
-  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x55) && (sxdata[8] == 0x13)) {
+  if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x55) && (sxdata[8] == 0x13) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }

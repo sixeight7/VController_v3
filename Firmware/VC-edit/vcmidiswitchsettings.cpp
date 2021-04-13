@@ -47,7 +47,7 @@ void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
                     connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(midiSwitchSettingChanged(int, int, int)));
                     connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
                     connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
-                }               
+                }
             }
             if (VCmidiSwitchMenu[i].type == VALUE) {
                 child->setText(0, VCmidiSwitchMenu[i].name + " (" + QString::number(VCmidiSwitchMenu[i].min) + " - " + QString::number(VCmidiSwitchMenu[i].max) + ")");

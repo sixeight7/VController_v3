@@ -18,7 +18,7 @@ bool global_tuner_active = false;
 #define REFRESH_PAGE 2
 #define RELOAD_PAGE 3
 uint8_t update_page = OFF;
-uint8_t Number_of_pages = 0; // Real value is read in EEPROM_create_indexes()
+uint8_t Number_of_pages = 0; // Real value is read in EEPROM_create_command_indexes()
 uint8_t Current_page = PAGE_CURRENT_PATCH_BANK;
 uint8_t page_bank_number = 0;
 uint8_t page_bank_select_number = 0;
@@ -36,7 +36,8 @@ uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
 #define ACTION_TIMER_LENGTH 600 // for messages that are shown on press of buttons
 #define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 
-bool open_menu_for_Katana_edit = false;
+bool open_menu_for_Katana_patch_save = false;
+bool open_menu_for_SY1000_scene_save = false;
 bool do_not_forward_after_Helix_PC_message = false;
 
 #define UP true
@@ -79,6 +80,7 @@ void setup_devices() { // Trigger the initialization of  the devices
     DEBUGMSG("Init device " + String(d));
     Device[d]->init();
   }
+  device_sequencer_start();
 }
 
 void main_devices() {
@@ -99,4 +101,27 @@ void set_current_device(uint8_t dev) {
     Current_device = dev;
     Main_backlight_show_colour(Device[Current_device]->my_LED_colour);
   }
+}
+
+IntervalTimer Sequencer_timer;
+
+void device_sequencer_start() {
+  long timer_interval = 60000000 / (24 * 120);
+  Sequencer_timer.begin(device_sequencer_timer_expired, timer_interval);
+  Serial.println("device sequencer started at " + String(timer_interval));
+}
+
+void device_sequencer_update(uint8_t steps, uint8_t divider) {
+  if (steps == 0) return;
+  if (divider == 0) return;
+  long timer_interval = 60000000 * divider / (steps * Setting.Bpm);
+  Sequencer_timer.update(timer_interval);
+  Serial.println("Sequence timer update: " + String(timer_interval));
+}
+
+void device_sequencer_timer_expired() {
+  __disable_irq();
+  My_HLX.update_sequencer = true;
+  __enable_irq();
+  
 }

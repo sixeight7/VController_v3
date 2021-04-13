@@ -16,6 +16,8 @@
 #define REQUEST_PARAMETER_TYPE 2
 #define REQUEST_ASSIGN_TYPE 3
 #define REQUEST_FX_BUTTON_TYPE 4
+#define REQUEST_PEDAL_ASSIGN 5
+#define REQUEST_FULL_ASSIGN 6
 
 // Constructor - called by all derived classes as well
 MD_base_class::MD_base_class (uint8_t _dev_no) {
@@ -393,7 +395,7 @@ void MD_base_class::unmute() {}
 void MD_base_class::mute() {}
 
 void MD_base_class::select_switch() {
-  if (Current_device == my_device_number) {
+  if ((Current_device == my_device_number) && (is_on)) {
     is_always_on_toggle();
   }
   else {
@@ -476,21 +478,7 @@ void MD_base_class::select_parameter_bank_category(uint8_t category) {
 
 void MD_base_class::par_bank_updown(signed int delta, uint8_t my_bank_size) {
 
-  /*// Perform bank up:
-  if (delta > 0) {
-    for (uint8_t i = 0; i < delta; i++) {
-      if (parameter_bank_number >= (number_of_parbank_parameters() - 1) / my_bank_size) parameter_bank_number = 0; // Check if we've reached the top
-      else parameter_bank_number++; //Otherwise move bank up
-    }
-  }
-  // Perform bank down:
-  if (delta < 0) {
-    for (uint8_t i = 0; i < abs(delta); i++) {
-      if (parameter_bank_number <= 0) parameter_bank_number = (number_of_parbank_parameters() - 1) / my_bank_size; // Check if we've reached the bottom
-      else parameter_bank_number--; //Otherwise move bank down
-    }
-  }*/
-  parameter_bank_number = update_encoder_value(delta, parameter_bank_number, 0, number_of_parbank_parameters() - 1);
+  parameter_bank_number = update_encoder_value(delta, parameter_bank_number, 0, (number_of_parbank_parameters() - 1) / my_bank_size);
 
   if (my_bank_size == 1) { // Show the current parameter name and value if the bank size is only 1
     String msg = "";
@@ -554,7 +542,7 @@ void MD_base_class::asgn_bank_updown(signed int delta, uint8_t my_bank_size) {
   else {
     LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
   }*/
-  assign_bank_number = update_encoder_value(delta, assign_bank_number, 0, get_number_of_assigns() - 1);
+  assign_bank_number = update_encoder_value(delta, assign_bank_number, 0, (get_number_of_assigns() - 1) / my_bank_size);
   LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
 
   update_page = REFRESH_PAGE; //Re-read the patchnames for this bank
@@ -615,8 +603,12 @@ uint8_t MD_base_class::select_next_device_page() { // Select the next page for t
   return read_current_device_page();
 }
 
-void MD_base_class::set_snapscene_title(uint8_t number, String &Output) {
+void MD_base_class::get_snapscene_title(uint8_t number, String &Output) {
   Output += "Not supported";
+}
+
+void MD_base_class::get_snapscene_label(uint8_t number, String &Output) {
+  Output += "";
 }
 
 bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t number) {
@@ -628,9 +620,13 @@ bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t number) {
   Output = "Not supported";
   }*/
 
-void MD_base_class::set_snapscene(uint8_t number) {}
+void MD_base_class::set_snapscene(uint8_t sw, uint8_t number) {}
 
 void MD_base_class::snapscene_number_format(String &Output) {}
+
+bool MD_base_class::check_snapscene_active(uint8_t scene) {
+  return false;
+}
 
 // ********************************* Section 6: Looper control ********************************************
 

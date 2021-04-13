@@ -3,19 +3,21 @@
 // Load the proper ui
 #ifdef IS_VCMINI
 #include "ui_mainwindow_VC-mini.h"
-#define DEVICENAME VC-mini
+#define DEVICENAME "VC-mini"
 #else
 #include "ui_mainwindow_VC-full.h"
-#define DEVICENAME VController
+#define DEVICENAME "VController"
 #endif
 
 #include "vceditsettingsdialog.h"
 #include "midi.h"
 #include "vcsettings.h"
 #include "vcmidiswitchsettings.h"
+#include "vcseqpattern.h"
 #include "vcdevices.h"
 #include "commandeditdialog.h"
 #include "aboutdialog.h"
+#include "scenedialog.h"
 
 #include <QSettings>
 #include <QDir>
@@ -79,6 +81,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     MyVCsettings = new VCsettings();
     MyVCmidiSwitches = new VCmidiSwitches();
+    MyVCseqPatterns = new VCseqPattern();
     MyVCdevices = new VCdevices();
     MyVCcommands = new VCcommands();
     connect(MyVCcommands, SIGNAL(updateCommandScreens(bool)), this, SLOT(updateCommandScreens(bool)));
@@ -87,6 +90,7 @@ MainWindow::MainWindow(QWidget *parent) :
     updateCommandScreens(true);
     fillTreeWidget(ui->treeWidget);
     fillPatchListBox(ui->patchListWidget);
+    fillPatchTypeComboBox(ui->patchTypeComboBox);
     ui->patchListWidget->setDefaultDropAction(Qt::MoveAction);
     connect(ui->patchListWidget, SIGNAL(moveCommand(customListWidget*,int,int)), this, SLOT(movePatch(customListWidget*,int,int)));
     connect(ui->patchListWidget, SIGNAL(customDoubleClicked()), this, SLOT(on_actionRename_triggered()));
@@ -178,6 +182,7 @@ void MainWindow::saveAppSettings() {
     appSettings.setValue("savePageFile", MySavePageFile);
     appSettings.setValue("savePatchFile", MySavePatchFile);
     appSettings.setValue("currentPage", currentPage);
+    appSettings.setValue("currentPatchTypeComboBoxItem", ui->patchTypeComboBox->currentIndex());
     appSettings.endGroup();
 }
 
@@ -260,6 +265,7 @@ void MainWindow::fillTreeWidget(QTreeWidget *my_tree)
     my_tree->setStyleSheet("QTreeWidget::item { padding: 2 px; }");
     MyVCsettings->fillTreeWidget(my_tree);
     MyVCmidiSwitches->fillTreeWidget(my_tree, MyVCmidiSwitches);
+    MyVCseqPatterns->fillTreeWidget(my_tree, MyVCseqPatterns);
     MyVCdevices->fillTreeWidget(my_tree, MyVCcommands);
     connect(my_tree, SIGNAL(activated(QModelIndex)), this, SLOT(treeWidgetActivated(QModelIndex)));
 }
@@ -269,9 +275,9 @@ void MainWindow::treeWidgetActivated(QModelIndex)
     QApplication::processEvents();
 }
 
-void MainWindow::movePatch(customListWidget *widget, int sourceRow, int destRow)
+void MainWindow::movePatch(customListWidget *, int sourceRow, int destRow)
 {
-    My_KTN.movePatch(sourceRow, destRow);
+    MyVCdevices->movePatch(sourceRow, destRow, currentDevicePatchType);
     fillPatchListBox(ui->patchListWidget);
 }
 
@@ -329,17 +335,51 @@ void MainWindow::fillListBoxes(bool first_time)
 void MainWindow::fillPatchListBox(QListWidget *my_patchList)
 {
     my_patchList->clear();
-    for (int p = 0; p < KTN_MAX_NUMBER_OF_KATANA_PRESETS; p++) {
-        my_patchList->addItem(My_KTN.ReadPatchStringForListWidget(p));
+    if (currentDevicePatchType == 0) {
+        for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+          my_patchList->addItem(MyVCdevices->ReadPatchStringForListWidget(p, 0));
+      }
     }
+    else {
+        uint8_t dev = (currentDevicePatchType & 0xFF) - 1;
+        for (int p = Device[dev]->patch_min_as_stored_on_VC; p <= Device[dev]->patch_max_as_stored_on_VC; p++) {
+            my_patchList->addItem(MyVCdevices->ReadPatchStringForListWidget(p, currentDevicePatchType));
+        }
+    }
+
+    updateStatusLabel();
+}
+
+void MainWindow::fillPatchTypeComboBox(QComboBox *my_combobox)
+{
+   my_combobox->clear();
+   QString memitem = DEVICENAME;
+   memitem.append(" memory");
+   my_combobox->addItem(memitem);
+   for (uint8_t dev = 0; dev < NUMBER_OF_DEVICES; dev++) {
+       if (Device[dev]->supportPatchSaving() > 0) my_combobox->addItem(Device[dev]->full_device_name);
+       if (Device[dev]->supportPatchSaving() > 1) my_combobox->addItem(Device[dev]->full_device_name + " bass mode");
+   }
+
+   QSettings appSettings;
+   appSettings.beginGroup("MainWindow");
+   my_combobox->setCurrentIndex(appSettings.value("currentPatchTypeComboBoxItem", 1).toInt());
+   appSettings.endGroup();
 }
 
 void MainWindow::updateStatusLabel()
 {
-    uint8_t percentage = Commands.size() * 100 / MAX_NUMBER_OF_INTERNAL_COMMANDS;
-    statusLabel->setText("Cmd memory: " + QString::number(percentage) + "%");
-    if (percentage >= 95) statusLabel->setStyleSheet("background-color: orange");
-    if (percentage >= 100) statusLabel->setStyleSheet("background-color: red");
+    uint8_t cmd_percentage = Commands.size() * 100 / MAX_NUMBER_OF_INTERNAL_COMMANDS;
+    //statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%");
+
+    uint8_t patch_percentage = MyVCdevices->numberOfPatches() * 100 / MAX_NUMBER_OF_DEVICE_PRESETS;
+    statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%, Patch memory: " + QString::number(patch_percentage) + "%");
+
+    uint8_t max_percentage = cmd_percentage;
+    if (patch_percentage > cmd_percentage) max_percentage = patch_percentage;
+    if (max_percentage >= 95) statusLabel->setStyleSheet("background-color: orange");
+    else statusLabel->setStyleSheet("background: transparent");
+    if (max_percentage >= 100) statusLabel->setStyleSheet("background-color: red");
 
     if (VControllerConnected) {
         editorStateLabel->setText("Online");
@@ -433,6 +473,7 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 8: colourName = "magenta"; break;  // Colour 8 is Magenta
       case 9: colourName = "rgb(250, 20, 147)"; break;  // Colour 9 is Pink
       case 10: colourName = "rgb(102, 240, 150)"; break; // Colour 10 is Soft green
+      case 11: colourName = "rgb(0, 102, 255)"; break; // Colour 11 is Light Blue
 
       case 17: colourName = "darkGreen"; break;  // Colour 17 is Green dimmed
       case 18: colourName = "darkRed"; break;  //  Colour 18 is Red dimmed
@@ -444,6 +485,7 @@ void MainWindow::setButtonColour(int button, int colour) {
       case 24: colourName = "darkMagenta"; break;   // Colour 24 is Magenta dimmed
       case 25: colourName = "rgb(180, 15, 100)"; break;   // Colour 25 is Pink dimmed
       case 26: colourName = "rgb(75, 150, 100)"; break; // Colour 10 is Soft green dimmed
+      case 27: colourName = "rgb(0, 72, 184)"; break; // Colour 10 is Light Blue dimmed
 
       default: colourName = "gray"; break;
     }
@@ -585,9 +627,11 @@ void MainWindow::on_actionOpen_triggered()
         }
         MyVCsettings->read(loadDoc.object());
         MyVCmidiSwitches->read(loadDoc.object());
+        MyVCseqPatterns->read(loadDoc.object());
         MyVCdevices->read(loadDoc.object());
         MyVCcommands->readAll(loadDoc.object());
-        My_KTN.readAll(loadDoc.object());
+        MyVCdevices->readAll(loadDoc.object());
+        MyVCdevices->readAllLegacyKatana(loadDoc.object());
         fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
         updateCommandScreens(false);
         fillPatchListBox(ui->patchListWidget);
@@ -627,9 +671,10 @@ void MainWindow::on_actionSave_triggered()
     writeHeader(saveObject, "FullBackup");
     MyVCsettings->write(saveObject);
     MyVCmidiSwitches->write(saveObject);
+    MyVCseqPatterns->write(saveObject);
     MyVCdevices->write(saveObject);
     MyVCcommands->writeAll(saveObject);
-    My_KTN.writeAll(saveObject);
+    MyVCdevices->writeAll(saveObject);
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
     ui->statusbar->showMessage(MyFullBackupFile + " saved", STATUS_BAR_MESSAGE_TIME);
@@ -878,7 +923,7 @@ void MainWindow::on_tabWidget_currentChanged(int index)
         ui->menuCommand->menuAction()->setVisible(false);
     }
 
-    if (ui->tabWidget->tabText(index) == "Katana patches") {
+    if (ui->tabWidget->tabText(index) == "Device patches") {
         ui->menuPatch->menuAction()->setVisible(true);
     }
     else {
@@ -1054,7 +1099,8 @@ void MainWindow::ShowPatchContextMenu(const QPoint &pos)
     submenu.addAction(ui->actionRename);
     submenu.addAction(ui->actionImport);
     submenu.addAction(ui->actionExport);
-    QAction* rightClickItem = submenu.exec(myPos);
+    submenu.addAction((ui->actionInitialize_patch));
+    submenu.exec(myPos);
 }
 
 void MainWindow::on_actionDuplicatePage_triggered()
@@ -1162,10 +1208,12 @@ void MainWindow::VControllerDetected(int type, int versionMajor, int versionMino
         return;
     }
 
+    QString versionString = 'v' + QString::number(versionMajor) + '.' + QString::number(versionMinor) + '.' + QString::number(versionBuild);
+
 #ifdef IS_VCMINI
-    ui->statusbar->showMessage("VC-midi connected", STATUS_BAR_MESSAGE_TIME);
+    ui->statusbar->showMessage("VC-mini " + versionString + " connected", STATUS_BAR_MESSAGE_TIME);
 #else
-    ui->statusbar->showMessage("VController connected", STATUS_BAR_MESSAGE_TIME);
+    ui->statusbar->showMessage("VController " + versionString + " connected", STATUS_BAR_MESSAGE_TIME);
 #endif
 
     if ((versionMajor != VCMINI_FIRMWARE_VERSION_MAJOR) || (versionMinor != VCMINI_FIRMWARE_VERSION_MINOR)) {
@@ -1255,31 +1303,41 @@ void MainWindow::on_readPatchButton_clicked()
 void MainWindow::on_writePatchButton_clicked()
 {
     try_reconnect_MIDI();
-    startProgressBar(KTN_MAX_NUMBER_OF_KATANA_PRESETS, "Uploading Katana patches...");
+    startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Uploading Katana patches...");
     for (uint16_t p = 0; p < Commands.size(); p++) {
-        MyMidi->MIDI_send_KTN_patch(p);
+        MyMidi->MIDI_send_device_patch(p);
         updateProgressBar(p);
     }
-    MyMidi->MIDI_editor_send_finish_KTN_patch_dump();
+    MyMidi->MIDI_editor_finish_device_patch_dump();
     closeProgressBar("Katana patch upload complete");
 }
 
 void MainWindow::on_actionRename_triggered()
 {
-    // Rename Katana patch
+    // Rename patch
     bool ok;
-    int patch = ui->patchListWidget->currentRow();
+    int item = ui->patchListWidget->currentRow();
+    if (item == -1) return;
 
-    if (patch == -1) {
-        return;
+    int index = MyVCdevices->findIndex(currentDevicePatchType, item);
+
+    uint8_t my_type = Device_patches[index][0];
+    if (my_type == KTN + 1) {
+      QString text = QInputDialog::getText(this, tr("QInputDialog::getText()"),
+                                         tr("New patch name:"), QLineEdit::Normal,
+                                         My_KTN.ReadPatchName(index).trimmed(), &ok);
+
+      if (ok && !text.isEmpty()) {
+        My_KTN.WritePatchName(index, text);
+        fillPatchListBox(ui->patchListWidget);
+        dataEdited = true;
+      }
     }
 
-    QString text = QInputDialog::getText(this, tr("QInputDialog::getText()"),
-                                         tr("New patch name:"), QLineEdit::Normal,
-                                         My_KTN.ReadPatchName(patch).trimmed(), &ok);
-
-    if (ok && !text.isEmpty()) {
-        My_KTN.WritePatchName(patch, text);
+    if (my_type == SY1000 + 1) {
+        scenedialog sd(this, index);
+        sd.exec();
+        sd.close();
         fillPatchListBox(ui->patchListWidget);
         dataEdited = true;
     }
@@ -1287,18 +1345,26 @@ void MainWindow::on_actionRename_triggered()
 
 void MainWindow::on_actionExport_triggered()
 {
-    // Export Katana patch
-    int patch = ui->patchListWidget->currentRow();
+    // Export patch
+    int number = ui->patchListWidget->currentRow();
+    if (number == -1) return;
 
-    if (patch == -1) {
+    int index = MyVCdevices->findIndex(currentDevicePatchType, number);
+    if (index == PATCH_INDEX_NOT_FOUND) return;
+
+    // Check if patch is empty
+    int type = Device_patches[index][0];
+    if (type == 0) {
+        ui->statusbar->showMessage("Patch is empty", STATUS_BAR_MESSAGE_TIME);
         return;
     }
+    int dev = type - 1;
 
     // File Save
     QFileInfo fileInfo(MySavePatchFile);
     qDebug() << MySavePatchFile << fileInfo.absoluteFilePath();
-    MySavePatchFile = fileInfo.absoluteFilePath() + "/" + My_KTN.ReadPatchName(patch) + ".vcp";
-    MySavePatchFile = QFileDialog::getSaveFileName(this, "Save Katana patch:", MySavePatchFile, tr("VC-edit data (*.vcp)"));
+    MySavePatchFile = fileInfo.absoluteFilePath() + "/" + Device[dev]->DefaultPatchFileName(number) + ".vcp";
+    MySavePatchFile = QFileDialog::getSaveFileName(this, "Save patch:", MySavePatchFile, tr("VC-edit data (*.vcp)"));
     QFile saveFile(MySavePatchFile);
 
     if (!saveFile.open(QIODevice::WriteOnly)) {
@@ -1306,9 +1372,10 @@ void MainWindow::on_actionExport_triggered()
         return;
     }
 
+    QString patchHeader = Device[dev]->patchFileHeader() + "Patch";
     QJsonObject saveObject;
-    writeHeader(saveObject, "KatanaPatch");
-    My_KTN.writePatchData(patch, saveObject);
+    writeHeader(saveObject, patchHeader);
+    MyVCdevices->writePatchData(index, saveObject);
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
     ui->statusbar->showMessage(MySavePatchFile + " saved", STATUS_BAR_MESSAGE_TIME);
@@ -1316,15 +1383,14 @@ void MainWindow::on_actionExport_triggered()
 
 void MainWindow::on_actionImport_triggered()
 {
-    // Import Katana patch
-    int patch = ui->patchListWidget->currentRow();
+    // Import device patch
+    int patch_no = ui->patchListWidget->currentRow();
+    if (patch_no == -1) return; // Nothing selected
 
-    if (patch == -1) {
-        return;
-    }
+    if (currentDevicePatchType == 0) return; // Cannot import in memory view
 
     // File Open
-    QString MyFile = QFileDialog::getOpenFileName(this, "Open VC-edit Katana patch file", QFileInfo(MySavePatchFile).filePath(), tr("VC-edit data (*.vcp)"));
+    QString MyFile = QFileDialog::getOpenFileName(this, "Open VC-edit patch file", QFileInfo(MySavePatchFile).filePath(), tr("VC-edit data (*.vcp)"));
     QFile loadFile(MyFile);
 
     if (!loadFile.open(QIODevice::ReadOnly)) {
@@ -1336,41 +1402,117 @@ void MainWindow::on_actionImport_triggered()
     QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
     fileLoaded = true;
 
+    uint8_t dev = currentDevicePatchType - 1;
+    QString patchHeader = Device[dev]->patchFileHeader() + "Patch";
     QString jsonType = readHeader(loadDoc.object());
-    if (jsonType != "KatanaPatch") {
-        ui->statusbar->showMessage("Couldn't read selected. No VC-edit Katana patch file", STATUS_BAR_MESSAGE_TIME);
-        return;
-    }
-    else {
-        My_KTN.readPatchData(patch, loadDoc.object());
+    if (jsonType == patchHeader) {
+        MyVCdevices->readPatchData(patch_no, loadDoc.object(), currentDevicePatchType);
         fillPatchListBox(ui->patchListWidget);
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
+    }
+    /*else if ((currentDevicePatchType == KTN + 1) && (jsonType == "KatanaPatch")) { // Open legacy format for Katana only
+        MyVCdevices->readPatchData(patch_no, loadDoc.object(), KTN + 1);
+        fillPatchListBox(ui->patchListWidget);
+        ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
+    }*/
+    else {
+        ui->statusbar->showMessage("Couldn't read selected. No VC-edit " + patchHeader + " file", STATUS_BAR_MESSAGE_TIME);
+        return;
     }
 }
 
 void MainWindow::on_actionCopyPatch_triggered()
 {
-    // Copy Katana patch
-    int patch = ui->patchListWidget->currentRow();
+    MyVCdevices->clearCopyBuffer();
 
-    if (patch == -1) {
-        return;
+    // Copy selected patches
+    foreach (QListWidgetItem* item, ui->patchListWidget->selectedItems()) {
+        int patch = item->listWidget()->row(item);
+        if (patch == -1) return;
+
+        MyVCdevices->copyPatch(patch, currentDevicePatchType);
     }
-
-    My_KTN.copyPatch(patch);
 }
 
 void MainWindow::on_actionPastePatch_triggered()
 {
-    // Paste Katana patch
+    // Paste patches in buffer
     int patch = ui->patchListWidget->currentRow();
 
     if (patch == -1) {
         return;
     }
 
-    My_KTN.pastePatch(patch);
+    MyVCdevices->pastePatch(patch, currentDevicePatchType);
 
     fillPatchListBox(ui->patchListWidget);
     dataEdited = true;
+}
+
+void MainWindow::on_actionInitialize_patch_triggered()
+{
+    foreach (QListWidgetItem* item, ui->patchListWidget->selectedItems()) {
+        int patch = item->listWidget()->row(item);
+        if (patch == -1) return;
+
+        MyVCdevices->initializePatch(patch, currentDevicePatchType);
+    }
+
+    fillPatchListBox(ui->patchListWidget);
+    dataEdited = true;
+}
+
+
+
+void MainWindow::on_patchTypeComboBox_currentIndexChanged(int index)
+{
+   int prevType = currentDevicePatchType;
+    currentDevicePatchType = 0;
+    if (index > 0) {
+        uint8_t t = 0;
+        for (uint8_t dev = 0; dev < NUMBER_OF_DEVICES; dev++) {
+            if (Device[dev]->supportPatchSaving() > 0) {
+                t++;
+                if (t == index) {
+                    currentDevicePatchType = dev + 1;
+                }
+            }
+            if (Device[dev]->supportPatchSaving() > 1) {
+                t++;
+                if (t == index) {
+                    currentDevicePatchType = (dev + 1) | BASS_MODE_NUMBER_OFFSET;
+                }
+            }
+        }
+    }
+
+    if (currentDevicePatchType != prevType){
+        fillPatchListBox(ui->patchListWidget);
+    }
+
+    ui->actionImport->setEnabled(index != 0); // Hide the Import Action when in memory mode
+    ui->actionPastePatch->setEnabled(index != 0);
+}
+
+
+
+void MainWindow::on_readPatternsButton_clicked()
+{
+    // Request patterns
+    try_reconnect_MIDI();
+    MyMidi->MIDI_editor_request_sequence_patterns();
+}
+
+void MainWindow::on_writePatternsButton_clicked()
+{
+    // Send patterns
+    try_reconnect_MIDI();
+    startProgressBar(NUMBER_OF_SEQ_PATTERNS, "Uploading sequence patterns...");
+    //MyMidi->MIDI_editor_send_settings();
+    for (int p = 0; p < NUMBER_OF_SEQ_PATTERNS; p++) {
+        updateProgressBar(p);
+        MyMidi->MIDI_editor_send_seq_pattern(p);
+    }
+    //MyMidi->MIDI_editor_send_save_settings();
+    closeProgressBar("Pattern upload complete.");
 }

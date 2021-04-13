@@ -4,7 +4,7 @@
 #include <QApplication>
 #include <QVector>
 
-#define NUMBER_OF_SELECTABLE_COLOURS 11
+#define NUMBER_OF_SELECTABLE_COLOURS 12
 
 // Defining FX colours types - the colours are set in the menu.
 // Colour numbers 241 - 255 are reserved for colour sublists.
@@ -21,5 +21,6 @@
 #define FX_LOOPER_TYPE 231 // For looper
 #define FX_WAH_TYPE 230 // For wahs
 #define FX_DYNAMICS_TYPE 229 // For gates/etc
+#define FX_SHOW_TAP_TEMPO 228
 
 #endif // LEDS_H

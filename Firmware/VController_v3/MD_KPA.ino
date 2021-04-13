@@ -521,7 +521,7 @@ void MD_KPA_class::request_bank_name(signed int delta, uint16_t number) {
 // ********************************* Section 5: KPA parameter control ********************************************
 // Define array for KPA effeect names and colours
 struct KPA_CC_type_struct { // Combines all the data we need for controlling a parameter in a device
-  char Name[17]; // The name for the label
+  char Name[11]; // The name for the label
   uint16_t Address;
   uint8_t CC; // The cc for this effect.
 };
@@ -535,8 +535,8 @@ const PROGMEM KPA_CC_type_struct KPA_CC_types[] = {
   {"STOMP MOD", 0x3A03, 24},
   {"STOMP DLY", 0x3C03, 26},
   {"STOMP RVB", 0x4B02, 28},
-  {"ROTARY SPEED", 0x0000, 33},
-  {"DLY FBACK INF", 0x0000, 34},
+  {"ROTARY SPD", 0x0000, 33},
+  {"DLY FB INF", 0x0000, 34},
   {"DELAY HOLD", 0x0000, 35}, // 10
   {"WAH PDL", 0x0000, 1},
   {"MORPH PDL", 0x0000, 11},

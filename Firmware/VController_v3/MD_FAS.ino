@@ -19,7 +19,7 @@
 #define FAS_PATCH_MIN 0
 #define FAS_PATCH_MAX 383
 
-// In the Axe-Fx's I/O / MIDI settings page, make sure that “Send Realtime Sysex” is set to ALL.
+// In the Axe-Fx's I/O / MIDI settings page, make sure that "Send Realtime Sysex” is set to ALL.
 
 // AxeFX model numbers:
 #define FAS_MODEL_STANDARD 0x00 // Axe-Fx Standard
@@ -125,7 +125,7 @@ void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
   if ((sxdata[1] == 0x00) && (sxdata[2] == 0x01) && (sxdata[3] == 0x74)) {
 
     // Check if it is GET_FIRMWARE_RESPONSE - used for device detection of the AxeFX
-    if (((sxdata[5] == FAS_FIRMWARE_VERSION) || (sxdata[5] == FAS_FIRMWARE_VERSION_AF2)) && (!connected)) {
+    if (((sxdata[5] == FAS_FIRMWARE_VERSION) || (sxdata[5] == FAS_FIRMWARE_VERSION_AF2)) && (!connected) && (enabled == DEVICE_DETECT)) {
       set_type(sxdata[4]); // Will change the device name after a succesful detection
       connect(sxdata[4], port); // Will connect to the device
     }
@@ -527,7 +527,7 @@ void MD_FAS_class::mute() {
 // 5. Release switch - FAS_parameter_release() below - also calls check_update_label()
 
 struct FAS_parameter_struct { // Combines all the data we need for controlling a parameter in a device
-  char Name[17]; // The name for the label
+  char Name[13]; // The name for the label
   uint8_t Colour; // The colour for this effect.
 };
 
@@ -597,16 +597,16 @@ const PROGMEM FAS_parameter_struct FAS_parameters[] = {
   {"Tonematch", FX_FILTER_TYPE},
   {"AMP 1 X/Y", FX_AMP_TYPE},
   {"AMP 2 X/Y", FX_AMP_TYPE},
-  {"CABINET 1 X/Y", FX_AMP_TYPE},
-  {"CABINET 2 X/Y", FX_AMP_TYPE},
+  {"CAB 1 X/Y", FX_AMP_TYPE},
+  {"CAB 2 X/Y", FX_AMP_TYPE},
   {"CHORUS 1 X/Y", FX_MODULATE_TYPE},
   {"CHORUS 2 X/Y", FX_MODULATE_TYPE},
   {"DELAY 1 X/Y", FX_DELAY_TYPE},
   {"DELAY 2 X/Y", FX_DELAY_TYPE},
   {"DRIVE 1 X/Y", FX_DIST_TYPE},
   {"DRIVE 2 X/Y", FX_DIST_TYPE},
-  {"FLANGER 1 X/Y", FX_MODULATE_TYPE},
-  {"FLANGER 2 X/Y", FX_MODULATE_TYPE},
+  {"FLANGER1 X/Y", FX_MODULATE_TYPE},
+  {"FLANGER2 X/Y", FX_MODULATE_TYPE},
   {"PHASER 1 X/Y", FX_MODULATE_TYPE},
   {"PHASER 2 X/Y", FX_MODULATE_TYPE},
   {"PITCH 1 X/Y", FX_PITCH_TYPE},
@@ -816,7 +816,7 @@ bool MD_FAS_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
 }
 // ********************************* Section 6: FAS scene and looper control ********************************************
 
-void MD_FAS_class::set_snapscene_title(uint8_t number, String & Output) {
+void MD_FAS_class::get_snapscene_title(uint8_t number, String & Output) {
   Output += "SCENE " + String(number);
 }
 
@@ -830,7 +830,8 @@ void MD_FAS_class::set_snapscene_title(uint8_t number, String & Output) {
   Output += "SCENE " + String(number);
   }*/
 
-void MD_FAS_class::set_snapscene(uint8_t number) {
+void MD_FAS_class::set_snapscene(uint8_t sw, uint8_t number) {
+  if (!is_on) unmute();
   current_snapscene = number;
   MIDI_send_CC(FAS_SCENE_SELECT_CC, number - 1, MIDI_channel, MIDI_port);
 }

@@ -41,12 +41,13 @@ struct colour {
 #define FX_LOOPER_TYPE 231 // For looper
 #define FX_WAH_TYPE 230 // For wahs
 #define FX_DYNAMICS_TYPE 229 // For gates/etc
+#define FX_SHOW_TAP_TEMPO 228
 
 //Lets make some colours (R,G,B)
 
 
 #define NUMBER_OF_COLOURS 32
-#define NUMBER_OF_SELECTABLE_COLOURS 11
+#define NUMBER_OF_SELECTABLE_COLOURS 12
 colour colours[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 0 is LED OFF
   {0, 255, 0} ,  // Colour 1 is Green
@@ -58,8 +59,8 @@ colour colours[NUMBER_OF_COLOURS] = {
   {204, 204, 0} ,   // Colour 7 is Yellow
   {128, 0, 255} ,   // Colour 8 is Purple
   {255, 0, 128} ,   // Colour 9 is Pink
-  {92, 255, 114} ,   // Colour 10 is Soft green
-  {0, 0, 0} ,   // Colour 11 is spare
+  {92, 255, 114} ,   // Colour 10 is Soft Green
+  {0, 92, 204} ,   // Colour 11 is Light Blue
   {0, 0, 0} ,   // Colour 12 is spare
   {0, 0, 0} ,   // Colour 13 is spare
   {0, 0, 0} ,   // Colour 14 is spare
@@ -75,7 +76,7 @@ colour colours[NUMBER_OF_COLOURS] = {
   {36, 0, 72} ,   // Colour 24 is Purple dimmed
   {36, 0, 36} ,   // Colour 25 is Pink dimmed
   {18, 40, 23} ,   // Colour 26 is Soft green dimmed
-  {0, 0, 0} ,   // Colour 27 is spare dimmed
+  {0, 22, 41} ,   // Colour 27 is Light Blue dimmed
   {0, 0, 0} ,   // Colour 28 is spare dimmed
   {0, 0, 0} ,   // Colour 29 is spare dimmed
   {0, 0, 0} ,   // Colour 30 is spare dimmed
@@ -94,7 +95,7 @@ colour Backlight_colours_Adafruit[NUMBER_OF_COLOURS] = {
   {128, 50, 204} ,   // Colour 8 is Purple
   {255, 50, 128} ,   // Colour 9 is Pink
   {92, 255, 114} ,   // Colour 10 is Soft Green
-  {0, 0, 0} ,   // Colour 11 is spare
+  {0, 92, 204} ,   // Colour 11 is Light Blue
   {0, 0, 0} ,   // Colour 12 is spare
   {0, 0, 0} ,   // Colour 13 is spare
   {0, 0, 0} ,   // Colour 14 is spare
@@ -113,7 +114,7 @@ colour Backlight_colours_Buydisplay[NUMBER_OF_COLOURS] = {
   {128, 50, 255} ,   // Colour 8 is Purple
   {255, 70, 150} ,   // Colour 9 is Pink
   {92, 255, 114} ,   // Colour 10 is Soft Green
-  {0, 0, 0} ,   // Colour 11 is spare
+  {0, 92, 204} ,   // Colour 11 is Light Blue
   {0, 0, 0} ,   // Colour 12 is spare
   {0, 0, 0} ,   // Colour 13 is spare
   {0, 0, 0} ,   // Colour 14 is spare
@@ -327,6 +328,7 @@ void LED_update() {
           cs = Device[Dev]->current_snapscene;
           if ((cs == SP[sw].PP_number) || (SP[sw].Pressed)) LED_show_colour(s, SP[sw].Colour);
           else if ((cs != 0) && ((cs == SP[sw].Value1) || (cs == SP[sw].Value2) || (cs == SP[sw].Value3))) LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
+          else if (Device[Dev]->check_snapscene_active(SP[sw].PP_number)) LED_show_colour(s, 3 | LED_DIMMED); // Show blue LEDs for active scenes SY1000
           else LED_show_colour(s, 0);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
@@ -430,6 +432,7 @@ uint8_t LED_FX_type_colour(uint8_t type) { // Read the FX colour from the settin
     case FX_LOOPER_TYPE: return Setting.FX_LOOPER_colour;
     case FX_WAH_TYPE: return Setting.FX_WAH_colour;
     case FX_DYNAMICS_TYPE: return Setting.FX_DYNAMICS_colour;
+    case FX_SHOW_TAP_TEMPO: return global_tap_tempo_LED;
     default: return type;
   }
 }
@@ -480,7 +483,6 @@ void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the sp
       LED_state_changed = true;
     }
   }
-
 }
 
 void Backlight_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the specified LED to the specified colour

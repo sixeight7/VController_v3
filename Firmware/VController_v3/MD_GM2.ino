@@ -171,7 +171,7 @@ void MD_GM2_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
 
 void MD_GM2_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
   // Check if it is a TC-electronics G-Major 2: F0 7E 7F 06 02 00 20 1F 66 01 00 03 F7
-  if ((sxdata[6] == 0x20) && (sxdata[7] == 0x1F) && (sxdata[8] == GM2_MODEL_NUMBER)) {
+  if ((sxdata[6] == 0x20) && (sxdata[7] == 0x1F) && (sxdata[8] == GM2_MODEL_NUMBER) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
     if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
   }
@@ -315,7 +315,7 @@ void MD_GM2_class::direct_select_format(uint16_t number, String &Output) {
 struct GM2_FX_type_struct { // Combines all the data we need for controlling a parameter in a device
   uint8_t Address;
   uint8_t Address_type;
-  char Name[17]; // The name for the label
+  char Name[7]; // The name for the label
   uint8_t Sublist;
   uint8_t Colour; // The colour for this effect.
 };

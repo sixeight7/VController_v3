@@ -193,7 +193,8 @@
 #define PAGE_CURRENT_ASSIGN 224
 #define PAGE_SY1000_PATCH_BANK 225
 #define PAGE_SY1000_ASSIGNS 226
-#define PAGE_MG300_PATCH_BANK 227
+#define PAGE_SY1000_SCENES 227
+#define PAGE_MG300_PATCH_BANK 228
 #define LAST_FIXED_CMD_PAGE 227
 
 #define DEFAULT_PAGE PAGE_SELECT // The page that gets selected when a valid page number is unknown
@@ -255,7 +256,7 @@
 #define SVL_DEFAULT_PAGE4 0
 
 #define SY1000_DEFAULT_PAGE1 PAGE_SY1000_PATCH_BANK
-#define SY1000_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SY1000_DEFAULT_PAGE2 PAGE_SY1000_SCENES
 #define SY1000_DEFAULT_PAGE3 PAGE_SY1000_ASSIGNS
 #define SY1000_DEFAULT_PAGE4 0
 
@@ -780,8 +781,8 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_SY1000_PATCH_BANK, 6, PATCH, SY1000, BANKSELECT, 6, 8}, // ** Switch 06 **
   {PAGE_SY1000_PATCH_BANK, 7, PATCH, SY1000, BANKSELECT, 7, 8}, // ** Switch 07 **
   {PAGE_SY1000_PATCH_BANK, 8, PATCH, SY1000, BANKSELECT, 8, 8}, // ** Switch 08 **
-  //{PAGE_SY1000_PATCH_BANK, 9, PARAMETER, SY1000, 14, STEP, 0, 6, 1}, // ** Switch 09 **
-  //{PAGE_SY1000_PATCH_BANK, 10, PAGE, COMMON, SELECT, PAGE_FULL_LOOPER}, // ** Switch 10 **
+  {PAGE_SY1000_PATCH_BANK, 9, ASSIGN, SY1000, SELECT, 0, 0}, // ** Switch 09 **
+  {PAGE_SY1000_PATCH_BANK, 10, ASSIGN, SY1000, SELECT, 1, 1}, // ** Switch 10 **
   //{PAGE_SY1000_PATCH_BANK, 11, PARAMETER, SY1000, 1, TOGGLE, 1, 0}, // ** Switch 11 **
   //{PAGE_SY1000_PATCH_BANK, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
   {PAGE_SY1000_PATCH_BANK, 13, PATCH, SY1000, BANKDOWN, 8}, // ** Switch 13 **
@@ -794,24 +795,44 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   // ******************************* PAGE 226: SY1000 assign *************************************************
   {PAGE_SY1000_ASSIGNS, LABEL, 'A', 'S', 'S', 'I', 'G', 'N', 'S', ' ' },
   {PAGE_SY1000_ASSIGNS, LABEL, 'S', 'Y', '1', '0', '0', '0', ' ', ' ' },
-  {PAGE_SY1000_ASSIGNS, 1, ASSIGN, SY1000, SELECT, 0, 21}, // ** Switch 01 **
-  {PAGE_SY1000_ASSIGNS, 2, ASSIGN, SY1000, SELECT, 1, 22}, // ** Switch 02 **
-  {PAGE_SY1000_ASSIGNS, 3, ASSIGN, SY1000, SELECT, 2, 23}, // ** Switch 03 **
-  {PAGE_SY1000_ASSIGNS, 4, ASSIGN, SY1000, SELECT, 3, 24}, // ** Switch 04 **
-  {PAGE_SY1000_ASSIGNS, 5, ASSIGN, SY1000, SELECT, 4, 25}, // ** Switch 05 **
-  {PAGE_SY1000_ASSIGNS, 6, ASSIGN, SY1000, SELECT, 5, 26}, // ** Switch 06 **
-  {PAGE_SY1000_ASSIGNS, 7, ASSIGN, SY1000, SELECT, 6, 27}, // ** Switch 07 **
-  {PAGE_SY1000_ASSIGNS, 8, ASSIGN, SY1000, SELECT, 7, 28}, // ** Switch 08 **
-  {PAGE_SY1000_ASSIGNS, 9, NOTHING, COMMON}, // ** Switch 09 **
-  {PAGE_SY1000_ASSIGNS, 10, NOTHING, COMMON}, // ** Switch 10 **
+  {PAGE_SY1000_ASSIGNS, 1, ASSIGN, SY1000, BANKSELECT, 1, 8}, // ** Switch 01 **
+  {PAGE_SY1000_ASSIGNS, 2, ASSIGN, SY1000, BANKSELECT, 2, 8}, // ** Switch 02 **
+  {PAGE_SY1000_ASSIGNS, 3, ASSIGN, SY1000, BANKSELECT, 3, 8}, // ** Switch 03 **
+  {PAGE_SY1000_ASSIGNS, 4, ASSIGN, SY1000, BANKSELECT, 4, 8}, // ** Switch 04 **
+  {PAGE_SY1000_ASSIGNS, 5, ASSIGN, SY1000, BANKSELECT, 5, 8}, // ** Switch 05 **
+  {PAGE_SY1000_ASSIGNS, 6, ASSIGN, SY1000, BANKSELECT, 6, 8}, // ** Switch 06 **
+  {PAGE_SY1000_ASSIGNS, 7, ASSIGN, SY1000, BANKSELECT, 7, 8}, // ** Switch 07 **
+  {PAGE_SY1000_ASSIGNS, 8, ASSIGN, SY1000, BANKSELECT, 8, 8}, // ** Switch 08 **
+  {PAGE_SY1000_ASSIGNS, 9, PATCH, SY1000, PREV, 1}, // ** Switch 09 **
+  {PAGE_SY1000_ASSIGNS, 10, PATCH, SY1000, NEXT, 1}, // ** Switch 10 **
   //{PAGE_SY1000_ASSIGNS, 11, NOTHING, COMMON}, // ** Switch 11 **
   //{PAGE_SY1000_ASSIGNS, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
-  {PAGE_SY1000_ASSIGNS, 13, PATCH, SY1000, PREV, 9}, // ** Switch 13 **
-  {PAGE_SY1000_ASSIGNS, 14, PATCH, SY1000, NEXT, 9}, // ** Switch 14 **
+  {PAGE_SY1000_ASSIGNS, 13, ASSIGN, SY1000, BANKDOWN, 8}, // ** Switch 13 **
+  {PAGE_SY1000_ASSIGNS, 14, ASSIGN, SY1000, BANKUP, 8}, // ** Switch 14 **
   //{PAGE_SY1000_ASSIGNS, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
   {PAGE_SY1000_ASSIGNS, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
-  // ******************************* PAGE 227: MG300_patch_bank (8 buttons per page) *************************************************
+  // ******************************* PAGE 227: Scenes (SY1000) *************************************************
+  {PAGE_SY1000_SCENES, LABEL, 'S', 'C', 'E', 'N', 'E', 'S', ' ', 'S' },
+  {PAGE_SY1000_SCENES, LABEL, 'Y', '1', '0', '0', '0', ' ', ' ', ' ' },
+  {PAGE_SY1000_SCENES, 1, SNAPSCENE, CURRENT, 1, 0, 0}, // ** Switch 01 **
+  {PAGE_SY1000_SCENES, 2, SNAPSCENE, CURRENT, 2, 0, 0}, // ** Switch 02 **
+  {PAGE_SY1000_SCENES, 3, SNAPSCENE, CURRENT, 3, 0, 0}, // ** Switch 03 **
+  {PAGE_SY1000_SCENES, 4, SNAPSCENE, CURRENT, 4, 0, 0}, // ** Switch 04 **
+  {PAGE_SY1000_SCENES, 5, SNAPSCENE, CURRENT, 5, 0, 0}, // ** Switch 05 **
+  {PAGE_SY1000_SCENES, 6, SNAPSCENE, CURRENT, 6, 0, 0}, // ** Switch 06 **
+  {PAGE_SY1000_SCENES, 7, SNAPSCENE, CURRENT, 7, 0, 0}, // ** Switch 07 **
+  {PAGE_SY1000_SCENES, 8, SNAPSCENE, CURRENT, 8, 0, 0}, // ** Switch 08 **
+  //{PAGE_SY1000_SCENES, 9, SAVE_PATCH, SY1000}, // ** Switch 09 **
+  {PAGE_SY1000_SCENES, 10, SAVE_PATCH, SY1000}, // ** Switch 10 **
+  //{PAGE_SY1000_SCENES, 11, PARAMETER, CURRENT, 10, MOMENTARY, 127, 0}, // ** Switch 11 **
+  //{PAGE_SY1000_SCENES, 12, TAP_TEMPO, COMMON}, // ** Switch 12 **
+  {PAGE_SY1000_SCENES, 13, PATCH, CURRENT, PREV}, // ** Switch 13 **
+  {PAGE_SY1000_SCENES, 14, PATCH, CURRENT, NEXT}, // ** Switch 14 **
+  //{PAGE_SY1000_SCENES, 15, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 15 **
+  {PAGE_SY1000_SCENES, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
+
+  // ******************************* PAGE 228: MG300_patch_bank (8 buttons per page) *************************************************
   {PAGE_MG300_PATCH_BANK, LABEL, 'P', 'A', 'T', 'C', 'H', ' ', 'B', 'A' },
   {PAGE_MG300_PATCH_BANK, LABEL, 'N', 'K', ' ', 'M', 'G', '3', '0', '0' },
   {PAGE_MG300_PATCH_BANK, 1, PATCH, MG300, BANKSELECT, 1, 8}, // ** Switch 01 **
@@ -999,7 +1020,9 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define PAGE_MG300_FX1 218
 #define PAGE_MG300_FX2 219
 #define PAGE_MG300_FX3 220
-#define LAST_FIXED_CMD_PAGE 220
+#define PAGE_SY1000_MODE_SEL1 221
+#define PAGE_SY1000_MODE_SEL2 222
+#define LAST_FIXED_CMD_PAGE 222
 
 #define DEFAULT_PAGE PAGE_CURRENT_PATCH_BANK // The page that gets selected when a valid page number is unknown
 
@@ -1059,8 +1082,8 @@ const uint16_t NUMBER_OF_INIT_COMMANDS = sizeof(Default_commands) / sizeof(Defau
 #define SVL_DEFAULT_PAGE3 0
 #define SVL_DEFAULT_PAGE4 0
 
-#define SY1000_DEFAULT_PAGE1 PAGE_CURRENT_PATCH_BANK
-#define SY1000_DEFAULT_PAGE2 PAGE_CURRENT_PARAMETER
+#define SY1000_DEFAULT_PAGE1 PAGE_SY1000_MODE_SEL1
+#define SY1000_DEFAULT_PAGE2 PAGE_CURRENT_PATCH_BANK
 #define SY1000_DEFAULT_PAGE3 PAGE_CURRENT_ASSIGN
 #define SY1000_DEFAULT_PAGE4 0
 
@@ -1320,6 +1343,39 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_MG300_FX3, 4, PATCH, MG300, NEXT}, // ** Switch 04 - ENC #1 turn **
   {PAGE_MG300_FX3, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
   {PAGE_MG300_FX3, 7, OPEN_PAGE_DEVICE, MG300, MG300_DEFAULT_PAGE1}, // ** Switch 07 - ENC #2 press **
+
+  // ******************************* PAGE 221: SY1000 MODE SELECT  *************************************************
+  {PAGE_SY1000_MODE_SEL1, LABEL, 'M', 'O', 'D', 'E', ' ', 'S', 'E', 'L'},
+  {PAGE_SY1000_MODE_SEL1, LABEL, '1', ' ', 'S', 'Y', '1', '0', '0', '0'},
+  {PAGE_SY1000_MODE_SEL1, 1 | LABEL, 'P', 'A', 'T', 'C', 'H', ' ', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL1, 1 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 2, 2}, // ** Switch 01 **
+  {PAGE_SY1000_MODE_SEL1, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+  {PAGE_SY1000_MODE_SEL1, 2 | LABEL, 'S', 'C', 'E', 'N', 'E', ' ', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL1, 2 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 3, 4}, // ** Switch 02 **
+  {PAGE_SY1000_MODE_SEL1, 2 | ON_LONG_PRESS, SAVE_PATCH, SY1000},
+  {PAGE_SY1000_MODE_SEL1, 3 | LABEL, 'M', 'A', 'N', 'U', 'A', 'L', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL1, 3 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 1, 0}, // ** Switch 03 **
+  {PAGE_SY1000_MODE_SEL1, 3 | ON_LONG_PRESS, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT},
+  {PAGE_SY1000_MODE_SEL1, 4, PATCH, SY1000, NEXT}, // ** Switch 04 - ENC #1 turn **
+  {PAGE_SY1000_MODE_SEL1, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
+  //{PAGE_SY1000_MODE_SEL1, 7, TAP_TEMPO, COMMON}, // ** Switch 07 - ENC #2 press **
+  
+  // ******************************* PAGE 221: SY1000 MODE SELECT (TOP ROW)  *************************************************
+  {PAGE_SY1000_MODE_SEL2, LABEL, 'M', 'O', 'D', 'E', ' ', 'S', 'E', 'L'},
+  {PAGE_SY1000_MODE_SEL2, LABEL, '2', ' ', 'S', 'Y', '1', '0', '0', '0'},
+  {PAGE_SY1000_MODE_SEL2, 1 | LABEL, 'P', 'A', 'T', 'C', 'H', ' ', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL2, 1 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 2, 2}, // ** Switch 01 **
+  {PAGE_SY1000_MODE_SEL2, 1 | ON_LONG_PRESS, SELECT_NEXT_DEVICE, COMMON}, // ** Switch 01 long press
+  {PAGE_SY1000_MODE_SEL2, 2 | LABEL, 'S', 'C', 'E', 'N', 'E', ' ', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL2, 2 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 6, 4}, // ** Switch 02 **
+  {PAGE_SY1000_MODE_SEL2, 2 | ON_LONG_PRESS, SAVE_PATCH, SY1000},
+  {PAGE_SY1000_MODE_SEL2, 3 | LABEL, 'M', 'A', 'N', 'U', 'A', 'L', ' ', ' '},
+  {PAGE_SY1000_MODE_SEL2, 3 | ON_RELEASE, PARAMETER, SY1000, 0, TOGGLE, 5, 0}, // ** Switch 03 **
+  {PAGE_SY1000_MODE_SEL2, 3 | ON_LONG_PRESS, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT},
+  {PAGE_SY1000_MODE_SEL2, 4, PATCH, SY1000, NEXT}, // ** Switch 04 - ENC #1 turn **
+  {PAGE_SY1000_MODE_SEL2, 6, SET_TEMPO, COMMON, 120}, // ** Switch 06 - ENC #2 turn **
+  //{PAGE_SY1000_MODE_SEL2, 7, TAP_TEMPO, COMMON}, // ** Switch 07 - ENC #2 press **
+  
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = sizeof(Fixed_commands) / sizeof(Fixed_commands[0]);

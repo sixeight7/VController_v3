@@ -11,6 +11,7 @@
 #include "midi.h"
 #include "vcsettings.h"
 #include "vcmidiswitchsettings.h"
+#include "vcseqpattern.h"
 #include "vcdevices.h"
 #include "vccommands.h"
 #include "customlistwidget.h"
@@ -18,8 +19,8 @@
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
 // Version should be the same as the version shown on the VController of VC-mini
 #define VCMINI_FIRMWARE_VERSION_MAJOR 3
-#define VCMINI_FIRMWARE_VERSION_MINOR 6
-#define VCMINI_FIRMWARE_VERSION_BUILD 1
+#define VCMINI_FIRMWARE_VERSION_MINOR 7
+#define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
 
@@ -112,6 +113,7 @@ private slots:
     void on_tabWidget_currentChanged(int index);
     void treeWidgetActivated(QModelIndex);
     void movePatch(customListWidget *widget, int sourceRow, int destRow);
+    void on_patchTypeComboBox_currentIndexChanged(int index);
 
     // Pressing buttons
     void on_readSysexButton_clicked();
@@ -164,8 +166,13 @@ private slots:
     void on_refreshSettingsTreeButton_clicked();
 
     void on_readPatchButton_clicked();
-
     void on_writePatchButton_clicked();
+
+    void on_actionInitialize_patch_triggered();
+
+    void on_readPatternsButton_clicked();
+
+    void on_writePatternsButton_clicked();
 
 private:
     void setupLcdDisplays();
@@ -175,6 +182,7 @@ private:
     void fillPageComboBox(QComboBox *my_combobox);
     void fillListBoxes(bool first_time);
     void fillPatchListBox(QListWidget *my_patchList);
+    void fillPatchTypeComboBox(QComboBox *my_combobox);
     void updateStatusLabel();
 
     // Loading and saving files
@@ -193,6 +201,7 @@ private:
     QTimer *timer;
     VCsettings *MyVCsettings;
     VCmidiSwitches *MyVCmidiSwitches;
+    VCseqPattern *MyVCseqPatterns;
     VCdevices *MyVCdevices;
     VCcommands *MyVCcommands;
     int currentPage = 0;
@@ -210,6 +219,8 @@ private:
     bool dataEdited = false;
     bool fileLoaded = false;
     bool VControllerConnected = false;
+    int currentDevicePatchType = 0;
+    //bool currentDevicePatchBassMode = false;
 };
 
 #endif // MAINWINDOW_H

@@ -67,7 +67,16 @@ struct MIDI_switch_settings_struct {
 #define MIDI_SWITCH_PC 4
 
 #define NUMBER_OF_MIDI_SWITCHES 25 // Switch 0 is also counted
-
 extern MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES];
+
+#define NUMBER_OF_SEQ_PATTERNS 32
+#define EEPROM_SEQ_PATTERN_SIZE 36
+extern uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE];
+
+#define VC_PATCH_SIZE 192
+#define MAX_NUMBER_OF_DEVICE_PRESETS 150 // Copy of EXT_MAX_NUMBER_OF_PATCH_PRESETS
+#define BASS_MODE_NUMBER_OFFSET 0x1000
+
+extern uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS][VC_PATCH_SIZE]; // Storage for the actual patches
 
 #endif // GLOBALS_H

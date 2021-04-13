@@ -308,20 +308,17 @@ void main_LCD_control()
 
 void LCD_update_main_display() {
 
-  if (!popup_title_showing) {
+  if (!popup_title_showing) { // Clear title_string
     for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
       main_lcd_title[i] = ' ';
     }
-
-    // Show tuner message if active
-    if (global_tuner_active) {
+    
+    if (global_tuner_active) { // Show tuner message if active
       LCD_main_set_title("  Tuner active  ");
       LCD_print_main_lcd_txt();
-      return;
     }
 
-    // Show menu content if active
-    if (Current_page == PAGE_MENU) {
+    else if (Current_page == PAGE_MENU) { // Show menu content if active
       menu_set_main_title();
       LCD_print_main_lcd_txt();
       // Show cursor
@@ -330,42 +327,51 @@ void LCD_update_main_display() {
         Main_lcd.cursor();
       }
       else Main_lcd.noCursor();
-      return;
     }
 
-    // Show patchnumers and device name on top line
-    LCD_set_combined_patch_number_and_name();
+    else { // Show patchnumers and device name on top line
+      LCD_set_combined_patch_number_and_name();
 
-    uint8_t ps_length = Current_patch_number_string.length();
-    if (ps_length > MAIN_LCD_DISPLAY_SIZE) ps_length = MAIN_LCD_DISPLAY_SIZE;
-    for (uint8_t i = 0; i < ps_length; i++) {
-      main_lcd_title[i] = Current_patch_number_string[i];
-    }
-
-    String top_right = "";
-    if (Setting.Main_display_show_top_right == 0) {
-      if (Current_device < NUMBER_OF_DEVICES) {
-        Current_device_name = Device[Current_device]->device_name;
-        top_right = Current_device_name;
+      uint8_t ps_length = Current_patch_number_string.length();
+      if (ps_length > MAIN_LCD_DISPLAY_SIZE) ps_length = MAIN_LCD_DISPLAY_SIZE;
+      for (uint8_t i = 0; i < ps_length; i++) {
+        main_lcd_title[i] = Current_patch_number_string[i];
       }
-    }
 
-    if (Setting.Main_display_show_top_right == 1) {
-      top_right = char(CHAR_QUARTER_NOTE);
-      top_right += "=";
-      top_right += String(Setting.Bpm);
-    }
+      String top_right = "";
+      if (Setting.Main_display_show_top_right == 0) {
+        if (Current_device < NUMBER_OF_DEVICES) {
+          Current_device_name = Device[Current_device]->device_name;
+          top_right = Current_device_name;
+        }
+      }
 
-    uint8_t name_length = top_right.length();
-    if (ps_length < (MAIN_LCD_DISPLAY_SIZE - name_length)) { // Only show current device if it fits
-      for (uint8_t i = 0; i < name_length; i++) {
-        main_lcd_title[MAIN_LCD_DISPLAY_SIZE - name_length + i] = top_right[i];
+      if (Setting.Main_display_show_top_right == 1) {
+        top_right = char(CHAR_QUARTER_NOTE);
+        top_right += "=";
+        top_right += String(Setting.Bpm);
+      }
+
+      if (Setting.Main_display_show_top_right == 2) {
+        uint8_t sc = Device[Current_device]->current_snapscene;
+        if (sc > 0) Device[Current_device]->get_snapscene_label(sc, top_right);
+        else top_right = "";
+        top_right.trim();
+      }
+
+      uint8_t name_length = top_right.length();
+      if (ps_length < (MAIN_LCD_DISPLAY_SIZE - name_length)) { // Only show top right string if it fits
+        for (uint8_t i = 0; i < name_length; i++) {
+          main_lcd_title[MAIN_LCD_DISPLAY_SIZE - name_length + i] = top_right[i];
+        }
       }
     }
   }
 
   // Show current page name, current patch or patches combined on second line
   if (!popup_label_showing) {
+    if (Current_page == PAGE_MENU) return;
+    
     for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
       main_lcd_label[i] = ' ';
     }
@@ -406,12 +412,17 @@ void LCD_set_combined_patch_number_and_name() {
   String patch_names[NUMBER_OF_DEVICES]; //Array of strings for the patchnames
 
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
-    if (Device[d]->connected) {
+    if (Device[d]->is_on) {
       Device[d]->display_patch_number_string(); // Adds the device name to patch number string
       Current_patch_number_string += PATCH_NUMBER_SEPERATOR; //Add a seperation sign in between
       patch_names[number_of_active_devices] = Device[d]->current_patch_name; //Add patchname to string
       number_of_active_devices++;
     }
+  }
+
+  if (number_of_active_devices == 0) { // So we see the patch number before the first device connects
+    Device[Current_device]->display_patch_number_string();
+    Current_patch_number_string += PATCH_NUMBER_SEPERATOR;
   }
 
   // Cut last character of patch number string
@@ -536,7 +547,8 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         }
         break;
       case OPEN_PAGE_DEVICE:
-        msg = Device[Dev]->device_name;
+        //msg = Device[Dev]->device_name;
+        msg = SP[sw].Label;
         break;
       case OPEN_NEXT_PAGE_OF_DEVICE:
         msg = "PGE+ ";
@@ -848,9 +860,11 @@ void LCD_update(uint8_t sw, bool do_show) {
         break;
       case ASSIGN:
         if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
-          Display_number_string = '[';
+          if (SP[sw].Latch == TOGGLE) Display_number_string = '[';
+          else Display_number_string = '<';
           Device[Dev]->read_assign_name(SP[sw].Assign_number, Display_number_string);
-          Display_number_string += ']';
+          if (SP[sw].Latch == TOGGLE) Display_number_string += ']';
+          else Display_number_string += '>';
           LCD_add_vled(3);
           LCD_add_title(Display_number_string);
           LCD_add_label(SP[sw].Label);
@@ -899,7 +913,7 @@ void LCD_update(uint8_t sw, bool do_show) {
         LCD_add_vled(3);
         Display_number_string = "";
         if (SP[sw].Value2 == 0) {
-          Device[Dev]->set_snapscene_title(SP[sw].PP_number, Display_number_string);
+          Device[Dev]->get_snapscene_title(SP[sw].PP_number, Display_number_string);
         }
         else if (SP[sw].Value3 == 0) { // Two snapshots in view
           LCD_add_snapshot_number(SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
@@ -920,7 +934,8 @@ void LCD_update(uint8_t sw, bool do_show) {
         //LCD_print_lcd_txt(sw);
         break;
       case SAVE_PATCH:
-        LCD_add_title("<SAVE PATCH>");
+        if (Dev == SY1000) LCD_add_title("<SCENE MENU>");
+        else LCD_add_title("<SAVE PATCH>");
         LCD_add_label(Device[Dev]->device_name);
         //LCD_print_lcd_txt(sw);
         break;
@@ -1332,7 +1347,7 @@ void LCD_add_label(const char* lbl) {
   }
 }
 
-void LCD_add_3digit_number(uint8_t number, String & msg) {
+void LCD_add_3digit_number(uint16_t number, String & msg) {
   msg += String(number / 100);
   msg += String((number % 100) / 10);
   msg += String(number % 10);

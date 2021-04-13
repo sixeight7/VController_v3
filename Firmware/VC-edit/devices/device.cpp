@@ -1,5 +1,6 @@
 #include "device.h"
 #include "VController/config.h"
+#include "VController/globals.h"
 #include <QStringList>
 
 void Device_class::init()
@@ -59,6 +60,17 @@ QString Device_class::get_setting_name(uint8_t variable) // Setting names for js
     };
     if (variable < setting_names.size()) return setting_names.at(variable);
     return "";
+}
+
+QString Device_class::get_patch_info(uint16_t number)
+{
+    uint8_t patch_no = (Device_patches[number][1] << 7) + Device_patches[number][2];
+    return number_format(patch_no);
+}
+
+void Device_class::rename_patch(uint16_t number)
+{
+
 }
 
 bool Device_class::check_command_enabled(uint8_t cmd)
@@ -132,5 +144,51 @@ QString Device_class::read_assign_trigger(uint8_t)
 uint8_t Device_class::trigger_follow_assign(uint8_t)
 {
     return 0;
+}
+
+QString Device_class::read_scene_name_from_buffer(int, uint8_t) const
+{
+    return "";
+}
+
+void Device_class::store_scene_name_to_buffer(int, uint8_t, QString)
+{
+
+}
+
+uint8_t Device_class::supportPatchSaving()
+{
+    return 0;
+}
+
+void Device_class::readPatchData(int, int, const QJsonObject &)
+{
+
+}
+
+void Device_class::writePatchData(int, QJsonObject &) const
+{
+
+}
+
+QString Device_class::patchFileHeader()
+{
+    return device_name;
+}
+
+QString Device_class::DefaultPatchFileName(int number)
+{
+    QString name = device_name;
+    name.append('_');
+    name.append(number_format(number));
+    return name;
+}
+
+QString Device_class::numConv(int number) const
+{
+    QString num = "";
+    if (number < 10) num.append("0");
+    num.append(QString::number(number));
+    return num;
 }
 
