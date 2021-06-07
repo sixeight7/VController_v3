@@ -35,7 +35,7 @@ public:
     virtual void readPatchData(int index, int patch_no, const QJsonObject &json);
     virtual void writePatchData(int patch_no, QJsonObject &json) const;
     virtual QString patchFileHeader();
-    virtual QString DefaultPatchFileName(int number);
+    virtual QString DefaultPatchFileName(int index);
 
     /*const uint8_t KTN_default_patch[VC_PATCH_SIZE] = {
           0x4e, 0x65, 0x77, 0x20, 0x50, 0x72, 0x65, 0x73, 0x65, 0x74, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x0c, 0x2e, 0x3c,

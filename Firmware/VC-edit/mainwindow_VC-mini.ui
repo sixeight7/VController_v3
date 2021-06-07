@@ -37,7 +37,7 @@ QLabel { color : white; background-color: rgb(0 ,0 ,100)}
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_PageCommands">
        <attribute name="title">

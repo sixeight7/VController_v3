@@ -1221,9 +1221,9 @@ void MainWindow::VControllerDetected(int type, int versionMajor, int versionMino
                                    + QString::number(VCMINI_FIRMWARE_VERSION_MAJOR) + "." + QString::number(VCMINI_FIRMWARE_VERSION_MINOR) + ")", STATUS_BAR_MESSAGE_TIME);
     }
     else if ((!VControllerConnected) && (!dataEdited) && (!fileLoaded)) {
-        MyMidi->MIDI_editor_request_settings();
         MyMidi->MIDI_editor_request_all_commands();
         MyMidi->MIDI_editor_request_all_KTN_patches();
+        MyMidi->MIDI_editor_request_settings();
     }
     VControllerConnected = true;
     updateStatusLabel();
@@ -1303,10 +1303,11 @@ void MainWindow::on_readPatchButton_clicked()
 void MainWindow::on_writePatchButton_clicked()
 {
     try_reconnect_MIDI();
-    startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Uploading Katana patches...");
-    for (uint16_t p = 0; p < Commands.size(); p++) {
+    startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Uploading Device patches...");
+    for (uint16_t p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
         MyMidi->MIDI_send_device_patch(p);
         updateProgressBar(p);
+        QThread().msleep(60);
     }
     MyMidi->MIDI_editor_finish_device_patch_dump();
     closeProgressBar("Katana patch upload complete");

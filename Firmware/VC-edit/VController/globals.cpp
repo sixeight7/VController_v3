@@ -51,30 +51,30 @@ Setting_struct Setting = {  // Default values for global settings
 };
 
 MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 0
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 1
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 2
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 3
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 4
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 5
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 6
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 7
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 8
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 9
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 10
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 11
-  { MIDI_SWITCH_CC_MOMENTARY, 1, 9, 26 }, // switch 12
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 13
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 14
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 15
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 16
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 17
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 18
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 19
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 20
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 21
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 22
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 23
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 0
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 1
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 2
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 3
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 4
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 5
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 6
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 7
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 8
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 9
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 10
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 11
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 12
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 13
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 14
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 15
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 16
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 17
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 18
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 19
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 20
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 21
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 22
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 23
 };
 
 uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE] = {

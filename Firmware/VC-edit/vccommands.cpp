@@ -119,6 +119,11 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
             cmdString.append(QString::number(cmd.Value1));
         }
         break;
+    case SNAPSCENE:
+        cmdString.append(QString::number(cmd.Data1));
+        if (cmd.Data2 != 0) cmdString.append('/' + QString::number(cmd.Data2));
+        if (cmd.Value1 != 0) cmdString.append('/' + QString::number(cmd.Value1));
+        break;
     case SET_TEMPO:
     case PAR_BANK_DOWN:
     case PAR_BANK_UP:

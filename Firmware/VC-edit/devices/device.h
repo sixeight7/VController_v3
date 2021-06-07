@@ -38,7 +38,7 @@ public:
     virtual void readPatchData(int index, int patch_no, const QJsonObject &json);
     virtual void writePatchData(int patch_no, QJsonObject &json) const;
     virtual QString patchFileHeader();
-    virtual QString DefaultPatchFileName(int number);
+    virtual QString DefaultPatchFileName(int index);
     QString numConv(int number) const;
 
     // Variables

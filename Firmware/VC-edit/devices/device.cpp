@@ -176,11 +176,12 @@ QString Device_class::patchFileHeader()
     return device_name;
 }
 
-QString Device_class::DefaultPatchFileName(int number)
+QString Device_class::DefaultPatchFileName(int index)
 {
     QString name = device_name;
+    int patch_no = (Device_patches[index][1] << 8) + Device_patches[index][2];
     name.append('_');
-    name.append(number_format(number));
+    name.append(number_format(patch_no));
     return name;
 }
 

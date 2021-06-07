@@ -175,7 +175,7 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
             MIDI_editor_receive_settings(message);
             break;
         case VC_START_COMMANDS_DUMP:
-            MIDI_editor_receive_start_commands_dump();
+            MIDI_editor_receive_start_commands_dump((message->at(6) << 7) + message->at(7));
             break;
         case VC_SET_DEVICE_SETTINGS:
             MIDI_editor_receive_device_settings(message);
@@ -458,9 +458,9 @@ void Midi::MIDI_editor_receive_device_settings(std::vector<unsigned char> *messa
     }
 }
 
-void Midi::MIDI_editor_receive_start_commands_dump()
+void Midi::MIDI_editor_receive_start_commands_dump(int size)
 {
-    emit startProgressBar(Commands.size(), "Downloading MIDI commands");
+    emit startProgressBar(size, "Downloading MIDI commands");
     Commands.clear();
 }
 
@@ -548,7 +548,7 @@ void Midi::MIDI_editor_receive_device_patch(std::vector<unsigned char> *message)
         }
       }
     WritePatch(patch_index, patch);
-    if (patch_index == 0) emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving device patches");
+    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving device patches");
     emit updateProgressBar(patch_index);
     emit updatePatchListBox();
 }

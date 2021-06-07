@@ -93,7 +93,7 @@ private:
     void MIDI_show_error();
     void MIDI_editor_receive_settings(std::vector< unsigned char > *message);
     void MIDI_editor_receive_device_settings(std::vector< unsigned char > *message);
-    void MIDI_editor_receive_start_commands_dump();
+    void MIDI_editor_receive_start_commands_dump(int size);
     void MIDI_editor_receive_finish_commands_dump(std::vector< unsigned char > *message);
     void MIDI_editor_receive_command(std::vector< unsigned char > *message);
     void MIDI_editor_receive_midi_switch_settings(std::vector< unsigned char > *message);

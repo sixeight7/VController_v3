@@ -623,10 +623,10 @@ QString KTN_class::patchFileHeader()
     return "Katana"; // To ensure compatibility with older files
 }
 
-QString KTN_class::DefaultPatchFileName(int number)
+QString KTN_class::DefaultPatchFileName(int index)
 {
     QString name = device_name;
     name.append('_');
-    name.append(ReadPatchName(number));
+    name.append(ReadPatchName(index));
     return name;
 }
