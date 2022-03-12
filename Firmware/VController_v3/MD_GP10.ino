@@ -13,6 +13,7 @@
 
 // Boss GP-10 settings:
 #define GP10_MIDI_CHANNEL 1 // Was unable to change patch when GP-10 channel was not 1. Seems to be a bug in the GP-10
+#define GP10_MIDI_PORT USBHMIDI_PORT
 #define GP10_PATCH_MIN 0
 #define GP10_PATCH_MAX 98
 
@@ -38,7 +39,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void MD_GP10_class::init() { // Default values for variables
+FLASHMEM void MD_GP10_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Boss GP-10 variables:
@@ -53,19 +54,36 @@ void MD_GP10_class::init() { // Default values for variables
   sysex_delay_length = 5; // minimum delay time between sysex messages (in msec).
   my_LED_colour = 4; // Default value: orange
   MIDI_channel = GP10_MIDI_CHANNEL; // Default value
+  MIDI_port_manual = MIDI_port_number(GP10_MIDI_PORT); // Default value
   is_always_on = true; // Default value
-  my_device_page1 = GP10_DEFAULT_PAGE1; // Default value
-  my_device_page2 = GP10_DEFAULT_PAGE2; // Default value
-  my_device_page3 = GP10_DEFAULT_PAGE3; // Default value
-  my_device_page4 = GP10_DEFAULT_PAGE4; // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = GP10_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = GP10_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = GP10_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = GP10_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = GP10_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = GP10_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = GP10_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = GP10_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = GP10_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = GP10_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = GP10_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = GP10_DEFAULT_VC_PAGE4; // Default value
+#endif
+
+#ifdef IS_VCTOUCH
+  device_pic = img_GP10;
+#endif
 }
 
 // ********************************* Section 2: GP10 common MIDI in functions ********************************************
 
-void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a GP-10
-  if ((port == MIDI_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x00) && (sxdata[6] == 0x05) && (sxdata[7] == 0x12)) {
+  if ((port == MIDI_in_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x00) && (sxdata[6] == 0x05) && (sxdata[7] == 0x12)) {
     uint32_t address = (sxdata[8] << 24) + (sxdata[9] << 16) + (sxdata[10] << 8) + sxdata[11]; // Make the address 32 bit
 
     // Check checksum
@@ -158,10 +176,10 @@ void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
 
 }
 
-void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // GP10 sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // GP10 sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program;
@@ -176,15 +194,15 @@ void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
 // Detection of GP-10
 
-void MD_GP10_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+FLASHMEM void MD_GP10_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a GP-10
   if ((sxdata[5] == 0x41) && (sxdata[6] == 0x05) && (sxdata[7] == 0x03) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
-void MD_GP10_class::do_after_connect() {
+FLASHMEM void MD_GP10_class::do_after_connect() {
   request_sysex(GP10_REQUEST_CURRENT_PATCH_NUMBER);
   request_sysex(GP10_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
   //write_sysex(GP10_EDITOR_MODE_ON); // Put the GP10 in EDITOR mode - otherwise tuner will not work
@@ -197,48 +215,48 @@ void MD_GP10_class::do_after_connect() {
 
 // ********************************* Section 3: GP10 common MIDI out functions ********************************************
 
-void MD_GP10_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
+FLASHMEM void MD_GP10_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value); // Calculate the Roland checksum
   uint8_t sysexmessage[15] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x05, 0x12, ad[3], ad[2], ad[1], ad[0], value, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 15, MIDI_port, 1); // GP-10 connected via USBHost_t36 library will only supoort sysex messages via cable 1 (default 0)
+  MIDI_send_sysex(sysexmessage, 15, MIDI_out_port, 1); // GP-10 connected via USBHost_t36 library will only supoort sysex messages via cable 1 (default 0)
 }
 
-void MD_GP10_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
+FLASHMEM void MD_GP10_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2); // Calculate the Roland checksum
   uint8_t sysexmessage[16] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x05, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 16, MIDI_port, 1);
+  MIDI_send_sysex(sysexmessage, 16, MIDI_out_port, 1);
 }
 
-void MD_GP10_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
+FLASHMEM void MD_GP10_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t no1 = no_of_bytes >> 7;
   uint8_t no2 = no_of_bytes & 0x7F;
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] +  no1 + no2); // Calculate the Roland checksum
   uint8_t sysexmessage[18] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x05, 0x11, ad[3], ad[2], ad[1], ad[0], 0x00, 0x00, no1, no2, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 18, MIDI_port, 1);
+  MIDI_send_sysex(sysexmessage, 18, MIDI_out_port, 1);
 }
 
-void MD_GP10_class::set_bpm() {
+FLASHMEM void MD_GP10_class::set_bpm() {
   if (connected) {
     write_sysex(GP10_TEMPO, Setting.Bpm >> 4, Setting.Bpm & 0x0F); // Tempo is modulus 16. It's all so very logical. NOT.
   }
 }
 
-void MD_GP10_class::start_tuner() {
+FLASHMEM void MD_GP10_class::start_tuner() {
   if (connected) {
     write_sysex(GP10_EDITOR_MODE_ON); // Put the GP10 in EDITOR mode - otherwise tuner will not work
     write_sysex(GP10_TUNER_ON); // Start tuner on GP-10
   }
 }
 
-void MD_GP10_class::stop_tuner() {
+FLASHMEM void MD_GP10_class::stop_tuner() {
   if (connected) {
     write_sysex(GP10_TUNER_OFF); // Stop tuner on GP-10
     write_sysex(GP10_EDITOR_MODE_OFF); // Switch off EDITOR mode - so the GP10 will respond faster
@@ -247,7 +265,7 @@ void MD_GP10_class::stop_tuner() {
 
 // ********************************* Section 4: GP10 program change ********************************************
 
-void MD_GP10_class::do_after_patch_selection() {
+FLASHMEM void MD_GP10_class::do_after_patch_selection() {
   request_onoff = false;
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) {
@@ -264,7 +282,7 @@ void MD_GP10_class::do_after_patch_selection() {
   MD_base_class::do_after_patch_selection();
 }
 
-bool MD_GP10_class::request_patch_name(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_GP10_class::request_patch_name(uint8_t sw, uint16_t number) {
   if (number > patch_max) return true;
   number++;
   uint32_t Address = 0x20000000 + ((number / 0x20) * 0x1000000) + ((number % 0x20) * 0x40000); //Calculate the address where the patchname is stored on the GP-10
@@ -275,15 +293,15 @@ bool MD_GP10_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void MD_GP10_class::request_current_patch_name() {
+FLASHMEM void MD_GP10_class::request_current_patch_name() {
   request_sysex(GP10_REQUEST_CURRENT_PATCH_NAME);
 }
 
-void MD_GP10_class::number_format(uint16_t number, String &Output) {
+FLASHMEM void MD_GP10_class::number_format(uint16_t number, String &Output) {
   Output += 'P' + String((number + 1) / 10) + String((number + 1) % 10);
 }
 
-void MD_GP10_class::direct_select_format(uint16_t number, String &Output) {
+FLASHMEM void MD_GP10_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) Output += 'P' + String(number) + "_";
   else Output += 'P' + String(bank_select_number) + String(number);
 }
@@ -292,14 +310,14 @@ void MD_GP10_class::direct_select_format(uint16_t number, String &Output) {
 // Selecting and muting the GP10 is done by storing the settings of COSM guitar switch and Normal PU switch
 // and switching both off when guitar is muted and back to original state when the GP10 is selected
 
-void MD_GP10_class::request_guitar_switch_states() {
+FLASHMEM void MD_GP10_class::request_guitar_switch_states() {
   //GP10_select_LED = GP10_PATCH_COLOUR; //Switch the LED on
   request_sysex(GP10_COSM_GUITAR_SW, 1);
   request_sysex(GP10_NORMAL_PU_SW, 1);
   request_onoff = true;
 }
 
-void MD_GP10_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_GP10_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[8] << 24) + (sxdata[9] << 16) + (sxdata[10] << 8) + sxdata[11]; // Make the address 32 bit
     if (address == GP10_COSM_GUITAR_SW) {
@@ -313,7 +331,7 @@ void MD_GP10_class::check_inst_switch_states(const unsigned char* sxdata, short 
   }
 }
 
-void MD_GP10_class::unmute() {
+FLASHMEM void MD_GP10_class::unmute() {
   is_on = connected;
   if (is_on) {
     write_sysex(GP10_COSM_GUITAR_SW, COSM_onoff); // Switch COSM guitar on
@@ -321,7 +339,7 @@ void MD_GP10_class::unmute() {
   }
 }
 
-void MD_GP10_class::mute() {
+FLASHMEM void MD_GP10_class::mute() {
   if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
     //    GP10_select_LED = GP10_OFF_COLOUR; //Switch the LED off
@@ -483,12 +501,12 @@ const uint8_t GP10_FX_colours[17] = { // Table with the LED colours for the diff
   FX_DELAY_TYPE, // Colour for "DELAY"
 };
 
-void MD_GP10_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_GP10_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = GP10_parameters[number].Name;
   else Output = "?";
 }
 
-void MD_GP10_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_GP10_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters())  {
     uint16_t my_sublist = GP10_parameters[number].Sublist;
     if ((my_sublist > 0) && !(my_sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -517,7 +535,7 @@ void MD_GP10_class::read_parameter_value_name(uint16_t number, uint16_t value, S
 }
 
 // Toggle GP10 stompbox parameter
-void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   // Send sysex MIDI command to GP-10
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
@@ -541,7 +559,7 @@ void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number
   }
 }
 
-void MD_GP10_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_GP10_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   // Work out state of pedal
   if (SP[Sw].Latch == MOMENTARY) {
     SP[Sw].State = 2; // Switch state off
@@ -555,11 +573,11 @@ void MD_GP10_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t numb
   }
 }
 
-void MD_GP10_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_GP10_class::read_parameter_title(uint16_t number, String &Output) {
   Output += GP10_parameters[number].Name;
 }
 
-bool MD_GP10_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_GP10_class::request_parameter(uint8_t sw, uint16_t number) {
   if (can_request_sysex_data()) {
     uint32_t my_address = GP10_parameters[number].Address;
     last_requested_sysex_address = my_address;
@@ -575,7 +593,7 @@ bool MD_GP10_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 }
 
-void MD_GP10_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current GP10 parameter
+FLASHMEM void MD_GP10_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current GP10 parameter
   SP[sw].Target_byte1 = byte1;
   SP[sw].Target_byte2 = byte2;
 
@@ -609,7 +627,7 @@ void MD_GP10_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { /
   update_lcd = sw;
 }
 
-void MD_GP10_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_GP10_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number; // Read the parameter number (index to GP10-parameter array)
   if (index != NOT_FOUND) {
     if ((GP10_parameters[index].Sublist > 0) && !(GP10_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -627,11 +645,11 @@ void MD_GP10_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates t
   }
 }
 
-uint16_t MD_GP10_class::number_of_parameters() {
+FLASHMEM uint16_t MD_GP10_class::number_of_parameters() {
   return GP10_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_GP10_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_GP10_class::number_of_values(uint16_t parameter) {
   if (parameter < GP10_NUMBER_OF_PARAMETERS) return GP10_parameters[parameter].NumVals;
   else return 0;
 }
@@ -664,34 +682,34 @@ uint8_t MD_GP10_class::number_of_values(uint16_t parameter) {
 #define GP10_assign_address_set3 0x20022050
 #define GP10_NUMBER_OF_ASSIGNS 8
 
-void MD_GP10_class::read_assign_name(uint8_t number, String & Output) {
+FLASHMEM void MD_GP10_class::read_assign_name(uint8_t number, String & Output) {
   if (number < GP10_NUMBER_OF_ASSIGNS)  Output += "ASSIGN " + String(number + 1);
   else Output += "--";
 }
 
-void MD_GP10_class::read_assign_short_name(uint8_t number, String & Output) {
+FLASHMEM void MD_GP10_class::read_assign_short_name(uint8_t number, String & Output) {
   if (number < GP10_NUMBER_OF_ASSIGNS)  Output += "ASG" + String(number + 1);
   else Output += "--";
 }
 
-void MD_GP10_class::read_assign_trigger(uint8_t number, String & Output) {
+FLASHMEM void MD_GP10_class::read_assign_trigger(uint8_t number, String & Output) {
   if ((number > 0) && (number < 128)) Output = "CC#" + String(number);
   else Output = "-";
 }
 
-uint8_t MD_GP10_class::get_number_of_assigns() {
+FLASHMEM uint8_t MD_GP10_class::get_number_of_assigns() {
   return GP10_NUMBER_OF_ASSIGNS;
 }
 
-uint8_t MD_GP10_class::trigger_follow_assign(uint8_t number) {
+FLASHMEM uint8_t MD_GP10_class::trigger_follow_assign(uint8_t number) {
   return number + 21; // Default cc numbers are 21 and up
 }
 
 
-void MD_GP10_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to GP10_ASSIGN is pressed
+FLASHMEM void MD_GP10_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to GP10_ASSIGN is pressed
   // Send cc MIDI command to GP-10
   uint8_t cc_number = SP[Sw].Trigger;
-  if (cc_number > 0) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
+  if (cc_number > 0) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_out_port);
 
   // Display the patch function
   if (SP[Sw].Assign_on) {
@@ -705,10 +723,10 @@ void MD_GP10_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to G
   if (SP[Sw].Assign_on) update_page = REFRESH_FX_ONLY; //PAGE_load_current(false); // To update the other switch states, we re-load the current page
 }
 
-void MD_GP10_class::assign_release(uint8_t Sw) { // Switch set to GP10_ASSIGN is released
+FLASHMEM void MD_GP10_class::assign_release(uint8_t Sw) { // Switch set to GP10_ASSIGN is released
   // Send cc MIDI command to GP-10
   uint8_t cc_number = SP[Sw].Trigger;
-  if (cc_number > 0) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
+  if (cc_number > 0) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_out_port);
 
   // Update status
   if (SP[Sw].Latch == MOMENTARY) {
@@ -725,12 +743,12 @@ void MD_GP10_class::assign_release(uint8_t Sw) { // Switch set to GP10_ASSIGN is
   }
 }
 
-void MD_GP10_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to GP10_ASSIGN is loaded in SP array
+FLASHMEM void MD_GP10_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to GP10_ASSIGN is loaded in SP array
   SP[sw].Trigger = cc_number; //Save the cc_number in the Trigger variable
   SP[sw].Assign_number = assign_number;
 }
 
-void MD_GP10_class::request_current_assign(uint8_t sw) {
+FLASHMEM void MD_GP10_class::request_current_assign(uint8_t sw) {
   if (!assign_read) { //Check if the assign area needs to be read first
     request_complete_assign_area(sw);
   }
@@ -739,14 +757,14 @@ void MD_GP10_class::request_current_assign(uint8_t sw) {
   }
 }
 
-void MD_GP10_class::request_complete_assign_area(uint8_t sw) {
+FLASHMEM void MD_GP10_class::request_complete_assign_area(uint8_t sw) {
   request_sysex(GP10_assign_address_set1, 40);  //Request the first 40 bytes of the GP10 assign area
   request_sysex(GP10_assign_address_set2, 40);  //Request the second 40 bytes of the GP10 assign area
   request_sysex(GP10_assign_address_set3, 32);  //Request the last 32 bytes of the GP10 assign area
   last_requested_sysex_switch = sw;
 }
 
-void MD_GP10_class::read_complete_assign_area(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_GP10_class::read_complete_assign_area(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   if (address == GP10_assign_address_set1) { // Read assign byte 0 - 39 from GP10 memory
     for (uint8_t count = 0; count < 40; count++) {
       assign_mem[count] = sxdata[count + 12]; //Add byte to the assign memory
@@ -768,7 +786,7 @@ void MD_GP10_class::read_complete_assign_area(uint8_t sw, uint32_t address, cons
   }
 }
 
-void MD_GP10_class::assign_request(uint8_t sw) { //Request the current assign
+FLASHMEM void MD_GP10_class::assign_request(uint8_t sw) { //Request the current assign
   bool found, assign_on;
   String msg;
   uint8_t assign_switch, assign_source, assign_latch;
@@ -843,7 +861,7 @@ void MD_GP10_class::assign_request(uint8_t sw) { //Request the current assign
   }
 }
 
-bool MD_GP10_class::target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the GP10_parameters table
+FLASHMEM bool MD_GP10_class::target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the GP10_parameters table
 
   // Lookup in GP10_parameter array
   bool found = false;
@@ -900,9 +918,9 @@ uint32_t GP10_exp_switch_target[] = {
 const uint8_t GP10_NUMBER_OF_EXP_SWITCH_TARGETS = sizeof(GP10_exp_switch_target) / sizeof(GP10_exp_switch_target[0]);
 
 
-void MD_GP10_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_GP10_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
-  LCD_show_bar(0, value); // Show it on the main display
+  LCD_show_bar(0, value, 0); // Show it on the main display
   uint8_t new_value = map(value, 0, 127, 0, 100);
   if ((exp_pedal == 1) && (exp_type < GP10_NUMBER_OF_EXP_PEDAL_TARGETS)) {
     if (GP10_exp_pedal_target[exp_type] > 0) write_sysex(GP10_exp_pedal_target[exp_type], new_value);
@@ -915,7 +933,7 @@ void MD_GP10_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page*/
 }
 
-void MD_GP10_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_GP10_class::toggle_expression_pedal(uint8_t sw) {
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 2) current_exp_pedal = 1;
@@ -932,7 +950,7 @@ void MD_GP10_class::toggle_expression_pedal(uint8_t sw) {
   update_page = REFRESH_FX_ONLY;
 }
 
-bool MD_GP10_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
+FLASHMEM bool MD_GP10_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal <= 2) {
     last_requested_sysex_switch = sw;
@@ -942,7 +960,7 @@ bool MD_GP10_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used f
   return false;
 }
 
-void MD_GP10_class::update_exp_label(uint8_t sw) {
+FLASHMEM void MD_GP10_class::update_exp_label(uint8_t sw) {
   if (current_exp_pedal == 1) {
     SP[sw].PP_number = GP10_EXP;
     read_parameter(sw, exp_type, 0);

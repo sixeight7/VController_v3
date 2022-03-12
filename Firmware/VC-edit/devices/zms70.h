@@ -5,6 +5,7 @@
 #include <QApplication>
 
 // Zoom MS70CDR settings:
+#define ZMS70_MIDI_PORT USBHMIDI_PORT
 #define ZMS70_MIDI_CHANNEL 1
 #define ZMS70_PATCH_MIN 0
 #define ZMS70_PATCH_MAX 49

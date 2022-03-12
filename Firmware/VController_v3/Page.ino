@@ -436,9 +436,8 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             else {
               SP[Current_switch].PP_number = SP[Current_switch].Value1;
             }
-            request_next_switch = Device[Dev]->request_snapscene_name(Current_switch, SP[Current_switch].PP_number);  //Request the parameter for this device
+            request_next_switch = Device[Dev]->request_snapscene_name(Current_switch, SP[Current_switch].Value1, SP[Current_switch].Value2, SP[Current_switch].Value3);
             if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
-            //LCD_clear_SP_label(Current_switch);
             break;
           case LOOPER:
             Device[Dev]->request_looper_label(Current_switch);
@@ -474,10 +473,14 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
               SP[Current_switch].PP_number = page;
               SP[Current_switch].Colour = Setting.LED_global_colour;
             }
+            else if (SP[Current_switch].Sel_type == NEXT)
+              page = update_encoder_value(1, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
+            else if (SP[Current_switch].Sel_type == PREV)
+              page = update_encoder_value(-1, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
             else {
               page = SP[Current_switch].PP_number;
-              if (page == 0) page = Previous_page;
             }
+            if (page == 0) page = Previous_page;
             if (SCO_valid_page(page)) {
               EEPROM_read_title(page, 0, page_label);
               page_label.trim();

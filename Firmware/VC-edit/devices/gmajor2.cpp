@@ -1,6 +1,7 @@
 #include "gmajor2.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 void GM2_class::init()
 {
@@ -10,13 +11,28 @@ void GM2_class::init()
     patch_max = GM2_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 2; // Default value: red
+    MIDI_port_manual = MIDI_port_number(GM2_MIDI_PORT);
     MIDI_channel = GM2_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = GM2_DEFAULT_PAGE1; // Default value
-    my_device_page2 = GM2_DEFAULT_PAGE2; // Default value
-    my_device_page3 = GM2_DEFAULT_PAGE3; // Default value
-    my_device_page4 = GM2_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = GM2_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = GM2_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = GM2_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = GM2_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = GM2_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = GM2_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = GM2_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = GM2_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = GM2_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = GM2_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = GM2_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = GM2_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
 }
 
 bool GM2_class::check_command_enabled(uint8_t cmd)

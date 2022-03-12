@@ -8,6 +8,7 @@
 #include "VController/hardware.h"
 #include "VController/config.h"
 #include "customlistwidget.h"
+#include "VController/globals.h"
 
 #include <QObject>
 #include <QComboBox>
@@ -25,6 +26,7 @@ class VCcommands : public QObject
 
 public:
     explicit VCcommands(QObject *parent = nullptr);
+    void setup_VC_config();
     void recreate_indexes();
     // fill page widgets:
     void fillPageComboBox(QComboBox *cbox);
@@ -72,6 +74,7 @@ public slots:
 
 private:
     // Low level interfacing with the command array.
+    void copy_command_structure(QVector<Cmd_struct>* source, QVector<Cmd_struct>* dest, uint16_t size);
     void create_indexes();
     uint16_t new_command_index();
     void delete_cmd(uint16_t number);
@@ -177,26 +180,23 @@ private:
     #define SUBLIST_CMD 249 // To show the selected command
     #define SUBLIST_DEVICES 248 // To show the devices + Current and Common
     #define SUBLIST_PATCH_BANK 247
+    #define SUBLIST_SWITCH 246
+    #define SUBLIST_MIDI_PORT 245
 
-    #ifdef IS_VCMINI
-    #define SWITCH_MENU_SUBLIST 117
-    #define SWITCH_MAX_NUMBER 9
-    #else
-    #define SWITCH_MENU_SUBLIST 58
     #define SWITCH_MAX_NUMBER 24
-    #endif
+
 
     const QVector<cmdtype_struct> cmdtype = {
         { "", 0, 0, 0 }, // TYPE_OFF 0
         { "DEVICE", SUBLIST_DEVICES, 0, (NUMBER_OF_DEVICES + 1) }, // TYPE_DEVICE_SELECT 1
         { "COMMAND", 1, 0, NUMBER_OF_COMMON_TYPES - 1 }, // TYPE_COMMON_COMMANDS 2
         { "COMMAND", 18, 0, NUMBER_OF_DEVICE_TYPES - 1 }, // TYPE_DEVICE_COMMANDS 3
-        { "PAGE", SUBLIST_PAGE, 0, LAST_FIXED_CMD_PAGE }, // TYPE_PAGE 4
-        { "SELECT TYPE", 127, 0, NUMBER_OF_SELECT_TYPES - 1 }, // TYPE_CMDTYPE 5
-        { "MIDI PORT", 40, 0, NUMBER_OF_MIDI_PORTS }, // TYPE_MIDI_PORT 6
+        { "PAGE", SUBLIST_PAGE, 0, last_fixed_cmd_page }, // TYPE_PAGE 4
+        { "SELECT TYPE", 129, 0, NUMBER_OF_SELECT_TYPES - 1 }, // TYPE_CMDTYPE 5
+        { "MIDI PORT", SUBLIST_MIDI_PORT, 0, number_of_midi_ports }, // TYPE_MIDI_PORT 6
         { "MIDI CHANNEL", 0, 1, 16 }, // TYPE_MIDI_CHANNEL 7
         { "CC NUMBER", 0, 0, 127 }, // TYPE_CC_NUMBER 8
-        { "CC TOGGLE TYPE", 83, 0, 6 }, // TYPE_CC_TOGGLE 9
+        { "CC TOGGLE TYPE", 85, 0, 6 }, // TYPE_CC_TOGGLE 9
         { "VALUE", 0, 0, 127 }, // TYPE_VALUE 10
         { "NOTE NUMBER", 0, 0, 127 }, // NOTE_NUMBER 11
         { "NOTE VELOCITY", 0, 0, 127 }, // TYPE_NOTE_VELOCITY 12
@@ -209,18 +209,18 @@ private:
         { "VALUE", SUBLIST_PAR_VALUE, 0, 255 }, // TYPE_PAR_VALUE 19
         { "ASSIGN", SUBLIST_ASSIGN, 0, 255 }, // TYPE_ASSIGN 20
         { "TRIGGER", SUBLIST_TRIGGER, 1, 127 }, // TYPE_ASSIGN 21
-        { "TOGGLE TYPE", 48, 0, 6 }, // TYPE_TOGGLE 22
+        { "TOGGLE TYPE", 50, 0, 6 }, // TYPE_TOGGLE 22
         { "STEP", 0, 1, 127 }, // TYPE_STEP 24
-        { "SWITCH TRIGGER", 109, 0, 5 }, // TYPE_SWITCH_TRIGGER 24
-        { "SWITCH", SWITCH_MENU_SUBLIST, 0, SWITCH_MAX_NUMBER }, // TYPE_SWITCH 25
+        { "SWITCH TRIGGER", 111, 0, 5 }, // TYPE_SWITCH_TRIGGER 24
+        { "SWITCH", SUBLIST_SWITCH, 0, SWITCH_MAX_NUMBER }, // TYPE_SWITCH 25
         { "COMMAND", SUBLIST_CMD, 0, 255 }, // TYPE_CMD 26
         { "BPM", 0, 40, 250 }, // TYPE_BPM 27
         { "MIN", 0, 0, 127 }, // TYPE_MIN 28
         { "MAX", 0, 0, 127 }, // TYPE_MAX 29
         { "SNAPSHOT/SCENE", 0, 0, 8 }, // TYPE_SNAPSCENE 30
-        { "LOOPER", 90, 0, 10 }, // TYPE_LOOPER 31
-        { "EXP.PEDAL", 101, 0, 3 }, // TYPE_EXP_PEDAL 32
-        { "SELECT TYPE", 127, 0, 3 }, // TYPE_CMDTYPE_ASSIGN 33
+        { "LOOPER", 92, 0, 10 }, // TYPE_LOOPER 31
+        { "EXP.PEDAL", 103, 0, 3 }, // TYPE_EXP_PEDAL 32
+        { "SELECT TYPE", 129, 0, 3 }, // TYPE_CMDTYPE_ASSIGN 33
     };
 
     const QStringList cmd_sublist = {
@@ -232,43 +232,35 @@ private:
         "PATCH", "PARAMETER", "ASSIGN", "SNAP/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "MASTER EXP PEDAL", "TOGGL MASTER EXP",
         "DIR.SELECT", "PAR BANK", "PAR BANK UP", "PAR BANK DOWN", "PARBANK_CATEGORY", "SAVE PATCH", "", "", "", "", "", "",
 
-        // Sublist 40 - 47: MIDI ports
-        "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "ALL PORTS", "", "", "",
+        // Sublist 40 - 49: MIDI ports
+        "OFF", MIDI_PORT_NAMES,
 
-        // Sublist 48 - 57: Toggle types
+        // Sublist 50 - 59: Toggle types
         "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "", "", "",
 
-        // Sublist 58 - 82: Switch types
-    #ifndef IS_VCMINI
+        // Sublist 60 - 84: Switch types
         "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Switch 4", "Switch 5", "Switch 6", "Switch 7", "Switch 8",
         "Switch 9", "Switch 10", "Switch 11", "Switch 12", "Switch 13", "Switch 14", "Switch 15", "Switch 16",
         "Ext 1 / Exp1", "Ext 2", "Ext 3 / Exp 2", "Ext 4", "Ext 5 / Exp 3", "Ext 6", "Ext 7 / Exp 4", "Ext 8",
-    #else
-        "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Encoder #1", "Encoder #1 Switch", "Encoder #2", "Encoder #2 Switch", "Ext 1 / Exp1",
-        "Ext 2", "MIDI Switch 1 / SW4", "MIDI Switch 2 / SW5", "MIDI Switch 3 / SW6", "MIDI Switch 4", "MIDI Switch 5", "MIDI Switch 6", "MIDI Switch 7",
-        "MIDI Switch 8", "MIDI Switch 9", "MIDI Switch 10", "MIDI Switch 11", "MIDI Switch 12", "MIDI Switch 13", "MIDI Switch 14", "MIDI Switch 15",
-    #endif
 
-        // Sublist 83 - 89: CC toggle types
+        // Sublist 85 - 91: CC toggle types
         "ONE SHOT", "MOMENTARY", "TOGGLE", "TOGGLE ON", "RANGE", "STEP", "UPDOWN",
 
-        // Sublist 90 - 100: CC toggle types
+        // Sublist 92 - 102: CC toggle types
         "OFF", "ON/OFF", "PLAY/STOP", "REC/OVERDUB", "UNDO/REDO", "HALF SPEED", "REVERSE", "PLAY ONCE", "PRE/POST", "REC/PLAY/OVERDUB", "STOP/ERASE",
 
-        // Sublist 101 - 108: EXP pedal types
+        // Sublist 103 - 110: EXP pedal types
         "TOGGLE", "EXP1", "EXP2", "EXP3", "", "", "", "",
 
-        // Sublist 109 - 116: Command switch trigger types
+        // Sublist 111 - 117: Command switch trigger types
         "ON PRESS", "ON RELEASE", "ON LONG PRESS", "ON DUAL PRESS", "ON DUAL RELEASE", "ON DUAL LONG PRS", "", "",
 
-        // Sublist 117 - 126
+        // Sublist 118 - 128
         "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Rotary 1", "Rotary Switch 1", "Rotary 2", "Rotary Switch 2", "Ext1 / Exp", "Ext 2",
 
-        // Sublist 127 - 134 Page/ patch select types
+        // Sublist 129 - 136 Page/ patch select types
         "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "", "",
     };
-
-#define SWITCH_NAME_NUMBER 58
 
     struct cmdbyte_struct {
       uint8_t Type;

@@ -6,9 +6,12 @@
 // This file contains all the hardware settings for the VController Production Model version 1.
 // Make sure you include this file when updating to new firmware
 
+#define VC_NAME "V-Controller"
+
 // Choose which configuration for the switches is chosen in Config.ino
 #define CONFIG_VCONTROLLER
 //#define CONFIG_VCMINI
+//#define CONFIG_VCTOUCH
 //#define CONFIG_CUSTOM
 #define MENU_ON_INDIVIDUAL_DISPLAYS
 
@@ -57,6 +60,8 @@
 
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
 
+#define MENU_KEY_COMBINATION 0x9000 // Switches 13 and 16
+
 // *** Neopixel LEDs
 #define NUMBER_OF_LEDS     12 // Number of neopixel LEDs connected
 #define LED_ORDER          0, 3, 6, 9, 1, 4, 7, 10, 2, 5, 8, 11 // The order in which the LEDs are connected
@@ -73,6 +78,7 @@
 // *** Individual displays above switches
 #define NUMBER_OF_DISPLAY_BOARDS 4
 #define NUMBER_OF_DISPLAYS 12
+#define INDIVIDUAL_DISPLAYS
 #define LCD_DISPLAY_SIZE 16
 
 // Define the addresses and numbers of the displays using the VController display boards based on an MCP23017. Maximum 15 displays can be defined here. 
@@ -124,9 +130,39 @@
 #define LINE_SELECT_CC_NUMBER 119
 #define VCONTROLLER_MIDI_CHANNEL 16
 
+#define NUMBER_OF_MIDI_PORTS 4
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 //#define MIDI3_BAUD_RATE 115200
 //#define MIDI3_BAUD_RATE 38400
 #define MIDI3_ENABLED
+//#define RECEIVE_SERIAL_BUFFER_SIZE 32 // Stabilize serial MIDI communication with buffers
 
+
+// Names and numbers of ports
+#define PORT1_NAME "USB MIDI"
+#define PORT1_TYPE USBMIDI_PORT
+
+#define PORT2_NAME "MIDI 1"
+#define PORT2_TYPE MIDI1_PORT
+
+#define PORT3_NAME "MIDI 2"
+#define PORT3_TYPE MIDI2_PORT
+
+#define PORT4_NAME "INT RPI MIDI"
+#define PORT4_TYPE MIDI3_PORT
+
+#define PORT5_NAME "ALL MIDI PORTS"
+#define PORT5_TYPE ALL_MIDI_PORTS
+
+#define PORT6_NAME ""
+#define PORT6_TYPE USBMIDI_PORT
+
+#define PORT7_NAME ""
+#define PORT7_TYPE USBMIDI_PORT
+
+#define PORT8_NAME ""
+#define PORT8_TYPE USBMIDI_PORT
+
+#define PORT9_NAME ""
+#define PORT9_TYPE USBMIDI_PORT
 #endif

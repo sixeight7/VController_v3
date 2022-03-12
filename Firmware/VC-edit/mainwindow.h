@@ -8,6 +8,7 @@
 #include <QString>
 #include <QLabel>
 #include <QTimer>
+#include <QVBoxLayout>
 #include "midi.h"
 #include "vcsettings.h"
 #include "vcmidiswitchsettings.h"
@@ -15,20 +16,17 @@
 #include "vcdevices.h"
 #include "vccommands.h"
 #include "customlistwidget.h"
+#include "customswitch.h"
+#include "customled.h"
+#include "customdisplaylabel.h"
 
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
 // Version should be the same as the version shown on the VController of VC-mini
 #define VCMINI_FIRMWARE_VERSION_MAJOR 3
-#define VCMINI_FIRMWARE_VERSION_MINOR 7
-#define VCMINI_FIRMWARE_VERSION_BUILD 1
+#define VCMINI_FIRMWARE_VERSION_MINOR 9
+#define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
-
-#ifndef IS_VCMINI
-#define NUMBER_OF_ON_SCREEN_BUTTONS 16
-#else
-#define NUMBER_OF_ON_SCREEN_BUTTONS 7
-#endif
 
 namespace Ui {
 class MainWindow;
@@ -130,30 +128,10 @@ private slots:
     void on_toolButtonPageUp2_clicked();
 
     // Remote control switches
-    void on_switch_1_pressed();
-    void on_switch_1_released();
-    void on_switch_2_pressed();
-    void on_switch_2_released();
-    void on_switch_3_pressed();
-    void on_switch_3_released();
-    void on_switch_4_pressed();
-    void on_switch_4_released();
-    void on_switch_5_pressed();
-    void on_switch_5_released();
-    void on_switch_6_pressed();
-    void on_switch_6_released();
-    void on_switch_7_pressed();
-    void on_switch_7_released();
-    void on_switch_8_pressed();
-    void on_switch_8_released();
-    void on_switch_9_pressed();
-    void on_switch_9_released();
-    void on_switch_10_pressed();
-    void on_switch_10_released();
-    void on_switch_11_pressed();
-    void on_switch_11_released();
-    void on_switch_12_pressed();
-    void on_switch_12_released();
+    void on_switch_pressed();
+    void on_switch_released();
+    void on_switchLabel_pressed();
+    void on_switchLabel_released();
     void on_switch_13_pressed();
     void on_switch_13_released();
     void on_switch_14_pressed();
@@ -175,8 +153,17 @@ private slots:
     void on_writePatternsButton_clicked();
 
 private:
+    void buildMainWindow();
+    void drawPageComboBoxes();
+    void drawRemoteControlArea();
+    void drawRemoteControlAreaVController();
+    void drawRemoteControlAreaVCmini();
+    void drawRemoteControlAreaVCtouch();
+    void drawRemoteSwitch(QHBoxLayout* layout, uint8_t switchNumber, int switchSize);
     void setupLcdDisplays();
-    void setupButtons();
+    void setFont(QLabel* display, uint8_t size);
+    QColor getColour(uint8_t colour);
+    void resetRemoteControlButtons();
     void setupEditTab();
     void fillTreeWidget(QTreeWidget *my_tree);
     void fillPageComboBox(QComboBox *my_combobox);
@@ -184,15 +171,24 @@ private:
     void fillPatchListBox(QListWidget *my_patchList);
     void fillPatchTypeComboBox(QComboBox *my_combobox);
     void updateStatusLabel();
+    void disconnect_VC();
 
     // Loading and saving files
     void writeHeader(QJsonObject &json, QString type);
     QString readHeader(const QJsonObject &json);
+    QString checkHeaderContainsRightVCtype(const QJsonObject &json);
 
     void try_reconnect_MIDI();
     QString addNonBreakingSpaces(QString text);
 
+    // Offline remote control
+    void startOfflineRemoteControl();
+    void offlineRemoteSwitchPressed(uint8_t sw);
+    void offlineRemoteSwitchReleased(uint8_t sw);
+    QString centerLabel(QString lbl);
+
     Ui::MainWindow *ui;
+    bool booted = false;
     QString MyFullBackupFile;
     QString MySavePageFile;
     QString MySavePatchFile;
@@ -210,6 +206,7 @@ private:
     int previousSwitch = -1;
     int previousSwitchPage = 0;
     int currentItem = 0;
+    QVector< customListWidget * > myListWidgets;
     customListWidget *currentWidget = 0;
     bool RemoteControlActive = false;
     bool copyBufferFilled = false;
@@ -220,7 +217,12 @@ private:
     bool fileLoaded = false;
     bool VControllerConnected = false;
     int currentDevicePatchType = 0;
-    //bool currentDevicePatchBassMode = false;
+    QVector< CustomLED * > myLEDs;
+    QVector< customDisplayLabel * > myLCDs;
+
+    uint8_t remoteDevice = KTN;
+    uint8_t remotePatchNumber = 0;
+    uint8_t remoteBankSize;
 };
 
 #endif // MAINWINDOW_H

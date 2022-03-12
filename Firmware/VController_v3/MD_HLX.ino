@@ -13,7 +13,7 @@
 
 // Line6 HELIX settings:
 #define HLX_MIDI_CHANNEL 1
-#define HLX_MIDI_PORT 1 // Default port is MIDI1
+#define HLX_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define HLX_PATCH_MIN 0
 #define HLX_PATCH_MAX 127
 
@@ -58,10 +58,10 @@
 #define HLX_SNAPSHOT_SELECT_CC 69
 
 #define HLX_EXP_PEDAL_VALUE_FOR_TUNER_CC 2
-#define HLX_SET_SEUENCER_BEATS 3
+#define HLX_SET_SEQUENCER_BEATS_CC 3
 #define HLX_SET_SEQUENCER_PATTERN_CC 4
 
-void MD_HLX_class::init() { // Default values for variables
+FLASHMEM void MD_HLX_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Line6 HLX variables:
@@ -74,17 +74,33 @@ void MD_HLX_class::init() { // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 2; // Default value: red
   MIDI_channel = HLX_MIDI_CHANNEL; // Default value
-  MIDI_port = HLX_MIDI_PORT; // Default value
-  my_device_page1 = HLX_DEFAULT_PAGE1; // Default value
-  my_device_page2 = HLX_DEFAULT_PAGE2; // Default value
-  my_device_page3 = HLX_DEFAULT_PAGE3; // Default value
-  my_device_page4 = HLX_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(HLX_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = HLX_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = HLX_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = HLX_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = HLX_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = HLX_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = HLX_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = HLX_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = HLX_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = HLX_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = HLX_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = HLX_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = HLX_DEFAULT_VC_PAGE4; // Default value
+#endif
   tuner_active = false;
   max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
   setup_random_number_generator();
+
+#ifdef IS_VCTOUCH
+  device_pic = img_HLX;
+#endif
 }
 
-void MD_HLX_class::update() {
+FLASHMEM void MD_HLX_class::update() {
   if (!connected) return;
   looper_timer_check();
   if (update_sequencer) { // Is triggered from the device_sequencer_timer_expired().
@@ -94,10 +110,10 @@ void MD_HLX_class::update() {
 }
 
 // ********************************* Section 2: HLX common MIDI in functions ********************************************
-void MD_HLX_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_HLX_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
   if (!connected) return;
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // HLX sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // HLX sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program;
@@ -110,9 +126,9 @@ void MD_HLX_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   PC_forwarding(program, channel, port);
 }
 
-void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
+FLASHMEM void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
   if (!connected) return;
-  if ((port == MIDI_port) && (channel == MIDI_channel)) {
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) {
     switch (control) {
       case HLX_EXP_PEDAL_VALUE_FOR_TUNER_CC: // EXP pedal minimized will start tuner - must be set in Command Center on each patch
         if ((!tuner_active) && (value == 0)) {
@@ -125,7 +141,7 @@ void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
       case HLX_SET_SEQUENCER_PATTERN_CC: // set the pattern for the MIDI sequencer
         set_sequence(value);
         break;
-      case HLX_SET_SEUENCER_BEATS:
+      case HLX_SET_SEQUENCER_BEATS_CC:
         set_sequence_beats(value);
         break;
       case 32: // Current setlist
@@ -169,47 +185,47 @@ void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
 
 // Detection of Helix only possible when connected via USB midi on the Helix in older versions of firmware.
 
-void MD_HLX_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+FLASHMEM void MD_HLX_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a Helix
   if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x21) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
-void MD_HLX_class::do_after_connect() {
+FLASHMEM void MD_HLX_class::do_after_connect() {
   current_exp_pedal = 2;
 }
 
 // ********************************* Section 3: HLX common MIDI out functions ********************************************
 
-void MD_HLX_class::set_bpm() {
+FLASHMEM void MD_HLX_class::set_bpm() {
   device_sequencer_update(number_of_sequence_steps, beat_divider);
 }
 
-void MD_HLX_class::bpm_tap() {
+FLASHMEM void MD_HLX_class::bpm_tap() {
   if (connected) {
-    MIDI_send_CC(64, 127, MIDI_channel, MIDI_port); // Tap tempo on HLX
+    MIDI_send_CC(64, 127, MIDI_channel, MIDI_out_port); // Tap tempo on HLX
   }
 }
 
-void MD_HLX_class::start_tuner() {
+FLASHMEM void MD_HLX_class::start_tuner() {
   if ((connected) && (!tuner_active)) {
-    MIDI_send_CC(68, 127, MIDI_channel, MIDI_port);
+    MIDI_send_CC(68, 127, MIDI_channel, MIDI_out_port);
     tuner_active = true;
   }
 }
 
-void MD_HLX_class::stop_tuner() {
+FLASHMEM void MD_HLX_class::stop_tuner() {
   if ((connected) && (tuner_active) && (is_on)) {
-    MIDI_send_CC(68, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(68, 0, MIDI_channel, MIDI_out_port);
     tuner_active = false;
   }
 }
 
 // ********************************* Section 4: HLX program change ********************************************
 
-void MD_HLX_class::do_after_patch_selection() {
+FLASHMEM void MD_HLX_class::do_after_patch_selection() {
   is_on = connected;
   unmute();
   if (Setting.Send_global_tempo_after_patch_change == true) {
@@ -227,7 +243,7 @@ void MD_HLX_class::do_after_patch_selection() {
   MD_base_class::do_after_patch_selection();
 }
 
-bool MD_HLX_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
+FLASHMEM bool MD_HLX_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
   if (!bank_selection_active()) return false;
 
   if (flash_bank_of_four == 255) return true; // We are not coming from direct select, so all LEDs should flash
@@ -241,19 +257,19 @@ bool MD_HLX_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash 
 }
 
 
-void MD_HLX_class::number_format(uint16_t number, String &Output) {
+FLASHMEM void MD_HLX_class::number_format(uint16_t number, String &Output) {
   char PatchChar;
   uint8_t bank_no = number >> 2;
   PatchChar = 65 + number % 4;
   Output += String((bank_no + 1) / 10) + String((bank_no + 1) % 10) + PatchChar;
 }
 
-void MD_HLX_class::direct_select_format(uint16_t number, String &Output) {
+FLASHMEM void MD_HLX_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) Output += String(number) + "__";
   else Output += String(bank_select_number) + String(number) + "_";
 }
 
-bool MD_HLX_class::valid_direct_select_switch(uint8_t number) {
+FLASHMEM bool MD_HLX_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
   if (direct_select_state == 0) { // Show all switches on first digit
     result = ((number * 40) <= (patch_max - patch_min));
@@ -265,7 +281,7 @@ bool MD_HLX_class::valid_direct_select_switch(uint8_t number) {
   return result;
 }
 
-void MD_HLX_class::direct_select_start() {
+FLASHMEM void MD_HLX_class::direct_select_start() {
   Previous_bank_size = bank_size; // Remember the bank size
   device_in_bank_selection = my_device_number + 1;
   bank_size = 400;
@@ -273,7 +289,7 @@ void MD_HLX_class::direct_select_start() {
   direct_select_state = 0;
 }
 
-void MD_HLX_class::direct_select_press(uint8_t number) {
+FLASHMEM void MD_HLX_class::direct_select_press(uint8_t number) {
   if (!valid_direct_select_switch(number)) return;
   if (direct_select_state == 0) {
     // First digit pressed
@@ -287,17 +303,17 @@ void MD_HLX_class::direct_select_press(uint8_t number) {
     flash_bank_of_four = base_patch / 4;
     bank_select_number = (base_patch / Previous_bank_size);
     bank_size = Previous_bank_size;
-    SCO_select_page(HLX_DEFAULT_PAGE1); // Which should give PAGE_HLX_PATCH_BANK
+    SCO_select_page(my_device_page1); // Which should give PAGE_HLX_PATCH_BANK
     device_in_bank_selection = my_device_number + 1; // Go into bank mode
   }
 }
 
-void MD_HLX_class::unmute() {
+FLASHMEM void MD_HLX_class::unmute() {
   is_on = connected;
   stop_tuner();
 }
 
-void MD_HLX_class::mute() {
+FLASHMEM void MD_HLX_class::mute() {
   if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
     start_tuner();
@@ -340,14 +356,14 @@ const uint16_t HLX_NUMBER_OF_PARAMETERS = sizeof(HLX_CC_types) / sizeof(HLX_CC_t
 #define HLX_SETLIST 14
 #define HLX_SNAPSHOT 15
 
-void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   // Send cc command to Line6 HLX
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   if (HLX_CC_types[number].NumVals == 2) {
-    MIDI_send_CC(HLX_CC_types[number].CC, 127, MIDI_channel, MIDI_port);
+    MIDI_send_CC(HLX_CC_types[number].CC, 127, MIDI_channel, MIDI_out_port);
   }
   else {
-    MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+    MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   }
 
   if (number == HLX_SETLIST) current_setlist = value;
@@ -366,14 +382,14 @@ void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_HLX_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_HLX_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 }
 
-void MD_HLX_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_HLX_class::read_parameter_title(uint16_t number, String &Output) {
   Output += HLX_CC_types[number].Name;
 }
 
-bool MD_HLX_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_HLX_class::request_parameter(uint8_t sw, uint16_t number) {
   String msg = "";
   SP[sw].State = 2; // Effect off
   SP[sw].Colour = my_LED_colour;
@@ -389,7 +405,7 @@ bool MD_HLX_class::request_parameter(uint8_t sw, uint16_t number) {
   return true; // Move to next switch is true.
 }
 
-void MD_HLX_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_HLX_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   String msg = "";
   uint16_t index = SP[Sw].PP_number;
   if ((index >= HLX_SW_EXP1) && (index <= HLX_SW_EXP3)) {
@@ -402,28 +418,28 @@ void MD_HLX_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates th
 }
 
 // Menu options for FX states
-void MD_HLX_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_HLX_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = HLX_CC_types[number].Name;
   else Output = "?";
 }
 
-uint16_t MD_HLX_class::number_of_parameters() {
+FLASHMEM uint16_t MD_HLX_class::number_of_parameters() {
   return HLX_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_HLX_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_HLX_class::number_of_values(uint16_t parameter) {
   if (parameter < HLX_NUMBER_OF_PARAMETERS) {
     return HLX_CC_types[parameter].NumVals;
   }
   else return 0;
 }
 
-void MD_HLX_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_HLX_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters()) Output += String(value);
   else Output += " ? "; // Unknown parameter
 }
 
-void MD_HLX_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_HLX_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   uint8_t number;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   switch (exp_pedal) {
@@ -432,8 +448,8 @@ void MD_HLX_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
     case 3: number = HLX_SW_EXP3; break;
     default: return;
   }
-  LCD_show_bar(0, value); // Show it on the main display
-  MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+  LCD_show_bar(0, value, 0); // Show it on the main display
+  MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   check_update_label(sw, value);
   String msg = HLX_CC_types[number].Name;
   msg += ':';
@@ -442,18 +458,18 @@ void MD_HLX_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_HLX_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_HLX_class::toggle_expression_pedal(uint8_t sw) {
   uint8_t value;
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 2) current_exp_pedal = 1;
   // Send toe switch message
   if (current_exp_pedal <= 2) value = 127;
-  MIDI_send_CC(HLX_CC_types[HLX_SW_EXP_TOE].CC, value, MIDI_channel, MIDI_port);
+  MIDI_send_CC(HLX_CC_types[HLX_SW_EXP_TOE].CC, value, MIDI_channel, MIDI_out_port);
   update_page = REFRESH_FX_ONLY;
 }
 
-bool MD_HLX_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_HLX_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   uint8_t number = 0;
   if (exp_pedal == 1) number = HLX_SW_EXP1;
@@ -464,27 +480,35 @@ bool MD_HLX_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   return true;
 }
 
-void MD_HLX_class::get_snapscene_title(uint8_t number, String &Output) {
+FLASHMEM void MD_HLX_class::get_snapscene_title(uint8_t number, String &Output) {
   Output += "SNAPSHOT " + String(number);
 }
 
-/*void MD_HLX_class::set_snapscene_name(uint8_t number, String &Output) {
+/*FLASHMEM void MD_HLX_class::set_snapscene_name(uint8_t number, String &Output) {
   Output += "SNAPSHOT " + String(number);
   }*/
 
-void MD_HLX_class::set_snapscene(uint8_t sw, uint8_t number) {
+FLASHMEM void MD_HLX_class::set_snapscene(uint8_t sw, uint8_t number) {
   if (!is_on) unmute();
+  if ((number < 1) || (number > 8)) return;
   current_snapscene = number;
-  MIDI_send_CC(HLX_SNAPSHOT_SELECT_CC, number - 1, MIDI_channel, MIDI_port);
+  MIDI_send_CC(HLX_SNAPSHOT_SELECT_CC, number - 1, MIDI_channel, MIDI_out_port);
+  MIDI_send_current_snapscene(my_device_number, current_snapscene);
 }
 
-void MD_HLX_class::snapscene_number_format(String &Output) { // Add snapshot number to potchnumber
+FLASHMEM void MD_HLX_class::show_snapscene(uint8_t  number) {
+  if ((number < 1) || (number > 8)) return;
+  if (number == current_snapscene) return;
+  current_snapscene = number;
+}
+
+FLASHMEM void MD_HLX_class::snapscene_number_format(String &Output) { // Add snapshot number to potchnumber
   if (current_snapscene == 0) return;
   Output += '-';
   Output += String(current_snapscene);
 }
 
-bool MD_HLX_class::looper_active() {
+FLASHMEM bool MD_HLX_class::looper_active() {
   return true;
 }
 
@@ -513,9 +537,9 @@ const PROGMEM HLX_looper_cc_struct HLX_looper_cc[] = { // Table with the cc mess
 
 const uint8_t HLX_LOOPER_NUMBER_OF_CCS = sizeof(HLX_looper_cc) / sizeof(HLX_looper_cc[0]);
 
-void MD_HLX_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM void MD_HLX_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < HLX_LOOPER_NUMBER_OF_CCS) {
-    if (HLX_looper_cc[cmd].cc > 0) MIDI_send_CC(HLX_looper_cc[cmd].cc, HLX_looper_cc[cmd].value, MIDI_channel, MIDI_port);
+    if (HLX_looper_cc[cmd].cc > 0) MIDI_send_CC(HLX_looper_cc[cmd].cc, HLX_looper_cc[cmd].value, MIDI_channel, MIDI_out_port);
   }
 }
 
@@ -548,7 +572,7 @@ const PROGMEM uint8_t HLX_sequencer_pattern[][36] = {
 #define PATTERN_EEPROM 254
 #define PATTERN_RANDOM 255
 
-void MD_HLX_class::set_sequence(uint8_t pattern) {
+FLASHMEM void MD_HLX_class::set_sequence(uint8_t pattern) {
   if (pattern == 0) { // Stop sequencer
     current_sequence = 0;
     number_of_sequence_steps = 0;
@@ -574,21 +598,21 @@ void MD_HLX_class::set_sequence(uint8_t pattern) {
   }
 
   device_sequencer_update(number_of_sequence_steps, beat_divider);
-  Serial.println("current_sequence:" + String(current_sequence) + ", number_of_sequence_steps:" + String(number_of_sequence_steps) + ", beat_divider:" + String(beat_divider));
+  DEBUGMSG("current_sequence:" + String(current_sequence) + ", number_of_sequence_steps:" + String(number_of_sequence_steps) + ", beat_divider:" + String(beat_divider));
 }
 
-void MD_HLX_class::set_sequence_beats(uint8_t beats) {
+FLASHMEM void MD_HLX_class::set_sequence_beats(uint8_t beats) {
   if (beats == 0) return;
   beat_divider = beats;
   device_sequencer_update(number_of_sequence_steps, beat_divider);
 }
 
-void MD_HLX_class::stop_sequence() {
+FLASHMEM void MD_HLX_class::stop_sequence() {
   current_sequence = 0;
   beat_divider = 1;
 }
 
-void MD_HLX_class::send_sequence_step_CC() {
+FLASHMEM void MD_HLX_class::send_sequence_step_CC() {
   uint8_t value;
   if (current_sequence == 0) return;
   if (current_sequence == PATTERN_EEPROM) value = EEPROM_seq_pattern[current_sequence_step + 4];
@@ -596,7 +620,7 @@ void MD_HLX_class::send_sequence_step_CC() {
   else if (current_sequence == PATTERN_RANDOM) value = generate_random_number();
   else return;
   if (value != previous_sequence_value) {
-    MIDI_send_CC(HLX_SET_SEQUENCER_PATTERN_CC, value, MIDI_channel, MIDI_port);
+    MIDI_send_CC(HLX_SET_SEQUENCER_PATTERN_CC, value, MIDI_channel, MIDI_out_port);
     previous_sequence_value = value;
   }
   current_sequence_step++;
@@ -619,7 +643,7 @@ void MD_HLX_class::send_sequence_step_CC() {
 #define RNG_SR_OREG_LVL(x)      (((uint32_t)(((uint32_t)(x))<<RNG_SR_OREG_LVL_SHIFT))&RNG_SR_OREG_LVL_MASK)
 #define SIM_SCGC6_RNGA          ((uint32_t)0x00000200)
 
-void MD_HLX_class::setup_random_number_generator() {
+FLASHMEM void MD_HLX_class::setup_random_number_generator() {
 
 #if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
   SIM_SCGC6 |= SIM_SCGC6_RNGA;                  //enable RNG
@@ -635,7 +659,7 @@ void MD_HLX_class::setup_random_number_generator() {
 #endif
 }
 
-uint8_t MD_HLX_class::generate_random_number() {
+FLASHMEM uint8_t MD_HLX_class::generate_random_number() {
 #if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
   RNG_CR |= RNG_CR_GO_MASK;
   while ((RNG_SR & RNG_SR_OREG_LVL(0xF)) == 0); //wait for RN to be generated
@@ -665,11 +689,11 @@ uint8_t MD_HLX_class::generate_random_number() {
 
 #define MIDI_HELIX_IC_TIME 200; // Time that instant commands are sent after sending program change message - the gap of the Helix is 120 ms on averge
 
-void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port) {
-  if (Port != MIDI_port) return;
+FLASHMEM void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port) {
+  if (Port != MIDI_in_port) return;
   if (Channel == MIDI_channel) { // Check if it is PC message from the Helix
     // Forward PC message from the Helix
-    MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
+    MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_out_port);
 
     // Check if more messages have been sent than received on last transmit - this means a message has been deleted from the Helix
     if (MIDI_Helix_sent_msg_no > MIDI_Helix_received_msg_no) {
@@ -692,10 +716,10 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
           MIDI_Helix_sent_msg_no++;
           switch (HLX_messages[m][0] & 0xF0) {
             case 0xC0: // Program change message
-              MIDI_forward_PC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][0] & 0x0F,  MIDI_port);
+              MIDI_forward_PC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][0] & 0x0F,  MIDI_out_port);
               break;
             case 0xB0: // Control change message
-              MIDI_forward_CC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][2], HLX_messages[m][0] & 0x0F, MIDI_port);
+              MIDI_forward_CC_to_all_ports_but_mine(HLX_messages[m][1], HLX_messages[m][2], HLX_messages[m][0] & 0x0F, MIDI_out_port);
               break;
           }
         }
@@ -716,8 +740,8 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
       DEBUGMSG("Checking PC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
       if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Program != HLX_messages[MIDI_Helix_received_msg_no][1]) || (current_setlist != HLX_message_setlist)) {
         DEBUGMSG("PC message does not match - Channel:" + String(Channel) + "!=" + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
-        MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
-        //MIDI_send_PC(Program, Channel, My_VG99.MIDI_port); // Forward the message
+        MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_out_port);
+        //MIDI_send_PC(Program, Channel, My_VG99.MIDI_out_port); // Forward the message
         HLX_messages[MIDI_Helix_received_msg_no][1] = Program;
         HLX_messages[MIDI_Helix_received_msg_no][0] = 0xC0 | Channel;
         EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_setlist); // Store it in EEPROM
@@ -726,13 +750,13 @@ void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint8_t Port)
     }
     else {
       // Forward message
-      MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_port);
+      MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_out_port);
     }
   }
 }
 
-void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Port) {
-  if (Port != MIDI_port) return;
+FLASHMEM void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Channel, uint8_t Port) {
+  if (Port != MIDI_in_port) return;
   if ((millis() < MIDI_Helix_IC_timer) && (Channel != MIDI_channel) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
     // Check message with stored message in EEPROM
     DEBUGMSG("Checking CC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
@@ -740,7 +764,7 @@ void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Chan
       DEBUGMSG("CC message does not match message #" + String(MIDI_Helix_received_msg_no));
       DEBUGMSG("Received: CC#" + String(Controller) + ", value: " + String(Value) + " on channel " + String(Channel));
       DEBUGMSG("Stored:   CC#" + String(HLX_messages[MIDI_Helix_received_msg_no][1]) + ", value: " + String(HLX_messages[MIDI_Helix_received_msg_no][2]) + " on channel " + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
-      MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_port);
+      MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_out_port);
       HLX_messages[MIDI_Helix_received_msg_no][1] = Controller;
       HLX_messages[MIDI_Helix_received_msg_no][2] = Value;
       HLX_messages[MIDI_Helix_received_msg_no][0] = 0xB0 | Channel;
@@ -750,6 +774,6 @@ void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uint8_t Chan
   }
   else {
     // Forward message
-    MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_port);
+    MIDI_forward_CC_to_all_ports_but_mine(Controller, Value, Channel, MIDI_out_port);
   }
 }

@@ -1,11 +1,9 @@
 #include "globals.h"
 
 // Copied data from globals.h (VController Teensy Code)
-#ifdef IS_VCMINI
-#define DEFAULT_MAIN_DISPLAY_MODE 3
-#else
-#define DEFAULT_MAIN_DISPLAY_MODE 1
-#endif
+
+uint8_t VC_type = 255; // Set to non existing type
+QString VC_name = "VC-mini";
 
 Setting_struct Setting = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
@@ -34,7 +32,7 @@ Setting_struct Setting = {  // Default values for global settings
   0,     // Bass_mode_device
   15,    // Bass_mode_cc_number
   100,   // Bass_mode_min_verlocity
-  DEFAULT_MAIN_DISPLAY_MODE,     // Main display mode
+  1,     // Main display mode
   {0, 0, 0, 0}, // The maximum values of the expression pedals (0 = auto calibrate)
   {0, 0, 0, 0}, // The minumum values of the expression pedals (0 = auto calibrate)
   6,     // FX_LOOPER_colour (white)
@@ -48,6 +46,17 @@ Setting_struct Setting = {  // Default values for global settings
   0,     // Main_display_show_top_right: show current device
   16,    // HNP_mode_cc_number
   2,     // CURNUM_action: Tap tempo
+  {0, 0, 0}, // Input ports for MIDI forwarding
+  {0, 0, 0},  // Output ports for MIDI forwarding
+  {0, 0, 0},  // Filters for MIDI forwarding
+  1,     // Bluetooth mode
+  1,     // WIFI mode
+  true,  // Status of AppleMIDI / RTPMIDI
+  true,  // Enable the WIFI server for OTA updates
+  1,     // Enable Follow_tempo_from_G2M
+  1,     // Colour of tap tempo LED when tempo following is on: green
+  0,     // Forward midi in both directions
+  false, // 50W version of Katana
 };
 
 MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings
@@ -89,3 +98,7 @@ uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE] = {
 };
 
 uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS][VC_PATCH_SIZE]; // Storage for the actual patches
+
+uint8_t number_of_midi_ports = 0;
+QStringList midi_port_names = {};
+uint8_t VCmidi_model_number;

@@ -70,11 +70,11 @@
 
 // Strymon Volante settings:
 #define SVL_MIDI_CHANNEL 1
-#define SVL_MIDI_PORT 1 // Default port is MIDI1
+#define SVL_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define SVL_PATCH_MIN 0
 #define SVL_PATCH_MAX 299
 
-void MD_SVL_class::init() { // Default values for variables
+FLASHMEM void MD_SVL_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Line6 SVL variables:
@@ -87,19 +87,34 @@ void MD_SVL_class::init() { // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 7; // Default value: yellow
   MIDI_channel = SVL_MIDI_CHANNEL; // Default value
-  MIDI_port = SVL_MIDI_PORT; // Default value
-  my_device_page1 = SVL_DEFAULT_PAGE1; // Default value
-  my_device_page2 = SVL_DEFAULT_PAGE2; // Default value
-  my_device_page3 = SVL_DEFAULT_PAGE3; // Default value
-  my_device_page4 = SVL_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(SVL_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = SVL_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = SVL_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = SVL_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = SVL_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = SVL_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = SVL_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = SVL_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = SVL_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = SVL_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = SVL_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = SVL_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = SVL_DEFAULT_VC_PAGE4; // Default value
+#endif
 
+#ifdef IS_VCTOUCH
+  device_pic = img_SVL;
+#endif
 }
 
 // ********************************* Section 2: SVL common MIDI in functions ********************************************
-void MD_SVL_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_SVL_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
   if (!connected) return;
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // SVL sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // SVL sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program + (CC00 << 7);
@@ -111,9 +126,9 @@ void MD_SVL_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   }
 }
 
-void MD_SVL_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
+FLASHMEM void MD_SVL_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
   if (!connected) return;
-  if ((port == MIDI_port) && (channel == MIDI_channel)) {
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) {
     if (control == 0) CC00 = value;
     else update_parameter_state_through_cc(control, value);
   }
@@ -123,40 +138,40 @@ void MD_SVL_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
 // Volante - identity response:
 // F0 7E 00 06 02 00 01 55 13 00 04 00 30 31 31 32 F7
 
-void MD_SVL_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+FLASHMEM void MD_SVL_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a Strymon Volante
   if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x55) && (sxdata[8] == 0x13) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
-void MD_SVL_class::do_after_connect() {
+FLASHMEM void MD_SVL_class::do_after_connect() {
   //  current_exp_pedal = 2;
 }
 
 // ********************************* Section 3: SVL common MIDI out functions ********************************************
-void MD_SVL_class::bpm_tap() {
+FLASHMEM void MD_SVL_class::bpm_tap() {
   if (connected) {
-    MIDI_send_CC(93, 127, MIDI_channel, MIDI_port); // Tap tempo on the Strymon Volante
+    MIDI_send_CC(93, 127, MIDI_channel, MIDI_out_port); // Tap tempo on the Strymon Volante
   }
 }
 
 // ********************************* Section 4: SVL program change ********************************************
 
-void MD_SVL_class::select_patch(uint16_t new_patch) {
+FLASHMEM void MD_SVL_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
-  MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_port);
-  MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_port);
+  MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_out_port);
+  MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_out_port);
   DEBUGMSG("out(SVL) PC" + String(new_patch)); //Debug
   do_after_patch_selection();
   update_page = REFRESH_PAGE;
 }
 
-void MD_SVL_class::do_after_patch_selection() {
+FLASHMEM void MD_SVL_class::do_after_patch_selection() {
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) {
     SCO_retap_tempo();
@@ -169,12 +184,12 @@ void MD_SVL_class::do_after_patch_selection() {
   MD_base_class::do_after_patch_selection();
 }
 
-void MD_SVL_class::number_format(uint16_t number, String & Output) {
+FLASHMEM void MD_SVL_class::number_format(uint16_t number, String & Output) {
   uint16_t number_plus_one = number + 1;
   Output += String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
 }
 
-void MD_SVL_class::direct_select_format(uint16_t number, String & Output) {
+FLASHMEM void MD_SVL_class::direct_select_format(uint16_t number, String & Output) {
   if (direct_select_state == 0) {
     Output += String(bank_select_number) + String(number) + "_";
   }
@@ -221,17 +236,17 @@ const PROGMEM char SVL_sublists[][8] = {
 
 #define SVL_EXP 14
 
-void MD_SVL_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_SVL_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   // Send cc command to Line6 SVL
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   if (SVL_CC_types[number].NumVals == 2) {
-    MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+    MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   }
   else if (SVL_CC_types[number].NumVals == 3) {
-    MIDI_send_CC(SVL_CC_types[number].CC, value + 1, MIDI_channel, MIDI_port);
+    MIDI_send_CC(SVL_CC_types[number].CC, value + 1, MIDI_channel, MIDI_out_port);
   }
   else {
-    MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+    MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   }
   par_on[number] = value;
 
@@ -251,18 +266,18 @@ void MD_SVL_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_SVL_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_SVL_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   if (SVL_CC_types[number].Momentary) {
-    MIDI_send_CC(SVL_CC_types[number].CC, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(SVL_CC_types[number].CC, 0, MIDI_channel, MIDI_out_port);
     par_on[number] = 0;
   }
 }
 
-void MD_SVL_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_SVL_class::read_parameter_title(uint16_t number, String &Output) {
   Output += SVL_CC_types[number].Name;
 }
 
-bool MD_SVL_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_SVL_class::request_parameter(uint8_t sw, uint16_t number) {
   String msg = "";
   if (par_on[number] == 0) SP[sw].State = 2; // Effect off
   else SP[sw].State = 1; // Effect on
@@ -276,7 +291,7 @@ bool MD_SVL_class::request_parameter(uint8_t sw, uint16_t number) {
   return true; // Move to next switch is true.
 }
 
-void MD_SVL_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_SVL_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   String msg = "";
   uint16_t index = SP[Sw].PP_number;
   if (index == SVL_EXP) {
@@ -289,28 +304,28 @@ void MD_SVL_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates th
 }
 
 // Menu options for FX states
-void MD_SVL_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_SVL_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = SVL_CC_types[number].Name;
   else Output = "?";
 }
 
-uint16_t MD_SVL_class::number_of_parameters() {
+FLASHMEM uint16_t MD_SVL_class::number_of_parameters() {
   return SVL_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_SVL_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_SVL_class::number_of_values(uint16_t parameter) {
   if (parameter < SVL_NUMBER_OF_PARAMETERS) {
     return SVL_CC_types[parameter].NumVals;
   }
   else return 0;
 }
 
-void MD_SVL_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_SVL_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters()) Output += String(value);
   else Output += " ? "; // Unknown parameter
 }
 
-void MD_SVL_class::update_parameter_state_through_cc(uint8_t control, uint8_t value) {
+FLASHMEM void MD_SVL_class::update_parameter_state_through_cc(uint8_t control, uint8_t value) {
   for (uint8_t i = 0; i < SVL_NUMBER_OF_PARAMETERS; i++) {
     if (control == SVL_CC_types[i].CC) par_on[i] = value;
   }
@@ -318,10 +333,10 @@ void MD_SVL_class::update_parameter_state_through_cc(uint8_t control, uint8_t va
 
 // ********************************* Section 6: SVL expression pedal control ********************************************
 
-void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   uint8_t number = SVL_EXP;
-  LCD_show_bar(0, value); // Show it on the main display
-  MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+  LCD_show_bar(0, value, 0); // Show it on the main display
+  MIDI_send_CC(SVL_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   check_update_label(sw, value);
   String msg = SVL_CC_types[number].Name;
   msg += ':';
@@ -330,7 +345,7 @@ void MD_SVL_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-bool MD_SVL_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_SVL_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   SP[sw].PP_number = SVL_EXP;
   LCD_clear_SP_label(sw);
   return true;

@@ -26,11 +26,15 @@ private slots:
 
     void on_hideKatanaTabCheckBox_stateChanged(int arg1);
 
+    void on_deviceModeComboBox_currentIndexChanged(int index);
+
 private:
     Ui::vcEditSettingsDialog *ui;
     void loadSettings();
     void saveSettings();
     Midi *_midi;
+    uint8_t my_VC_type;
+    bool booted = false;
 };
 
 

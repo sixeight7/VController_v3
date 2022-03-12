@@ -4,6 +4,13 @@
 #include <QApplication>
 #include <QVector>
 
+#define VCONTROLLER 0
+#define VCMINI 1
+#define VCTOUCH 2
+
+extern uint8_t VC_type;
+extern QString VC_name;
+
 #define LCD_DISPLAY_SIZE 16
 
 // Copied data from globals.h (VController Teensy Code)
@@ -49,6 +56,17 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Main_display_show_top_right; // What will be shown top right on the nmain display
   uint8_t HNP_mode_cc_number; // Addition to Bass mode
   uint8_t CURNUM_action; // What to do when current patch number is pressed again
+  uint8_t MIDI_forward_source_port[3]; // Input ports for MIDI forwarding
+  uint8_t MIDI_forward_dest_port[3]; // Output ports for MIDI forwarding
+  uint8_t MIDI_forward_filter[3]; // Filters for MIDI forwarding
+  uint8_t BLE_mode; // Bluetooth mode
+  uint8_t WIFI_mode; // WIFI mode
+  uint8_t RTP_enabled; // Status of AppleMIDI / RTPMIDI
+  uint8_t WIFI_server_enabled; // Enable the WIFI server for OTA updates
+  uint8_t Follow_tempo_from_G2M; // Tempo is updated from playing speed using Guitar2midi
+  uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
+  uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
+  uint8_t Is_katana50; // 50W version of Katana
 };
 
 extern Setting_struct Setting;
@@ -78,5 +96,11 @@ extern uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE]
 #define BASS_MODE_NUMBER_OFFSET 0x1000
 
 extern uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS][VC_PATCH_SIZE]; // Storage for the actual patches
+
+extern uint8_t number_of_midi_ports;
+extern QStringList midi_port_names;
+extern uint8_t VCmidi_model_number;
+
+#define NUMBER_OF_MIDI_FORWARD_FILTERS 7
 
 #endif // GLOBALS_H

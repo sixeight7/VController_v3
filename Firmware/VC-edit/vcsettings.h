@@ -9,6 +9,7 @@
 #include "VController/globals.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/hardware.h"
 
 #include <QObject>
 #include <QDialog>
@@ -46,16 +47,18 @@ private:
     };
 
 #define DEVICE_SUBLIST 255
+#define MIDI_PORT_SUBLIST 254
 
     const QVector<Setting_menu_struct> VCsettingMenu =
     {
       { "General Settings", HEADER, 0, 0, 0, 0 },
       { "Main display mode shows on bottom line", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-      { "Main display shows top right", OPTION, 48, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
-      { "CURNUM action", OPTION, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
-      { "Master Expression Pedal also controls", OPTION, 35, 0, 2, &Setting.MEP_control }, // Switch 4
+      { "Main display shows top right", OPTION, 50, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
+      { "CURNUM action", OPTION, 53, 0, 5, &Setting.CURNUM_action }, // Switch 3
+      { "Master Expression Pedal also controls", OPTION, 37, 0, 2, &Setting.MEP_control }, // Switch 4
       { "Send Global Tempo on patch change", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
       { "Hide tap tempo LED", OPTION, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
+      { "Katana type", OPTION, 83, 0, 1, &Setting.Is_katana50 }, // Switch 7
 
       { "LED Settings", HEADER, 0, 0, 0, 0 }, // Menu title
       { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 1
@@ -68,7 +71,8 @@ private:
       { "MIDI note colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 8
       { "BPM colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 9
       { "BPM synced colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 10
-      { "RGB display colour scheme", OPTION, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 11
+      { "BPM follow color", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_follow_colour },// Switch 11
+      { "RGB display colour scheme", OPTION, 48, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 12
 
       { "LED FX colours", HEADER, 0, 0, 0, 0 }, // Menu title
       { "GTR/COSM colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_GTR_colour }, // Switch 1
@@ -84,14 +88,34 @@ private:
       { "WAH COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_WAH_colour }, // Switch 11
       { "DYNAMICS COLOUR", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_DYNAMICS_colour }, // Switch 12
 
-      { "MIDI advanced settings", HEADER, 0, 0, 0, 0 }, // Menu title
-      { "Read MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
-      { "Send MIDI clock", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
+      { "MIDI Advanced Settings", HEADER, 0, 0, 0, 0 }, // Menu title
+      { "Read MIDI clock", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.Read_MIDI_clock_port }, // Switch 1
+      { "Send MIDI clock", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.Send_MIDI_clock_port }, // Switch 2
       { "Bass mode Guitar-to-MIDI channel", VALUE, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
       { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
       { "Bass mode CC number", VALUE, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
       { "Bass mode min velocity", VALUE, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
       { "HighNotePriotyCC", VALUE, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
+      { "Follow tempo from Guitar2MIDI", OPTION, 72, 0, 2, &Setting.Follow_tempo_from_G2M}, // Switch 10
+
+      { "MIDI Forwarding Settings", HEADER }, // Menu title
+      { "Rule 1: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[0] }, // Switch 1
+      { "Rule 1: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[0] }, // Switch 2
+      { "Rule 1: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
+      { "Rule 2: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[1] }, // Switch 4
+      { "Rule 2: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[1] }, // Switch 5
+      { "Rule 2: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
+      { "Rule 3: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[2] }, // Switch 7
+      { "Rule 3: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[2] }, // Switch 8
+      { "Rule 3: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
+      { "Forward data bi-directional", OPTION, 75, 0, 7, &Setting.MIDI_forward_bidirectional }, // Switch 10
+
+
+      { "WIRELESS MENU (VC-touch)", HEADER }, // Menu title
+      { "Bluetooth", OPTION, 1, 0, 1, &Setting.BLE_mode }, // Switch 1
+      { "WIFI mode", OPTION, 68, 0, 2, &Setting.WIFI_mode }, // Switch 2
+      { "RTPMIDI enabled", OPTION, 1, 0, 1, &Setting.RTP_enabled }, // Switch 7
+      { "WIFI server", OPTION, 1, 0, 1, &Setting.WIFI_server_enabled }, // Switch 8
     };
 
     const uint16_t NUMBER_OF_SETTINGS_MENU_ITEMS = VCsettingMenu.size();
@@ -106,26 +130,41 @@ private:
       // Sublist 19 - 22: Main display modes
       "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
 
-      // Sublist 23 - 30: MIDI ports
-      "OFF", "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "",
+      // Sublist 23 - 32: MIDI ports
+      "OFF", MIDI_PORT_NAMES,
 
-      // Sublist 31 - 34: Expression pedals
+      // Sublist 33 - 36: Expression pedals
       "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-      // Sublist 35 - 37: MEP control options
-      "NONE", "UP/DOWN buttons", "UP/DN + STEP buttons",
+      // Sublist 37 - 39: MEP control options
+      "NONE", "UP/DOWN", "UP/DN + STEP",
 
-      // Sublist 38 - 45: MIDI switch types
+      // Sublist 40 - 47: MIDI switch types
       "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
 
-      // Sublist 46 - 47: RGB Display colour schemes
+      // Sublist 48 - 49: RGB Display colour schemes
       "ADAFRUIT", "BUYDISPLAY",
 
-      // Sublist 48 - 50: Main display top right types
+      // Sublist 50 - 52: Main display top right types
       "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
 
-      // Sublist 51 - 56: Current number actions
+      // Sublist 53 - 58: Current number actions
       "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
+
+      // Sublist 60 - 67: MIDI forward filters
+      "BLOCK ALL MIDI", "FORWARD ALL MIDI", "ALL BUT SYSEX", "FWD PC ONLY", "FORWARD CC ONLY", "FWD NOTES ONLY", "FWD SYSEX ONLY", "",
+
+      // Sublist 68 - 71: WIFI modes
+      "OFF", "Client", "Access point", "Client + AP",
+
+      // Sublist 72 - 74: Tempo follow modes
+      "DISABLED", "OFF", "ON",
+
+      // Sublist 75 - 82: MIDI forwarding bidirectional settings
+      "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
+
+      // Sublist 83 - 84: Katana type
+      "Katana100 (8 CH)", "Katana50 (4 CH)",
     };
 };
 

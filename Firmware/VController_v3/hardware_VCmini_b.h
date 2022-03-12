@@ -6,11 +6,14 @@
 // This file contains all the hardware settings for the VController Production Model version 1.
 // Make sure you include this file when updating to new firmware
 
+#define VC_NAME "VC-mini"
+
 #define IS_VCMINI // Will give the alternative configuration as defined in Config.ino
 
 // Choose which configuration for the switches is chosen in Config.ino
 //#define CONFIG_VCONTROLLER
 #define CONFIG_VCMINI
+//#define CONFIG_VCTOUCH
 //#define CONFIG_CUSTOM
 //#define MENU_ON_INDIVIDUAL_DISPLAYS
 
@@ -79,6 +82,8 @@
 //#define JACK4_PINS 22, 23, A8, A9, 1000
 
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
+
+#define MENU_KEY_COMBINATION B01010000 // Both encoder switches pressed
 
 // *** Neopixel LEDs
 #define NUMBER_OF_LEDS     3 // Number of neopixel LEDs connected
@@ -150,10 +155,37 @@
 #define LINE_SELECT_CC_NUMBER 119
 #define VCONTROLLER_MIDI_CHANNEL 16
 
+#define NUMBER_OF_MIDI_PORTS 4
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 //#define MIDI3_BAUD_RATE 115200
 //#define MIDI3_BAUD_RATE 38400
 //#define MIDI3_ENABLED
 #define MIDI_T36_HOST_PORT_ENABLED
 
+// Names and numbers of ports
+#define PORT1_NAME "USB MIDI"
+#define PORT1_TYPE USBMIDI_PORT
+
+#define PORT2_NAME "USB MIDI HOST"
+#define PORT2_TYPE USBHMIDI_PORT
+
+#define PORT3_NAME "MIDI 1"
+#define PORT3_TYPE MIDI1_PORT
+
+#define PORT4_NAME "MIDI 2"
+#define PORT4_TYPE MIDI2_PORT
+
+#define PORT5_NAME "ALL MIDI PORTS"
+#define PORT5_TYPE ALL_MIDI_PORTS
+#define PORT6_NAME ""
+#define PORT6_TYPE USBMIDI_PORT
+
+#define PORT7_NAME ""
+#define PORT7_TYPE USBMIDI_PORT
+
+#define PORT8_NAME ""
+#define PORT8_TYPE USBMIDI_PORT
+
+#define PORT9_NAME ""
+#define PORT9_TYPE USBMIDI_PORT
 #endif

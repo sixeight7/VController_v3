@@ -12,7 +12,13 @@
 // GPIO A pin 6,7 and 8 to the E pin of display 1,2 and 3
 
 #include <Print.h>
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
 #include <i2c_t3.h>
+#else
+#include <Wire.h>
+//#include <i2c_driver.h>
+//#include <i2c_driver_wire.h>
+#endif
 #include <LCD.h>
 //#include <I2CIO.h>
 //#include "debug.h"

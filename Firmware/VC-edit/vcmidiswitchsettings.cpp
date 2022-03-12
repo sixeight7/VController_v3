@@ -37,10 +37,16 @@ void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
                 CustomComboBox *comboBox = new CustomComboBox(my_tree, s, VCmidiSwitchMenu[i].parameter);
                 if (VCmidiSwitchMenu[i].sublist > 0) { // Fill combobox with items from the sublist
                     {
-                        int number_of_items = VCmidiSwitchMenu[i].max - VCmidiSwitchMenu[i].min + 1;
-                        for (int j = 0; j < number_of_items; j++)
-                            comboBox->addItem(menu_sublist.at(j + VCmidiSwitchMenu[i].sublist - 1));
-                        //comboBox->setCurrentIndex(Device[d]->get_setting(VCmidiSwitchMenu[i].parameter));
+                        if (VCmidiSwitchMenu[i].sublist == MIDI_PORT_SUBLIST) {
+                            //comboBox->addItem("OFF");
+                            for (int p = 0; p < number_of_midi_ports; p++)
+                                comboBox->addItem(midi_port_names[p]);
+                        }
+                        else {
+                            int number_of_items = VCmidiSwitchMenu[i].max - VCmidiSwitchMenu[i].min + 1;
+                            for (int j = 0; j < number_of_items; j++)
+                                comboBox->addItem(menu_sublist.at(j + VCmidiSwitchMenu[i].sublist - 1));
+                        }
                         comboBox->setCurrentIndex(getMidiSwitchSetting(s,VCmidiSwitchMenu[i].parameter));
                     }
                     my_tree->setItemWidget(child, 2, comboBox);
@@ -180,7 +186,7 @@ QString VCmidiSwitches::getSwitchNameForTree(int sw) const
         target = "?";
     }
 
-    if ((sw) < switch_name.size()) return switch_name.at(sw) + target;
+    if ((sw) < switchnames.size()) return switchnames.at(sw) + target;
     return "Switch " + QString::number(sw + 1) + target;
 }
 

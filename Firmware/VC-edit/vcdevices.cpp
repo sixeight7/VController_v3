@@ -9,7 +9,7 @@
 VCdevices::VCdevices(QObject *parent) : QObject(parent)
 {
     InitializePatchArea();
-    setup_devices();
+    //setup_devices();
 }
 
 void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
@@ -30,7 +30,9 @@ void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
 
             CustomSlider *slider = new CustomSlider(my_tree, 0, i);
             //QProgressBar *slider = new QProgressBar(my_tree);
-            slider->setRange( VCdeviceMenu[i].min, VCdeviceMenu[i].max);
+            uint8_t max = VCdeviceMenu[i].max;
+            if (VCdeviceMenu[i].sublist == MIDI_PORT_SUBLIST1) max = number_of_midi_ports;
+            slider->setRange( VCdeviceMenu[i].min, max);
             slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
             my_tree->setItemWidget(child, 4, slider);
             connect(slider, SIGNAL(new_value(int, int, int)), this, SLOT(deviceSettingChanged(int, int, int)));
@@ -44,8 +46,13 @@ void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
                         VCd->fillFixedPageComboBox(comboBox);
                         int pageNumber = Device[d]->get_setting(VCdeviceMenu[i].parameter);
                         comboBox->setCurrentIndex(VCd->indexFromValue(TYPE_PAGE, pageNumber));
-                        slider->setRange(0, VCd->indexFromValue(TYPE_PAGE, LAST_FIXED_CMD_PAGE));
+                        slider->setRange(0, VCd->indexFromValue(TYPE_PAGE, last_fixed_cmd_page));
                         slider->setValue(VCd->indexFromValue(TYPE_PAGE, pageNumber));
+                    }
+                    else if (VCdeviceMenu[i].sublist == MIDI_PORT_SUBLIST1) {
+                        for (int p = 0; p < number_of_midi_ports; p++)
+                            comboBox->addItem(midi_port_names[p]);
+                        comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
                     }
                     else {
                         int number_of_items = VCdeviceMenu[i].max - VCdeviceMenu[i].min + 1;
@@ -170,7 +177,7 @@ QString VCdevices::ReadPatchStringForListWidget(int number, int type)
         my_index = number;
     }
     else {
-        int n = number - Device[dev]->patch_min_as_stored_on_VC;
+        int n = number - Device[dev]->patch_min_as_stored_on_VC();
         line = Device[dev]->number_format(number);
         my_index = findIndex(type, n);
     }
@@ -236,7 +243,7 @@ int VCdevices::getDevicePatchType(int number, int type)
     if (type == 0) return Device_patches[number][0];
     uint8_t dev = (type &= 0xFF) - 1;
     if (type & BASS_MODE_NUMBER_OFFSET) number |= BASS_MODE_NUMBER_OFFSET;
-    if (findIndex(type, number - Device[dev]->patch_min_as_stored_on_VC) == PATCH_INDEX_NOT_FOUND) return 0;
+    if (findIndex(type, number - Device[dev]->patch_min_as_stored_on_VC()) == PATCH_INDEX_NOT_FOUND) return 0;
     else return type;
 }
 

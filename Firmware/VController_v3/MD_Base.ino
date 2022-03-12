@@ -56,8 +56,6 @@ uint8_t MD_base_class::get_setting(uint8_t variable) {
     case 8: return my_device_page3;
     case 9: return my_device_page4;
     case 10: return enabled;
-    case 11: return external_MIDI_port;
-    case 12: return external_MIDI_channel;
   }
   return 0;
 }
@@ -75,8 +73,6 @@ void MD_base_class::set_setting(uint8_t variable, uint8_t value) {
     case 8: my_device_page3 = value; break;
     case 9: my_device_page4 = value; break;
     case 10: enabled = value; break;
-    case 11: external_MIDI_port = value; break;
-    case 12: external_MIDI_channel = value; break;
   }
 }
 
@@ -88,7 +84,7 @@ void MD_base_class::forward_MIDI_message(const unsigned char* sxdata, short unsi
 
 void MD_base_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // Device sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // Device sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program;
@@ -102,7 +98,7 @@ void MD_base_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 void MD_base_class::forward_PC_message(uint8_t program, uint8_t channel) {}
 
 void MD_base_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {  // Check incoming CC messages from GR-55
-  if ((channel == MIDI_channel) && (port == MIDI_port)) {
+  if ((channel == MIDI_channel) && (port == MIDI_in_port)) {
     if (control == 0) {
       CC00 = value;
       DEBUGMSG("Received CC0 with value " + String(value));
@@ -122,8 +118,9 @@ void MD_base_class::check_still_connected() { // Started from MIDI/MIDI_check_al
 void MD_base_class::check_manual_connection() {
 
   if (enabled == DEVICE_ON) { // We always have to set the port, when enabled == DEVICE_ON, so a change of manual port will update the device port
-    MIDI_port = MIDI_set_port_number_from_menu(MIDI_port_manual);
-    if (!connected) connect(MIDI_device_id, MIDI_port); // We connect only when the device is not connected yet.
+    MIDI_in_port = MIDI_set_port_number_from_menu(MIDI_port_manual);
+    MIDI_out_port = MIDI_set_port_number_from_menu(MIDI_port_manual);
+    if (!connected) connect(MIDI_device_id, MIDI_in_port, MIDI_out_port); // We connect only when the device is not connected yet.
   }
 
   if ((connected) && (enabled == DEVICE_OFF)) disconnect();
@@ -136,13 +133,19 @@ bool MD_base_class::can_request_sysex_data() {
 
 void MD_base_class::send_alternative_identity_request(uint8_t check_device_no) {}
 
-void MD_base_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {}
+void MD_base_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {}
 
-void MD_base_class::connect(uint8_t device_id, uint8_t port) {
-  DEBUGMAIN(String(device_name) + " connected on MIDI port " + String(port >> 4) + ':' + String(port & 0x0F));
+void MD_base_class::connect(uint8_t device_id, uint8_t in_port, uint8_t out_port) {
+  DEBUGMAIN(String(device_name) + " connected on MIDI in port " + String(in_port >> 4) + ':' + String(in_port & 0x0F) + " and MIDI out port " + String(out_port >> 4) + ':' + String(out_port & 0x0F));
   connected = true;
   MIDI_device_id = device_id;
-  MIDI_port = port; // Set the correct MIDI port for this device
+  MIDI_in_port = in_port;
+#ifdef RECEIVE_SERIAL_BUFFER_SIZE
+  MIDI_out_port = out_port | (in_port & 0x0F);
+#else
+  MIDI_out_port = in_port; // in and out port must be the same when there is no buffer (Teensy 3.2)
+#endif
+  MIDI_port_manual = MIDI_port_number(in_port & 0xF0);
   do_after_connect();
   PAGE_check_first_connect(my_device_number); // Go to the device page of this device if it is the first device that connects
   if (enabled == DEVICE_DETECT) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
@@ -166,7 +169,7 @@ void MD_base_class::disconnect() {
 // ********************************* Section 3: Device common MIDI out functions ********************************************
 
 void MD_base_class::check_sysex_delay() { // Will delay if last message was within sysex_delay_length (10 ms)
-  if (MIDI_port == USBHMIDI_PORT) return;
+  if (MIDI_out_port == USBHMIDI_PORT) return;
   while (millis() - sysexDelay <= sysex_delay_length) {
     //main_MIDI_common(); // Keep the MIDI input detection going. Otherwise we get errors on midi input
   }
@@ -192,7 +195,7 @@ void MD_base_class::select_patch(uint16_t new_patch) {
   if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
-  MIDI_send_PC(new_patch, MIDI_channel, MIDI_port);
+  MIDI_send_PC(new_patch, MIDI_channel, MIDI_out_port);
   DEBUGMSG("out(" + String(device_name) + ") PC" + String(new_patch)); //Debug
   do_after_patch_selection();
 }
@@ -226,6 +229,7 @@ bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
   if (new_patch > patch_max) new_patch = patch_max;
   if (new_patch == patch_number) { // Check if curnum needs to be executed.
     DEBUGMSG("Executing curnum action");
+    set_current_device(my_device_number);
     switch (Setting.CURNUM_action) {
       case CN_PREV_PATCH:
         if (prev_patch_number != patch_number) patch_select_pressed(prev_patch_number);
@@ -282,13 +286,13 @@ void MD_base_class::bank_updown(signed int delta, uint8_t my_bank_size) {
       if (bank_select_number >= (rel_patch_max / bank_size)) bank_select_number = 0; // Check if we've reached the top
       else bank_select_number ++;
     }
-  }
-  if (delta < 0) { // Perform bank down:
+    }
+    if (delta < 0) { // Perform bank down:
     for (uint8_t i = 0; i < abs(delta); i++) {
       if (bank_select_number <= 0) bank_select_number = (rel_patch_max / bank_size); // Check if we've reached the bottom
       else bank_select_number --;
     }
-  }*/
+    }*/
   bank_select_number = update_encoder_value(delta, bank_select_number, 0, (rel_patch_max / bank_size));
 
   if (bank_select_number == bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
@@ -526,22 +530,22 @@ void MD_base_class::request_current_assign(uint8_t sw) {
 void MD_base_class::asgn_bank_updown(signed int delta, uint8_t my_bank_size) {
 
   /*// Perform bank up:
-  if (delta > 0) {
+    if (delta > 0) {
     for (uint8_t i = 0; i < delta; i++) {
       if (assign_bank_number >= (get_number_of_assigns() - 1) / my_bank_size) assign_bank_number = 0; // Check if we've reached the top
       else assign_bank_number++; //Otherwise move bank up
     }
-  }
-  // Perform bank down:
-  if (delta < 0) {
+    }
+    // Perform bank down:
+    if (delta < 0) {
     for (uint8_t i = 0; i < abs(delta); i++) {
       if (assign_bank_number <= 0) assign_bank_number = (get_number_of_assigns() - 1) / my_bank_size; // Check if we've reached the bottom
       else assign_bank_number--; //Otherwise move bank down
     }
-  }
-  else {
+    }
+    else {
     LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
-  }*/
+    }*/
   assign_bank_number = update_encoder_value(delta, assign_bank_number, 0, (get_number_of_assigns() - 1) / my_bank_size);
   LCD_show_popup_label("Asgn bank " + String(assign_bank_number + 1) + "/" + String((get_number_of_assigns() - 1) / my_bank_size + 1), ACTION_TIMER_LENGTH);
 
@@ -611,7 +615,7 @@ void MD_base_class::get_snapscene_label(uint8_t number, String &Output) {
   Output += "";
 }
 
-bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t number) {
+bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3) {
   LCD_clear_SP_label(sw);
   return true;
 }
@@ -620,7 +624,11 @@ bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t number) {
   Output = "Not supported";
   }*/
 
-void MD_base_class::set_snapscene(uint8_t sw, uint8_t number) {}
+void MD_base_class::set_snapscene(uint8_t sw, uint8_t number) {
+  MIDI_send_current_snapscene(my_device_number, current_snapscene);
+}
+
+void MD_base_class::show_snapscene(uint8_t number) {}
 
 void MD_base_class::snapscene_number_format(String &Output) {}
 
@@ -1083,9 +1091,9 @@ void MD_base_class::looper_timer_check() {
       uint8_t new_bar = (long_end_time - long_current_time) * 128 / long_length;
       if ((looper_bar != new_bar) && (new_bar < 128)) { // Check if this is a new looper bar length
         looper_bar = new_bar;
-        //LCD_set_looper_title(); // So the display will match
-        if (!looper_reverse) LCD_show_bar(my_looper_lcd, 127 - looper_bar);
-        else  LCD_show_bar(my_looper_lcd, looper_bar);
+        uint16_t c = TFT_colours[request_looper_backlight_colour()];
+        if (!looper_reverse) LCD_show_looper_bar(my_looper_lcd, 127 - looper_bar, c);
+        else  LCD_show_looper_bar(my_looper_lcd, looper_bar, c);
       }
     }
   }

@@ -41,17 +41,13 @@ char menu_label[LCD_DISPLAY_SIZE + 1];
 // Variables for text entry
 uint8_t page_in_edit = 0; // The page we are editing
 uint8_t switch_in_edit = 0; // The switch we are editing
-String Text_entry; // The string we use for entering a text
-uint8_t Text_entry_length = 16;
 uint8_t Text_previous_switch = 255; // The number of the switch that was pressed before
 uint8_t Text_switch_char_index = 0; // The index of the characters of the switch that is being pressed
 bool keyboard_timer_running = false;
 uint32_t keyboard_timer = 0;
 #define KEYBOARD_TIMER_LENGTH 800 // Wait time before forwarding the cursor to the next position
 bool no_hold; // Holding switches too long may trigger hold when we don't want it
-bool KTN_name_edited = false;
-bool SY1000_name_edited = false;
-uint8_t Current_MIDI_switch = 1;
+void (*execute_before_closing_keyboard)() = NULL;
 
 struct menu_struct {
   char Label[17];
@@ -66,26 +62,30 @@ struct menu_struct {
 #define GLOBAL_MENU 1
 #define DEVICE_MENU 2
 #define LED_SETTINGS_MENU 3
-#define LED_FX_COLOURS_MENU 4
-#define COMMAND_SELECT_MENU 5
-#define COMMAND_DELETE_MENU 6
-#define COMMAND_EDIT_MENU 7
-#define KEYBOARD_MENU 8
-#define FIRMWARE_MENU 9
-#define CALIBRATION_MENU 10
-#define MIDI_SWITCH_MENU 11
-#define MIDI_ADV_MENU 12
-#define KATANA_MENU 13
-#define SY1000_MENU 14
+#define MORE_LED_SETTINGS_MENU 4
+#define LED_FX_COLOURS_MENU 5
+#define COMMAND_SELECT_MENU 6
+#define COMMAND_DELETE_MENU 7
+#define COMMAND_EDIT_MENU 8
+#define KEYBOARD_MENU 9
+#define FIRMWARE_MENU 10
+#define CALIBRATION_MENU 11
+#define MIDI_SWITCH_MENU 12
+#define MIDI_ADV_MENU 13
+#define MIDI_FORWARDING_MENU 14
+#define WIRELESS_MENU 15
+#define KATANA_MENU 16
+#define SY1000_MENU 17
 
 #define DEVICE_SUBLIST 255
 #define PAGE_SUBLIST 254
 #define SWITCH_SUBLIST 253
 #define KTN_NUMBER_SUBLIST 252
 #define SY1000_NUMBER_SUBLIST 251
+#define WIFI_SSID_SUBLIST 250
 
 // The table below has an edited copy in VC-eit/Headers/vcsettings.h
-// Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty. 
+// Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty.
 
 const PROGMEM menu_struct menu[][15] = {
   { // Menu 0 - Select menu
@@ -97,10 +97,14 @@ const PROGMEM menu_struct menu[][15] = {
     { "LED SETTINGS    ", OPEN_MENU, LED_SETTINGS_MENU }, // Switch 5
     { "FX COLOURS MENU ", OPEN_MENU, LED_FX_COLOURS_MENU }, // Switch 6
     { "MIDI ADVNCD MENU", OPEN_MENU, MIDI_ADV_MENU }, // Switch 7
-    { "CALIBRATION MENU", OPEN_MENU, CALIBRATION_MENU }, // Switch 8
-    { "FIRMWARE MENU", OPEN_MENU, FIRMWARE_MENU }, // Switch 9
-    { "", NONE }, // Switch 10
+    { "MIDI FORWRD MENU", OPEN_MENU, MIDI_FORWARDING_MENU }, // Switch 8
+    { "CALIBRATION MENU", OPEN_MENU, CALIBRATION_MENU }, // Switch 9
+    { "FIRMWARE MENU", OPEN_MENU, FIRMWARE_MENU }, // Switch 10
+#ifdef IS_VCTOUCH
+    { "WIRELESS MENU", OPEN_MENU, WIRELESS_MENU }, // Switch 11
+#else
     { "", NONE }, // Switch 11
+#endif
     { "EXIT MENU", EXIT_MENU, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
@@ -109,13 +113,13 @@ const PROGMEM menu_struct menu[][15] = {
   { // Menu 1 - Global settings
     { "GLOBAL SETTINGS ", NONE }, // Menu title
     { "Main disp mode", SET, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-    { "Main disp shows", SET, 48, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
-    { "CURNUM action", SET, 51, 0, 5, &Setting.CURNUM_action }, // Switch 3
-    { "MEP also cntrols", SET, 35, 0, 2, &Setting.MEP_control }, // Switch 4
+    { "Main disp shows", SET, 50, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
+    { "CURNUM action", SET, 53, 0, 5, &Setting.CURNUM_action }, // Switch 3
+    { "MEP also cntrols", SET, 37, 0, 2, &Setting.MEP_control }, // Switch 4
     { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
     { "Hide tempo LED", SET, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
-    { "Backlight Type", SET, 46, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 7
-    { "", NONE }, // Switch 8
+    { "Backlight Type", SET, 48, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 7
+    { "Katana type", SET, 83, 0, 1, &Setting.Is_katana50 }, // Switch 8
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
@@ -152,15 +156,33 @@ const PROGMEM menu_struct menu[][15] = {
     { "MIDI PC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_PC_colour }, // Switch 6
     { "MIDI CC colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_CC_colour }, // Switch 7
     { "MIDI note colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.MIDI_note_colour }, // Switch 8
-    { "BPM colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 9
-    { "BPM sync colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 10
+    { "", NONE }, // Switch 9
+    { "MORE...", OPEN_MENU, MORE_LED_SETTINGS_MENU }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 4 - LED effect colours
+  { // Menu 4 - More colours
+    { "MORE LED SETTNGS", NONE }, // Menu title
+    { "BPM colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_colour }, // Switch 1
+    { "BPM sync colour", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_synced_colour }, // Switch 2
+    { "BPM follow color", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.LED_bpm_follow_colour },// Switch 3
+    { "", NONE }, // Switch 4
+    { "", NONE }, // Switch 5
+    { "", NONE }, // Switch 6
+    { "", NONE }, // Switch 7
+    { "", NONE}, // Switch 8
+    { "", NONE }, // Switch 9
+    { "", NONE }, // Switch 10
+    { "", NONE }, // Switch 11
+    { "RETURN", OPEN_MENU, LED_SETTINGS_MENU }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 5 - LED effect colours
     { "LED FX COLOURS  ", NONE }, // Menu title
     { "GTR/COSM COLOUR", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_GTR_colour }, // Switch 1
     { "PITCH FX COLOUR", SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, &Setting.FX_PITCH_colour }, // Switch 2
@@ -179,7 +201,7 @@ const PROGMEM menu_struct menu[][15] = {
   },
 
 #ifndef MENU_ON_INDIVIDUAL_DISPLAYS
-  { // Menu 5 - Command select menu for VC-mini
+  { // Menu 6 - Command select menu for VC-mini
     { "SELECT PG/SW/CMD", NONE }, // Menu title
     { "", CMD_BYTE, 9 }, // Switch 1
     { "", CMD_BYTE, 10 }, // Switch 2
@@ -197,7 +219,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14
   },
 #else
-  { // Menu 5 - Command select menu for full VController
+  { // Menu 6 - Command select menu for full VController
     { "SELECT PG/SW/CMD", NONE }, // Menu title
     { "", CMD_BYTE, 9 }, // Switch 1
     { "", CMD_BYTE, 10 }, // Switch 2
@@ -216,7 +238,7 @@ const PROGMEM menu_struct menu[][15] = {
   },
 #endif
 
-  { // Menu 6 - Command MORE menu
+  { // Menu 7 - Command MORE menu
     { "SELECT PG/SW/CMD", NONE }, // Menu title
     { "", CMD_BYTE, 9 }, // Switch 1 - PAGE select
     { "", CMD_BYTE, 10 }, // Switch 2 - SWITCH select
@@ -234,7 +256,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 7 - Command edit command
+  { // Menu 8 - Command edit command
     { "Edit COMMAND    ", NONE }, // Menu title
     { "", CMD_BYTE, 0 }, // Switch 1
     { "", CMD_BYTE, 1 }, // Switch 2
@@ -251,7 +273,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
-  { // Menu 8 - Virtual keyboard
+  { // Menu 9 - Virtual keyboard
     { "Enter Name:     ", NONE }, // Menu title
     { "ABC1abc", KEYBOARD}, // Switch 1
     { "DE2de", KEYBOARD}, // Switch 2
@@ -264,12 +286,12 @@ const PROGMEM menu_struct menu[][15] = {
     { "UVW9uvw", KEYBOARD}, // Switch 9
     { "XYZ0xyz", KEYBOARD}, // Switch 10
     { " !?-+_", KEYBOARD}, // Switch 11
-    { "<OK>", EXECUTE, 0, 0, 0, (void*)close_edit_name }, // Switch 12 (should not be of type NONE)
+    { "<OK>", EXECUTE, 0, 0, 0, (void*)save_and_close_keyboard }, // Switch 12 (should not be of type NONE)
     { "<=", EXECUTE, 0, 0, 0, (void*)cursor_left_page_name }, // Switch 13 (LEFT)
     { "=>", EXECUTE, 0, 0, 0, (void*)cursor_right_page_name }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 9 - Firmware menu
+  { // Menu 10 - Firmware menu
     { "FIRMWARE MENU   ", NONE }, // Menu title
     { "Init Settings",  EXECUTE, 0, 0, 0, (void*)initialize_settings }, // Switch 1
     { "Init Commands",  EXECUTE, 0, 0, 0, (void*)initialize_commands }, // Switch 2
@@ -287,9 +309,9 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 10 - Calibration menu
+  { // Menu 11 - Calibration menu
     { "CALIBRATION MENU", NONE }, // Menu title
-    { "Select exp pedal", SET_NO_EXP, 31, 0, NUMBER_OF_CTL_JACKS - 1, &calibrate_exp_pedal }, // Switch 1
+    { "Select exp pedal", SET_NO_EXP, 33, 0, NUMBER_OF_CTL_JACKS - 1, &calibrate_exp_pedal }, // Switch 1
     { "Set Max (Toe)",  EXECUTE, 0, 0, 0, (void*)SC_set_expr_max }, // Switch 2
     { "Set Min (Heel)",  EXECUTE, 0, 0, 0, (void*)SC_set_expr_min },// Switch 3
     { "Auto Calibrate  ",  EXECUTE, 0, 0, 0, (void*)SC_set_auto_calibrate }, // Switch 4
@@ -306,14 +328,14 @@ const PROGMEM menu_struct menu[][15] = {
   },
 
 
-  { // Menu 11 - MIDI switch
+  { // Menu 12 - MIDI switch
     { "MIDI SWITCH MENU", NONE }, // Menu title
     { "Select switch", SET, SWITCH_SUBLIST, 1, TOTAL_NUMBER_OF_SWITCHES, &Current_MIDI_switch }, // Switch 1
-    { "Type",  MIDI_SWITCH_SET, 38, 0, 4, (void*) 1 }, // Switch 2
+    { "Type",  MIDI_SWITCH_SET, 40, 0, 4, (void*) 1 }, // Switch 2
     { "Midi port", MIDI_SWITCH_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
     { "Midi channel", MIDI_SWITCH_SET, 0, 1, 16, (void*) 3 }, // Switch 4
     { "CC",  MIDI_SWITCH_SET, 0, 0, 127, (void*) 4 }, // Switch 5
-    { "", NONE }, // Switch 6
+    { "MIDI learn",  EXECUTE, 0, 0, 0, (void*)midi_learn_mode }, // Switch 6
     { "", NONE }, // Switch 7
     { "", NONE }, // Switch 8
     { "", NONE }, // Switch 9
@@ -324,7 +346,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 12 - Midi advanced settings
+  { // Menu 13 - Midi advanced settings
     { "MIDI ADVNCD MENU", NONE }, // Menu title
     { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
     { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
@@ -335,14 +357,51 @@ const PROGMEM menu_struct menu[][15] = {
     { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
     { "Bass mode min vl", SET, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
     { "HighNotePriotyCC", SET, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
-    { "", NONE }, // Switch 10
+    { "Follow tempo G2M", SET, 72, 0, 2, &Setting.Follow_tempo_from_G2M }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 13 - Katana menu
+  { // Menu 14 - Midi forwarding
+    { "MIDI FORWRD MENU", NONE }, // Menu title
+    { "1: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[0] }, // Switch 1
+    { "1: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[0] }, // Switch 2
+    { "1: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
+    { "2: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[1] }, // Switch 4
+    { "2: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[1] }, // Switch 5
+    { "2: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
+    { "3: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[2] }, // Switch 7
+    { "3: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[2] }, // Switch 8
+    { "3: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
+    { "Bi-directional", SET, 75, 0, 7, &Setting.MIDI_forward_bidirectional }, // Switch 10
+    { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 15 - Wireless menu
+    { "WIRELESS MENU", NONE }, // Menu title
+    { "Bluetooth", SET, 1, 0, 1, &Setting.BLE_mode }, // Switch 1
+    { "WIFI mode", SET, 68, 0, 2, &Setting.WIFI_mode }, // Switch 2
+    { "Set WIFI SSID", SET, WIFI_SSID_SUBLIST, 0, 1, &selected_ssid }, // Switch 3
+    { "Set WIFI passwd",  EXECUTE, 0, 0, 0, (void*)Set_WIFI_passwd },// Switch 4
+    { "Rescan WIFI",  EXECUTE, 0, 0, 0, (void*)MIDIWL_request_WIFI_scan },// Switch 5
+    { "Set AP SSID", EXECUTE, 0, 0, 0, (void*)Set_WIFI_AP_ssid }, // Switch 6
+    { "Set AP passwd",  EXECUTE, 0, 0, 0, (void*)Set_WIFI_AP_passwd },// Switch 7
+    { "RTPMIDI enabled", SET, 1, 0, 1, &Setting.RTP_enabled }, // Switch 8
+    { "WIFI server", SET, 1, 0, 1, &Setting.WIFI_server_enabled }, // Switch 9
+    { "Set OTA passwd",  EXECUTE, 0, 0, 0, (void*)Set_OTA_passwd }, // Switch 10
+
+    { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
+    { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 16 - Katana menu
     { "KATANA SAVE", NONE }, // Menu title
     { "Write to:", SET, KTN_NUMBER_SUBLIST, 0, 80, &My_KTN.save_patch_number }, // Switch 1
     { "Write",  EXECUTE, 0, 0, 0, (void*)KTN_save },// Switch 2
@@ -360,7 +419,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 14 - SY1000 menu
+  { // Menu 17 - SY1000 menu
     { "SY1000 SCENE MNU", NONE }, // Menu title
     { "Select scene:", SET, SY1000_NUMBER_SUBLIST, 1, 8, &My_SY1000.save_scene_number }, // Switch 1
     { "Read scene",  EXECUTE, 0, 0, 0, (void*)SY1000_save },// Switch 2
@@ -369,8 +428,8 @@ const PROGMEM menu_struct menu[][15] = {
     { "Exchange scenes", EXECUTE, 0, 0, 0, (void*)SY1000_exchange }, // Switch 5
     { "Clear scene", EXECUTE, 0, 0, 0, (void*)SY1000_clear }, // Switch 6
     { "Clear all scenes", EXECUTE, 0, 0, 0, (void*)SY1000_clear_all }, // Switch 7
-    { "Add bass assigns", EXECUTE, 0, 0, 0, (void*)SY1000_add_bass_string_assigns }, // Switch 8
-    { "", NONE }, // Switch 9
+    { "Quiet sc change", SET, 1, 0, 1, &My_SY1000.mute_during_scene_change }, // Switch 8
+    { "Add bass assigns", EXECUTE, 0, 0, 0, (void*)SY1000_add_bass_string_assigns }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
     { "Cancel", EXECUTE, 0, 0, 0, (void*)SY1000_exit }, // Switch 12 (should not be of type NONE)
@@ -392,26 +451,41 @@ const PROGMEM char menu_sublist[][17] = {
   // Sublist 19 - 22: Main display modes
   "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
 
-  // Sublist 23 - 30: MIDI ports
-  "OFF", "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB HOST PORT", "ALL PORTS", "",
+  // Sublist 23 - 32: MIDI ports
+  "OFF", PORT1_NAME, PORT2_NAME, PORT3_NAME, PORT4_NAME, PORT5_NAME, PORT6_NAME, PORT7_NAME, PORT8_NAME, PORT9_NAME,
 
-  // Sublist 31 - 34: Expression pedals
+  // Sublist 33 - 36: Expression pedals
   "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-  // Sublist 35 - 37: MEP control options
+  // Sublist 37 - 39: MEP control options
   "NONE", "UP/DOWN", "UP/DN + STEP",
 
-  // Sublist 38 - 45: MIDI switch types
+  // Sublist 40 - 47: MIDI switch types
   "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
 
-  // Sublist 46 - 47: RGB Display colour schemes
+  // Sublist 48 - 49: RGB Display colour schemes
   "ADAFRUIT", "BUYDISPLAY",
 
-  // Sublist 48 - 50: Main display top right types
+  // Sublist 50 - 53: Main display top right types
   "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
 
-  // Sublist 51 - 57: Current number actions
+  // Sublist 53 - 59: Current number actions
   "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
+
+  // Sublist 60 - 67: MIDI forward filters
+  "BLOCK ALL MIDI", "FORWARD ALL MIDI", "ALL BUT SYSEX", "FWD PC ONLY", "FORWARD CC ONLY", "FWD NOTES ONLY", "FWD SYSEX ONLY", "",
+
+  // Sublist 68 - 71: WIFI modes
+  "OFF", "Client", "Access point", "Client + AP",
+
+  // Sublist 72 - 74: Tempo follow modes
+  "DISABLED", "OFF", "ON",
+
+  // Sublist 75 - 82: MIDI forwarding bidirectional settings
+  "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
+
+  // Sublist 83 - 84: Katana type
+  "Katana100 (8 CH)", "Katana50 (4 CH)", 
 };
 
 #define SUBLIST_COLOUR 4
@@ -431,22 +505,93 @@ void initialize_commands() {
 }
 
 void initialize_device_patches() {
-  bool go = false;
-  go = menu_are_you_sure("Wipe all patches", "      Sure?     ");
-  if (go) EEP_initialize_patch_data();
+  if (menu_are_you_sure("Wipe all patches", "      Sure?     ")) {
+    EEP_initialize_patch_data();
+  }
 }
 
 void reboot_program_mode() { // Reboot the Teensy to program mode
   DEBUGMSG("Rebooting to program mode...");
   LCD_show_program_mode();
   delay(200);
-  _reboot_Teensyduino_();
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
+  _reboot_Teensyduino_(); // Reboot Teensy 3.x
+#elif defined(KINETISL)
+  SCB_AIRCR = 0x05FA0004; // Reboot Teensy LC
+#elif defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+  asm("bkpt #251"); // run bootloader
+#endif
 }
 
 void reboot() {
   DEBUGMAIN("Rebooting VController...");
   delay(200);
   SCB_AIRCR = 0x05FA0004; // request reset
+}
+
+void midi_learn_mode() {
+  MIDI_learn_mode = true;
+  LCD_show_popup_label("Move controller", ACTION_TIMER_LENGTH);
+}
+
+void Set_WIFI_passwd() {
+  Text_entry = "WIFI passwd";
+  Text_entry_length = 20;
+  Main_menu_cursor = 1;
+
+  start_keyboard(Write_WIFI_passwd);
+}
+
+void Write_WIFI_passwd() {
+#ifdef IS_VCTOUCH
+  MIDIWL_send_string_to_ESP(WL_SET_WIFI_PASSWORD, Text_entry);
+  //LCD_show_popup_label(Text_entry, ACTION_TIMER_LENGTH);
+#endif
+}
+
+void Set_WIFI_AP_ssid() {
+  Text_entry = "VC-touch";
+  Text_entry_length = 20;
+  Main_menu_cursor = 1;
+
+  start_keyboard(Write_WIFI_AP_ssid);
+}
+
+void Write_WIFI_AP_ssid() {
+#ifdef IS_VCTOUCH
+  MIDIWL_send_string_to_ESP(WL_SET_AP_SSID, Text_entry);
+  //LCD_show_popup_label(Text_entry, ACTION_TIMER_LENGTH);
+#endif
+}
+
+void Set_WIFI_AP_passwd() {
+  Text_entry = "vguitar123";
+  Text_entry_length = 20;
+  Main_menu_cursor = 1;
+
+  start_keyboard(Write_WIFI_AP_passwd);
+}
+
+void Write_WIFI_AP_passwd() {
+#ifdef IS_VCTOUCH
+  MIDIWL_send_string_to_ESP(WL_SET_AP_PASSWORD, Text_entry);
+  //LCD_show_popup_label(Text_entry, ACTION_TIMER_LENGTH);
+#endif
+}
+
+void Set_OTA_passwd() {
+  Text_entry = "Admin passwd";
+  Text_entry_length = 20;
+  Main_menu_cursor = 1;
+
+  start_keyboard(Write_OTA_passwd);
+}
+
+void Write_OTA_passwd() {
+#ifdef IS_VCTOUCH
+  MIDIWL_send_string_to_ESP(WL_SET_SERVER_ADMIN_PASSWORD, Text_entry);
+  //LCD_show_popup_label(Text_entry, ACTION_TIMER_LENGTH);
+#endif
 }
 
 void KTN_save() {
@@ -460,19 +605,11 @@ void KTN_rename() {
   Text_entry_length = 16;
   Main_menu_cursor = 1;
 
-  // Select the keyboard menu
-  previous_menu = current_menu;
-  current_menu = KEYBOARD_MENU;
-  KTN_name_edited = true;
-  update_page = REFRESH_PAGE;
-  update_main_lcd = true;
-
-  // How do we get out?
+  start_keyboard(KTN_rename_done);
 }
 
 void KTN_rename_done() {
   My_KTN.store_patch_name_to_buffer(Text_entry);
-  KTN_name_edited = false;
 }
 
 void KTN_exit() {
@@ -504,19 +641,13 @@ void SY1000_rename() {
   Text_entry_length = 8;
   Main_menu_cursor = 1;
 
-  // Select the keyboard menu
-  previous_menu = current_menu;
-  current_menu = KEYBOARD_MENU;
-  SY1000_name_edited = true;
-  update_page = REFRESH_PAGE;
-  update_main_lcd = true;
+  start_keyboard(SY1000_rename_done);
 }
 
 void SY1000_rename_done() {
   //My_SY1000.store_scene_name_to_buffer(My_SY1000.save_scene_number, Text_entry);
   for (uint8_t c = 0; c < 8; c++) My_SY1000.scene_label_buffer[c] = Text_entry[c];
   My_SY1000.store_scene_name_to_buffer(My_SY1000.save_scene_number);
-  SY1000_name_edited = false;
 }
 
 void SY1000_exchange() {
@@ -636,10 +767,15 @@ void menu_load(uint8_t Sw) {
         if (*val < NUMBER_OF_DEVICES) strcpy(menu_label, Device[*val]->full_device_name);
       }
       else if (menu[current_menu][number].Sublist == SWITCH_SUBLIST) {
-        //msg = "Switch " + String(*val); // Need a better solution here
         read_cmd_sublist(25, *val, msg); // 25 = TYPE_SWITCH
         //LCD_set_SP_label(Sw, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
+      }
+      else if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) {
+#ifdef IS_VCTOUCH
+        MIDIWL_read_wifi_ssid_sublist(*val, msg);
+        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
+#endif
       }
       else if (menu[current_menu][number].Sublist == KTN_NUMBER_SUBLIST) {
         My_KTN.number_format(My_KTN.save_patch_number + 9 , msg);
@@ -805,7 +941,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   uint8_t number = SP[Sw].PP_number;
   if (number == MENU_BACK) {
     if (current_menu == KEYBOARD_MENU) {
-      close_edit_name();
+      save_and_close_keyboard();
       return;
     }
     if (current_menu == SELECT_MENU) {
@@ -854,7 +990,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   if (number == MENU_PREV) {
     if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
-      close_edit_name();
+      save_and_close_keyboard();
 #else
       cursor_left_page_name();
 #endif
@@ -867,7 +1003,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   if (number == MENU_NEXT) {
     if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
-      close_edit_name();
+      save_and_close_keyboard();
 #else
       cursor_right_page_name();
 #endif
@@ -883,6 +1019,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   uint8_t vnumber;
   uint8_t value;
   signed int delta;
+  uint8_t my_max;
   if (go_up) delta = 1;
   else delta = -1;
   no_hold = true;
@@ -919,7 +1056,9 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
         if (*val > menu[current_menu][number].Min)*val = *val - 1;
         else *val = menu[current_menu][number].Max;
         }*/
-      *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, menu[current_menu][number].Max);
+      my_max = menu[current_menu][number].Max;
+      if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
+      *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, my_max);
       DEBUGMSG("Menu target " + String(number) + " set to value " + String (*val));
       menu_load(Sw); // Will update the label
       if ((menu[current_menu][number].Sublist == DEVICE_SUBLIST) || (menu[current_menu][number].Sublist == SWITCH_SUBLIST)) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
@@ -996,6 +1135,11 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
     case SAVE_AND_EXIT:
       if (menu[current_menu][number].Sublist == 1) { // Save settings
         if (current_menu == CALIBRATION_MENU) SC_check_calibration();
+#ifdef IS_VCTOUCH
+        if (current_menu == WIRELESS_MENU) {
+          MIDIWL_after_save_in_menu();
+        }
+#endif
         EEP_write_eeprom_common_data(); //Save data if sublist is 1
         check_all_devices_for_manual_connection();
       }
@@ -1020,7 +1164,7 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
   uint8_t number = SP[Sw].PP_number;
   if (number == MENU_SET_VALUE) {
     if (current_menu == KEYBOARD_MENU) {
-      close_edit_name();
+      save_and_close_keyboard();
       return;
     }
     number = current_menu_switch;
@@ -1029,6 +1173,8 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
   uint8_t *val;
   uint8_t vnumber;
   uint8_t value;
+  uint8_t my_max;
+
   if (!no_hold) {
     switch (menu[current_menu][number].Type) {
       case CMD_BYTE:
@@ -1046,9 +1192,9 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
       case SET:
       case SET_NO_EXP:
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-        //if (*val < menu[current_menu][number].Max)*val = *val + 1;
-        //else *val = menu[current_menu][number].Min;
-        *val = update_encoder_value(1, *val, menu[current_menu][number].Min, menu[current_menu][number].Max);
+        my_max = menu[current_menu][number].Max;
+        if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
+        *val = update_encoder_value(1, *val, menu[current_menu][number].Min, my_max);
         menu_load(Sw); // Will update the label
         if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
         break;
@@ -1118,6 +1264,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
   uint8_t vnumber;
   uint8_t setting;
   uint8_t no_of_pages;
+  uint8_t my_max;
 
   no_hold = true;
   switch (menu[current_menu][number].Type) {
@@ -1125,16 +1272,18 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
       cmdbyte_from_exp_pedal(value, lcd_for_bar, lcd_for_update);
       break;
     case SET:
-      LCD_show_bar(lcd_for_bar, value); // Show it on the switch display
+      LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       //LCD_show_popup_label(menu[current_menu][number].Label);
       val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-      *val = map (value, 0, 127, menu[current_menu][number].Min, menu[current_menu][number].Max);
+      my_max = menu[current_menu][number].Max;
+      if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
+      *val = map (value, 0, 127, menu[current_menu][number].Min, my_max);
       if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) reload_menus(10); // So the device menu updates when another device is selected
       menu_load(lcd_for_update); // Will update the label
       no_hold = false;
       break;
     case DEVICE_SET:
-      LCD_show_bar(lcd_for_bar, value); // Show it on the switch display
+      LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       //LCD_show_popup_label(menu[current_menu][number].Label);
       if (Current_device < NUMBER_OF_DEVICES) {
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
@@ -1154,7 +1303,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
       }
       break;
     case MIDI_SWITCH_SET:
-      LCD_show_bar(lcd_for_bar, value); // Show it on the switch display
+      LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       if (Current_device < NUMBER_OF_DEVICES) {
         val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
@@ -1255,7 +1404,6 @@ void menu_select(uint8_t _menu) {
 }
 
 bool menu_are_you_sure(String line1, String line2) {
-  LCD_clear_all_displays();
   LCD_show_are_you_sure(line1, line2);
 
 #ifdef MENU_ON_INDIVIDUAL_DISPLAYS
@@ -1281,6 +1429,10 @@ void reload_menus(uint8_t number) { // Will reload the set number of menu's star
     uint8_t my_col = i % cols + 1;
     menu_load((rows - my_row) * cols + my_col);
   }
+}
+
+inline bool device_menu_active() {
+  return (current_menu == DEVICE_MENU);
 }
 
 
@@ -1392,20 +1544,26 @@ const PROGMEM char cmd_sublist[][17] = {
   "DIR.SELECT", "PAR BANK", "PAR BANK UP", "PAR BANK DOWN", "PARBANK_CATEGORY", "SAVE PATCH", "", "", "", "", "", "",
 
   // Sublist 40 - 47: MIDI ports
-  "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "ALL PORTS", "", "", "",
+  "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USBH MIDI", "MIDI 4", "ALL PORTS", "",
 
   // Sublist 48 - 57: Toggle types
   "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "", "", "",
 
   // Sublist 58 - 82: Switch types
-#ifndef IS_VCMINI
+#ifdef IS_VCTOUCH
   "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Switch 4", "Switch 5", "Switch 6", "Switch 7", "Switch 8",
-  "Switch 9", "Switch 10", "Switch 11", "Switch 12", "Switch 13", "Switch 14", "Switch 15", "Switch 16",
-  "Ext 1 / Exp1", "Ext 2", "Ext 3 / Exp 2", "Ext 4", "Ext 5 / Exp 3", "Ext 6", "Ext 7 / Exp 4", "Ext 8",
+  "Switch 9", "Switch 10", "Switch 11", "Switch 12", "Switch 13", "Switch 14", "Switch 15",
+  "Ext 1 / Exp1", "Ext 2", "Ext 3 / Exp 2", "Ext 4", "Ext 5 / Exp 3", "Ext 6", "MIDI Switch 1", "MIDI Switch 2", "MIDI Switch 3",
 #else
+#ifdef IS_VCMINI
   "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Encoder #1", "Encoder #1 SW", "Encoder #2", "Encoder #2 SW", "Ext 1 / Exp1",
   "Ext 2", "MIDI Switch 1", "MIDI Switch 2", "MIDI Switch 3", "MIDI Switch 4", "MIDI Switch 5", "MIDI Switch 6", "MIDI Switch 7",
   "MIDI Switch 8", "MIDI Switch 9", "MIDI Switch 10", "MIDI Switch 11", "MIDI Switch 12", "MIDI Switch 13", "MIDI Switch 14", "MIDI Switch 15",
+#else
+  "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Switch 4", "Switch 5", "Switch 6", "Switch 7", "Switch 8",
+  "Switch 9", "Switch 10", "Switch 11", "Switch 12", "Switch 13", "Switch 14", "Switch 15", "Switch 16",
+  "Ext 1 / Exp1", "Ext 2", "Ext 3 / Exp 2", "Ext 4", "Ext 5 / Exp 3", "Ext 6", "Ext 7 / Exp 4", "Ext 8",
+#endif
 #endif
 
   // Sublist 83 - 89: CC toggle types
@@ -2217,7 +2375,7 @@ void cmdbyte_from_exp_pedal(uint8_t value, uint8_t lcd_for_bar, uint8_t lcd_for_
     //LCD_show_popup_label(cmdtype[cmd_type].Title);
     build_command_structure(cmd_byte_no, cmd_type, true);
     menu_load(lcd_for_update); // So the correct text shows below the display
-    LCD_show_bar(lcd_for_bar, value); // Show it on the Sw display
+    LCD_show_bar(lcd_for_bar, value, 0); // Show it on the Sw display
   }
 }
 
@@ -2225,25 +2383,11 @@ void menu_set_main_title() { // Called from main_LCD_control() when the main dis
 #ifdef MENU_ON_INDIVIDUAL_DISPLAYS
   // Full VController main display screen
   LCD_main_set_title(menu[current_menu][0].Label);
-  switch (current_menu) {
-    case COMMAND_SELECT_MENU:
-    case COMMAND_EDIT_MENU:
-      LCD_main_set_label("Pg:" + String(cmdbyte[CB_PAGE].Value) + " Sw:" + String(cmdbyte[CB_SWITCH].Value) + " Cmd:" + String(cmdbyte[CB_CMD_NO].Value + 1));
-      break;
-    case KEYBOARD_MENU:
-      if (!popup_label_showing) LCD_main_set_label(Text_entry);
-      break;
-  }
 #else
   // VCmini menu
   // Show menu title and label of the current menu for the menu items that have one line
-  if ((menu[current_menu][current_menu_switch].Type == OPEN_MENU) || (menu[current_menu][current_menu_switch].Type == EXECUTE) || (menu[current_menu][current_menu_switch].Type == SAVE_AND_EXIT)) {
+  if ((menu[current_menu][current_menu_switch].Type == OPEN_MENU) || (menu[current_menu][current_menu_switch].Type == EXECUTE) || (menu[current_menu][current_menu_switch].Type == SAVE_AND_EXIT) || (current_menu == KEYBOARD_MENU)) {
     LCD_main_set_title(menu[current_menu][0].Label);
-    if (!popup_label_showing) LCD_main_set_label(menu[current_menu][current_menu_switch].Label);
-  }
-  else if (current_menu == KEYBOARD_MENU) {
-    LCD_main_set_title(menu[current_menu][0].Label);
-    if (!popup_label_showing) LCD_main_set_label(Text_entry);
   }
   else {
     menu_load(MENU_BACK);
@@ -2268,6 +2412,35 @@ void menu_set_main_title() { // Called from main_LCD_control() when the main dis
 #endif
 }
 
+void menu_set_main_label() { // Called from main_LCD_control() when the main display is updated and it the page is the menu page
+#ifdef MENU_ON_INDIVIDUAL_DISPLAYS
+  // Full VController main display screen
+  LCD_main_set_title(menu[current_menu][0].Label);
+  switch (current_menu) {
+    case COMMAND_SELECT_MENU:
+    case COMMAND_EDIT_MENU:
+      LCD_main_set_label("Pg:" + String(cmdbyte[CB_PAGE].Value) + " Sw:" + String(cmdbyte[CB_SWITCH].Value) + " Cmd:" + String(cmdbyte[CB_CMD_NO].Value + 1));
+      break;
+    case KEYBOARD_MENU:
+      if (!popup_label_showing) LCD_main_set_label(Text_entry);
+      break;
+  }
+#else
+  // VCmini menu
+  // Show menu title and label of the current menu for the menu items that have one line
+  if ((menu[current_menu][current_menu_switch].Type == OPEN_MENU) || (menu[current_menu][current_menu_switch].Type == EXECUTE) || (menu[current_menu][current_menu_switch].Type == SAVE_AND_EXIT)) {
+    LCD_main_set_label(menu[current_menu][current_menu_switch].Label);
+  }
+  else if (current_menu == KEYBOARD_MENU) {
+    LCD_main_set_label(Text_entry);
+  }
+  else {
+    LCD_main_set_label(menu_label);
+  }
+#endif
+}
+
+
 // ********************************* Section 5: Text entry ********************************************
 
 
@@ -2279,39 +2452,31 @@ void edit_page_name() { // Load page name and start edit. Called from menu
   Text_entry_length = 16;
   Main_menu_cursor = 1;
 
-  // Select the keyboard menu
-  previous_menu = current_menu;
-  current_menu = KEYBOARD_MENU;
-  update_page = REFRESH_PAGE;
-  update_main_lcd = true;
+  start_keyboard(close_edit_name);
 }
 
 void edit_switch_name() { // Load page name and start edit. Called from menu
   // Set the Text_entry to the current page name
   page_in_edit = cmdbyte[CB_PAGE].Value;
   switch_in_edit = cmdbyte[CB_SWITCH].Value;
-  EEPROM_read_title(page_in_edit, switch_in_edit, Text_entry);
+  if (EEPROM_check4label(page_in_edit, switch_in_edit)) EEPROM_read_title(page_in_edit, switch_in_edit, Text_entry);
+  else Text_entry = "Switch " + String(switch_in_edit);
   Main_menu_cursor = 1;
 
-  // Select the keyboard menu
-  previous_menu = current_menu;
-  current_menu = KEYBOARD_MENU;
-  update_page = REFRESH_PAGE;
-  update_main_lcd = true;
+  start_keyboard(close_edit_name);
 }
 
 void close_edit_name() { // Called when pressing OK on the edit name menu page
-  if (KTN_name_edited) {
-    KTN_rename_done();
-  }
-  else if (SY1000_name_edited) {
-    SY1000_rename_done();
-  }
-  else {
-    EEPROM_write_title(page_in_edit, switch_in_edit, Text_entry);
-    EEPROM_create_command_indexes();
-  }
+  EEPROM_write_title(page_in_edit, switch_in_edit, Text_entry);
+  EEPROM_create_command_indexes();
+}
 
+void save_and_close_keyboard() {
+  if (execute_before_closing_keyboard != NULL) execute_before_closing_keyboard();
+  close_keyboard();
+}
+
+void close_keyboard() {
   Main_menu_cursor = 0; // Switch off the cursor
   keyboard_timer_running = false;
 
@@ -2319,6 +2484,11 @@ void close_edit_name() { // Called when pressing OK on the edit name menu page
   current_menu = previous_menu;
   update_page = REFRESH_PAGE;
   update_main_lcd = true;
+
+  if (touch_active) {
+    //menu_select(current_menu);
+    SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_LONG_PRESS | SKIP_HOLD);
+  }
 }
 
 void delete_switch_name() { // Delete the selected switch name and purge the commands
@@ -2332,7 +2502,35 @@ void delete_switch_name() { // Delete the selected switch name and purge the com
   update_main_lcd = true;
 }
 
-void key_press(uint8_t number) { // Called when key is pressed.
+void start_keyboard(void (*f)()) {
+  execute_before_closing_keyboard = f;
+
+  // Check length of text entry string
+  if (Text_entry.length() < Text_entry_length) {
+    for (uint8_t i = Text_entry.length(); i < Text_entry_length; i++) Text_entry += ' ';
+  }
+  if (Text_entry.length() > Text_entry_length) {
+    Text_entry = Text_entry.substring(0, Text_entry_length);
+  }
+
+  // Select the keyboard menu
+  previous_menu = current_menu;
+  current_menu = KEYBOARD_MENU;
+
+  if (!touch_active) {
+    update_page = REFRESH_PAGE;
+    update_main_lcd = true;
+  }
+  else {
+#ifdef IS_VCTOUCH
+    TFT_draw_keyboard(false);
+    SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_LONG_PRESS | SKIP_HOLD);
+    SC_remote_switch_released(last_touch_switch_pressed, true); // To clear to virtual LED
+#endif
+  }
+}
+
+void key_press(uint8_t number) { // Called when key switch is pressed.
   if ((keyboard_timer_running) && (number != Text_previous_switch)) { // Advance the cursor when a different key is pressed then the previous one and the timer is still running
     cursor_right_page_name();
     Text_switch_char_index = 0;
@@ -2417,7 +2615,7 @@ void check_keyboard_press_expired() { // Will advance the cursor to the right wh
 
 void cursor_left_page_name() {
   if (Main_menu_cursor > 1) Main_menu_cursor--;
-  else Main_menu_cursor = Text_entry_length;
+  else if (!touch_active) Main_menu_cursor = Text_entry_length;
   update_main_lcd = true;
   keyboard_timer_running = false;
   Text_switch_char_index = 0;
@@ -2425,7 +2623,7 @@ void cursor_left_page_name() {
 
 void cursor_right_page_name() {
   if (Main_menu_cursor < Text_entry_length) Main_menu_cursor++;
-  else Main_menu_cursor = 1;
+  else if (!touch_active) Main_menu_cursor = 1;
   update_main_lcd = true;
   keyboard_timer_running = false;
   Text_switch_char_index = 0;

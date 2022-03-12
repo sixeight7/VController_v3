@@ -5,6 +5,7 @@
 #include "device.h"
 #include <QApplication>
 
+#define SY1000_MIDI_PORT USBHMIDI_PORT
 #define SY1000_MIDI_CHANNEL 1
 #define SY1000_PATCH_MIN 0
 #define SY1000_PATCH_MAX 399
@@ -45,6 +46,7 @@ public:
     virtual QString read_scene_name_from_buffer(int number, uint8_t scene) const;
     virtual void store_scene_name_to_buffer(int number, uint8_t scene, QString name);
     int get_scene_index(uint8_t scene) const;
+    bool check_snapscene_active(const int number, const uint8_t scene) const;
 
     virtual uint8_t supportPatchSaving();
     virtual void readPatchData(int index, int patch_no, const QJsonObject &json);

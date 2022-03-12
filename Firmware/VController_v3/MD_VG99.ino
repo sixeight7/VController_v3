@@ -19,6 +19,7 @@
 
 // Roland VG-99 settings:
 #define VG99_MIDI_CHANNEL 9
+#define VG99_MIDI_PORT MIDI1_PORT
 #define VG99_PATCH_MIN 0
 #define VG99_PATCH_MAX 399
 
@@ -58,7 +59,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void MD_VG99_class::init() // Default values for variables
+FLASHMEM void MD_VG99_class::init() // Default values for variables
 {
   MD_base_class::init();
 
@@ -74,20 +75,42 @@ void MD_VG99_class::init() // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec)
   my_LED_colour = 2; // Default value: red
   MIDI_channel = VG99_MIDI_CHANNEL; // Default value
-  my_device_page1 = VG99_DEFAULT_PAGE1;  // Default value
-  my_device_page2 = VG99_DEFAULT_PAGE2; // Default value
-  my_device_page3 = VG99_DEFAULT_PAGE3; // Default value
-  my_device_page4 = VG99_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(VG99_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = VG99_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = VG99_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = VG99_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = VG99_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = VG99_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = VG99_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = VG99_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = VG99_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = VG99_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = VG99_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = VG99_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = VG99_DEFAULT_VC_PAGE4; // Default value
+#endif
   count_parameter_categories();
   is_on = false;
+
+#ifdef IS_VCTOUCH
+  device_pic = img_VG99;
+#endif
+}
+
+void MD_VG99_class::update() {
+  if (!connected) return;
+  check_edit_mode_return_timer();
 }
 
 // ********************************* Section 2: VG99 common MIDI in functions ********************************************
 
-void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {  // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a VG-99
-  if ((port == MIDI_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x1C) && (sxdata[6] == 0x12)) {
+  if ((port == MIDI_in_port) && (sxdata[1] == 0x41) && (sxdata[2] == MIDI_device_id) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x1C) && (sxdata[6] == 0x12)) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
     // Check checksum
@@ -155,7 +178,7 @@ void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned i
   check_SYSEX_in_fc300(sxdata, sxlength);
 }
 
-void MD_VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsigned int sxlength) { // Check incoming sysex messages from VG99/FC300. Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsigned int sxlength) { // Check incoming sysex messages from VG99/FC300. Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a VG-99 in FC300 mode.
   if ((sxdata[1] == 0x41) && (sxdata[3] == 0x00) && (sxdata[4] == 0x00) && (sxdata[5] == 0x20)) {
@@ -183,10 +206,10 @@ void MD_VG99_class::check_SYSEX_in_fc300(const unsigned char* sxdata, short unsi
   }
 }
 
-void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) { // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // VG99 sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // VG99 sends a program change
     uint16_t new_patch = (CC00 * 100) + program;
     if ((patch_number != new_patch) && (millis() - PC_ignore_timer > VG99_PC_IGNORE_TIMER_LENGTH)) {
       prev_patch_number = patch_number;
@@ -201,15 +224,15 @@ void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
 
 // Detection of VG-99
 
-void MD_VG99_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+FLASHMEM void MD_VG99_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a VG-99
   if ((sxdata[5] == 0x41) && (sxdata[6] == 0x1C) && (sxdata[7] == 0x02) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
-void MD_VG99_class::do_after_connect() {
+FLASHMEM void MD_VG99_class::do_after_connect() {
   write_sysex(VG99_EDITOR_MODE_OFF); // Put the VG-99 out of editor mode - saves lots of messages on the VG99 display, but may hang the VController
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NUMBER);
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
@@ -219,63 +242,88 @@ void MD_VG99_class::do_after_connect() {
 }
 
 // ********************************* Section 3: VG99 common MIDI out functions ********************************************
-void MD_VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
+FLASHMEM void MD_VG99_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value); // Calculate the Roland checksum
   uint8_t sysexmessage[14] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x1C, 0x12, ad[3], ad[2], ad[1], ad[0], value, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 14, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 14, MIDI_out_port);
 }
 
-void MD_VG99_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
+FLASHMEM void MD_VG99_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2); // Calculate the Roland checksum
   uint8_t sysexmessage[15] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x1C, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 15, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 15, MIDI_out_port);
 }
 
-void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value) { // VG99 writing to the FC300
+FLASHMEM void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value) { // VG99 writing to the FC300
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into two bytes: ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[1] + ad[0] + value); // Calculate the Roland checksum
   uint8_t sysexmessage[12] = {0xF0, 0x41, FC300_device_id, 0x00, 0x00, 0x020, 0x12, ad[1], ad[0], value, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 12, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 12, MIDI_out_port);
 }
 
-void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value1, uint8_t value2, uint8_t value3) { // VG99 writing to the FC300 - 3 bytes version
+FLASHMEM void MD_VG99_class::write_sysexfc(uint16_t address, uint8_t value1, uint8_t value2, uint8_t value3) { // VG99 writing to the FC300 - 3 bytes version
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into two bytes: ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[1] + ad[0] + value1 + value2 + value3); // Calculate the Roland checksum
   uint8_t sysexmessage[14] = {0xF0, 0x41, FC300_device_id, 0x00, 0x00, 0x020, 0x12, ad[1], ad[0], value1, value2, value3, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 14, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 14, MIDI_out_port);
 }
 
-void MD_VG99_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
+FLASHMEM void MD_VG99_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] +  no_of_bytes); // Calculate the Roland checksum
   uint8_t sysexmessage[17] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x1C, 0x11, ad[3], ad[2], ad[1], ad[0], 0x00, 0x00, 0x00, no_of_bytes, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 17, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 17, MIDI_out_port);
 }
 
-void MD_VG99_class::set_bpm() {
+FLASHMEM void MD_VG99_class::control_edit_mode() {
+  set_editor_mode(true);
+  if ((MIDI_in_port & 0xF0) != USBHMIDI_PORT) {
+    edit_mode_return_timer = VG99_EDIT_MODE_RETURN_TIME + millis();
+    edit_return_timer_running = true;
+  }
+}
+
+void MD_VG99_class::check_edit_mode_return_timer() {
+  if (!edit_return_timer_running) return;
+  if (millis() > edit_mode_return_timer) {
+    set_editor_mode(false);
+    edit_return_timer_running = false;
+  }
+}
+
+FLASHMEM void MD_VG99_class::set_editor_mode(bool state) {
+  if (state == edit_mode) return;
+  if (((MIDI_in_port & 0xF0) == USBHMIDI_PORT) && (state == false)) return; // Do not switch off editor mode when connected to USB_MIDI
+  if (state) write_sysex(VG99_EDITOR_MODE_ON);
+  else write_sysex(VG99_EDITOR_MODE_OFF);
+  edit_mode = state;
+}
+
+FLASHMEM void MD_VG99_class::set_bpm() {
   if (connected) {
+    control_edit_mode();
     write_sysex(VG99_TEMPO, (Setting.Bpm - 40) >> 7, (Setting.Bpm - 40) & 0x7F); // Tempo is modulus 128 on the  And sending 0 gives tempo 40.
   }
 }
 
-void MD_VG99_class::start_tuner() {
+FLASHMEM void MD_VG99_class::start_tuner() {
   if (connected) {
     write_sysex(VG99_TUNER_ON); // Start tuner on VG-99
   }
 }
 
-void MD_VG99_class::stop_tuner() {
+FLASHMEM void MD_VG99_class::stop_tuner() {
   if (connected) {
     write_sysex(VG99_TUNER_OFF); // Stop tuner on VG-99
   }
@@ -283,20 +331,20 @@ void MD_VG99_class::stop_tuner() {
 
 // ********************************* Section 4: VG99 program change ********************************************
 
-void MD_VG99_class::select_patch(uint16_t new_patch) {
+FLASHMEM void MD_VG99_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
-  MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_port);
-  MIDI_send_PC(new_patch % 100, MIDI_channel, MIDI_port);
+  MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_out_port);
+  MIDI_send_PC(new_patch % 100, MIDI_channel, MIDI_out_port);
   DEBUGMSG("out(VG99) PC" + String(new_patch)); //Debug
   //mute();
   //GR55.mute();
   do_after_patch_selection();
 }
 
-void MD_VG99_class::do_after_patch_selection() {
+FLASHMEM void MD_VG99_class::do_after_patch_selection() {
   request_onoff = false;
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) set_bpm();
@@ -309,7 +357,7 @@ void MD_VG99_class::do_after_patch_selection() {
   CC00 = 0;
 }
 
-bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
   if (number > patch_max) return true;
   uint32_t Address = 0x71010000 + (((number * 0x10) / 0x80) * 0x100) + ((number * 0x10) % 0x80); //Calculate the address where the patchname is stored on the VG-99
   last_requested_sysex_address = Address;
@@ -319,11 +367,11 @@ bool MD_VG99_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void MD_VG99_class::request_current_patch_name() {
+FLASHMEM void MD_VG99_class::request_current_patch_name() {
   request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME);
 }
 
-void MD_VG99_class::number_format(uint16_t number, String &Output) {
+FLASHMEM void MD_VG99_class::number_format(uint16_t number, String &Output) {
   // Uses patch_number as input and returns Current_patch_number_string as output in format "U001"
   // First character is U for User or P for Preset patches
   if (number > 199) Output +=  'P';
@@ -334,7 +382,7 @@ void MD_VG99_class::number_format(uint16_t number, String &Output) {
   Output +=  String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
 }
 
-void MD_VG99_class::direct_select_format(uint16_t number, String &Output) {
+FLASHMEM void MD_VG99_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) {
     if (bank_select_number >= 2) Output +=  'P';
     else Output +=  'U';
@@ -352,14 +400,14 @@ void MD_VG99_class::direct_select_format(uint16_t number, String &Output) {
 // Selecting and muting the VG99 is done by storing the settings of COSM guitar switch and Normal PU switch
 // and switching both off when guitar is muted and back to original state when the VG99 is selected
 
-void MD_VG99_class::request_guitar_switch_states() {
+FLASHMEM void MD_VG99_class::request_guitar_switch_states() {
   //VG99_select_LED = VG99_PATCH_COLOUR; //Switch the LED on
   request_sysex(VG99_COSM_GUITAR_A_SW, 1);
   request_sysex(VG99_COSM_GUITAR_B_SW, 1);
   request_onoff = true;
 }
 
-void MD_VG99_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_VG99_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
@@ -374,18 +422,18 @@ void MD_VG99_class::check_inst_switch_states(const unsigned char* sxdata, short 
   }
 }
 
-void MD_VG99_class::unmute() {
+FLASHMEM void MD_VG99_class::unmute() {
   is_on = connected;
   if (is_on) select_patch(patch_number); //Just sending the program change will put the sound back on
 }
 
-void MD_VG99_class::mute() {
+FLASHMEM void MD_VG99_class::mute() {
   if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     mute_now();
   }
 }
 
-void MD_VG99_class::mute_now() {
+FLASHMEM void MD_VG99_class::mute_now() {
   is_on = false;
   //  VG99_select_LED = VG99_OFF_COLOUR; //Switch the LED off
   write_sysex(VG99_COSM_GUITAR_A_SW, 0x00); // Switch COSM guitar off
@@ -817,7 +865,7 @@ const PROGMEM uint8_t VG99_polyFX_colours[4] = {
 
 uint8_t VG99_number_of_items_in_category[VG99_NUMBER_OF_FX_CATEGORIES];
 
-void MD_VG99_class::count_parameter_categories() {
+FLASHMEM void MD_VG99_class::count_parameter_categories() {
   uint8_t c;
   for (uint16_t i = 0; i < VG99_NUMBER_OF_PARAMETERS; i++) {
     c = VG99_parameters[i].Category;
@@ -825,19 +873,19 @@ void MD_VG99_class::count_parameter_categories() {
   }
 }
 
-void MD_VG99_class::request_par_bank_category_name(uint8_t sw) {
+FLASHMEM void MD_VG99_class::request_par_bank_category_name(uint8_t sw) {
   uint8_t index = SP[sw].PP_number;
   if ((index > 0) && (index <= VG99_NUMBER_OF_FX_CATEGORIES))
     LCD_set_SP_label(sw, (const char*) &VG99_parameter_category[index - 1].Name);
   else LCD_clear_SP_label(sw);
 }
 
-void MD_VG99_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_VG99_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = VG99_parameters[number].Name;
   else Output = "?";
 }
 
-void MD_VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < number_of_parameters())  {
     //Output += VG99_parameters[number].Name;
     if ((VG99_parameters[number].Sublist > 0) && !(VG99_parameters[number].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -866,7 +914,7 @@ void MD_VG99_class::read_parameter_value_name(uint16_t number, uint16_t value, S
 }
 
 // Toggle VG99 stompbox parameter
-void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   // Send sysex MIDI command to VG-99
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
@@ -897,7 +945,7 @@ void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number
   }
 }
 
-void MD_VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
 
   if ((SP[Sw].Latch == MOMENTARY) && (number < VG99_NUMBER_OF_PARAMETERS)) {
     SP[Sw].State = 2; // Switch state off
@@ -908,11 +956,11 @@ void MD_VG99_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t numb
   }
 }
 
-void MD_VG99_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_VG99_class::read_parameter_title(uint16_t number, String &Output) {
   Output += VG99_parameters[number].Name;
 }
 
-bool MD_VG99_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_VG99_class::request_parameter(uint8_t sw, uint16_t number) {
   if (can_request_sysex_data()) {
     uint32_t my_address = 0x60000000 + VG99_parameters[number].Address;
     last_requested_sysex_address = my_address;
@@ -928,7 +976,7 @@ bool MD_VG99_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 }
 
-void MD_VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current VG99 parameter
+FLASHMEM void MD_VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current VG99 parameter
   SP[sw].Target_byte1 = byte1;
   SP[sw].Target_byte2 = byte2;
 
@@ -978,7 +1026,7 @@ void MD_VG99_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { /
   LCD_set_SP_label(sw, msg);
 }
 
-void MD_VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number;
   if (index != NOT_FOUND) {
 
@@ -1002,11 +1050,11 @@ void MD_VG99_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates t
   }
 }
 
-uint16_t MD_VG99_class::number_of_parameters() {
+FLASHMEM uint16_t MD_VG99_class::number_of_parameters() {
   return VG99_NUMBER_OF_PARAMETERS - VG99_NON_PARAMETER_TARGETS;
 }
 
-uint8_t MD_VG99_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_VG99_class::number_of_values(uint16_t parameter) {
   if (parameter < VG99_NUMBER_OF_PARAMETERS) {
     //uint8_t part = parameter / 30; // Split the parameter number in part and index
     //uint8_t index = parameter % 30;
@@ -1015,12 +1063,12 @@ uint8_t MD_VG99_class::number_of_values(uint16_t parameter) {
   else return 0;
 }
 
-uint16_t MD_VG99_class::number_of_parbank_parameters() {
+FLASHMEM uint16_t MD_VG99_class::number_of_parbank_parameters() {
   if (parameter_bank_category == 0) return VG99_NUMBER_OF_PARAMETERS;
   else return VG99_number_of_items_in_category[parameter_bank_category - 1];
 }
 
-uint16_t MD_VG99_class::get_parbank_parameter_id(uint16_t par_number) {
+FLASHMEM uint16_t MD_VG99_class::get_parbank_parameter_id(uint16_t par_number) {
   if (parameter_bank_category == 0) return par_number; // In category 0 all FX are accessible
 
   //Find the correct parameter number for this parameter number
@@ -1106,17 +1154,17 @@ const PROGMEM uint16_t FC300_CTL[12] = {0x2100, 0x2101, 0x2402, 0x2102, 0x2403, 
 
 //const PROGMEM char FC300_ASGN_NAME[12][8] = {"CTL1", "CTL2", "CTL3", "CTL4", "CTL5", "CTL6", "CTL7", "CTL8", "EXP1", "EXP SW1", "EXP2", "EXP SW2",};
 
-void MD_VG99_class::read_assign_name(uint8_t number, String & Output) {
+FLASHMEM void MD_VG99_class::read_assign_name(uint8_t number, String & Output) {
   if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title;
   else Output += "--";
 }
 
-void MD_VG99_class::read_assign_short_name(uint8_t number, String & Output) {
+FLASHMEM void MD_VG99_class::read_assign_short_name(uint8_t number, String & Output) {
   if (number < VG99_NUMBER_OF_ASSIGNS)  Output += VG99_assigns[number].Title_short;
   else Output += "--";
 }
 
-void MD_VG99_class::read_assign_trigger(uint8_t number, String & Output) {
+FLASHMEM void MD_VG99_class::read_assign_trigger(uint8_t number, String & Output) {
   if ((number > 0) && (number <= 8))  Output = "FC300 CTL" + String(number);
   else if (number == 9) Output = "FC300 EXP1";
   else if (number == 10) Output = "FC300 EXP SW1";
@@ -1126,23 +1174,23 @@ void MD_VG99_class::read_assign_trigger(uint8_t number, String & Output) {
   else Output = "-";
 }
 
-uint8_t MD_VG99_class::get_number_of_assigns() {
+FLASHMEM uint8_t MD_VG99_class::get_number_of_assigns() {
   return VG99_NUMBER_OF_ASSIGNS;
 }
 
-uint8_t MD_VG99_class::trigger_follow_assign(uint8_t number) {
+FLASHMEM uint8_t MD_VG99_class::trigger_follow_assign(uint8_t number) {
   if (number < 12) return number + 1; // Return the trigger for the FC300 pedals
   if ((number >= 23) && (number <= 33))  return number - 2; // Default cc numbers are 21 - 31
   if ((number >= 34) && (number <= 65)) return number + 30; // And higher up it is 64 - 95
   return 0;
 }
 
-void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to VG99_ASSIGN is pressed
+FLASHMEM void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to VG99_ASSIGN is pressed
 
   // Send cc MIDI command to VG-99. If cc is 1 - 8, send the FC300 CTL sysex code
   uint8_t cc_number = SP[Sw].Trigger;
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], value);
-  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_port);
+  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, value, MIDI_channel, MIDI_out_port);
   else {
     LCD_show_popup_label("Assign read only", MESSAGE_TIMER_LENGTH);
     SCO_update_parameter_state(Sw, 0, 1, 1); // Undo update parameter state by repeating the toggle
@@ -1161,13 +1209,13 @@ void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to V
   if (SP[Sw].Assign_on) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is released
+FLASHMEM void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is released
 
   // Send cc MIDI command to VG-99. If cc is 1 - 8, send the FC300 CTL sysex code
   uint8_t cc_number = SP[Sw].Trigger;
   delay(20); // To fix the release message not being picked up when ASSIGN command is triggered on switch release as well
   if ((cc_number >= 1) && (cc_number <= 12)) write_sysexfc(FC300_CTL[cc_number - 1], 0);
-  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_port);
+  else if ((cc_number <= 31) || ((cc_number >= 64) && (cc_number < 95))) MIDI_send_CC(cc_number, 0, MIDI_channel, MIDI_out_port);
 
   // Update status
   if (SP[Sw].Latch == MOMENTARY) {
@@ -1182,7 +1230,7 @@ void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_ASSIGN is
   }
 }
 
-void MD_VG99_class::fix_reverse_pedals() {
+FLASHMEM void MD_VG99_class::fix_reverse_pedals() {
   // This fixes first time non or reverse responding FC300 CTL pedals
   write_sysexfc(FC300_CTL[2], 0x7F); // Press CTL-3
   write_sysexfc(FC300_CTL[4], 0x7F); // Press CTL-5
@@ -1193,12 +1241,12 @@ void MD_VG99_class::fix_reverse_pedals() {
   }
 }
 
-void MD_VG99_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t my_trigger) { // Switch set to VG99_ASSIGN is loaded in SP array
+FLASHMEM void MD_VG99_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t my_trigger) { // Switch set to VG99_ASSIGN is loaded in SP array
   SP[sw].Trigger = my_trigger; //Save the cc_number / FC300 pedal number in the Trigger variable
   SP[sw].Assign_number = assign_number;
 }
 
-void MD_VG99_class::request_current_assign(uint8_t sw) {
+FLASHMEM void MD_VG99_class::request_current_assign(uint8_t sw) {
   uint8_t index = SP[sw].Assign_number;
   if (index < VG99_NUMBER_OF_ASSIGNS) {
     DEBUGMSG("Request assign " + String(index + 1));
@@ -1213,7 +1261,7 @@ void MD_VG99_class::request_current_assign(uint8_t sw) {
   else PAGE_request_next_switch(); // Wrong assign number given in Config - skip it
 }
 
-void MD_VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   bool assign_on, found;
   String msg;
   uint8_t assign_switch = sxdata[11];
@@ -1299,7 +1347,7 @@ void MD_VG99_class::read_current_assign(uint8_t sw, uint32_t address, const unsi
   }
 }
 
-bool MD_VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the VG99_parameters table
+FLASHMEM bool MD_VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the target and its address in the VG99_parameters table
 
   // Lookup in VG99_parameter array
   //uint8_t part = (target / 0x1000); // As the array is divided in addresses by 1000, it is easy to find the right part
@@ -1315,27 +1363,27 @@ bool MD_VG99_class::target_lookup(uint8_t sw, uint16_t target) {  // Finds the t
   return found;
 }
 
-void MD_VG99_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_VG99_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal > 0) {
-    LCD_show_bar(0, value); // Show it on the main display
+    LCD_show_bar(0, value, 0); // Show it on the main display
     SCO_update_parameter_state(sw, 0, 1, 1);
     assign_press(sw, value);
   }
 }
 
-void MD_VG99_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_VG99_class::toggle_expression_pedal(uint8_t sw) {
   //uint8_t value;
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 2) current_exp_pedal = 1;
   // Send toe switch message
   //if (current_exp_pedal <= 2) value = 127;
-  //MIDI_send_CC(VG99_CC_types[VG99_SW_EXP_TOE].CC, value, MIDI_channel, MIDI_port);
+  //MIDI_send_CC(VG99_CC_types[VG99_SW_EXP_TOE].CC, value, MIDI_channel, MIDI_out_port);
   update_page = REFRESH_FX_ONLY;
 }
 
-bool MD_VG99_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_VG99_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   uint8_t number = 0;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal == 1) number = VG99_FC300_EXP1;

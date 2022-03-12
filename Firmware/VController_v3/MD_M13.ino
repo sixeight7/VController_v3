@@ -13,6 +13,7 @@
 
 // Line6 M13 settings:
 #define M13_MIDI_CHANNEL 1
+#define M13_MIDI_PORT MIDI1_PORT
 #define M13_PATCH_MIN 0
 #define M13_PATCH_MAX 11
 
@@ -41,7 +42,7 @@ M13_data_struct *M13_data; // Memory will we be allocated after M13 connects.
 
 // Initialize device variables
 // Called at startup of VController
-void MD_M13_class::init() { // Default values for variables
+FLASHMEM void MD_M13_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Line6 M13 variables:
@@ -54,18 +55,35 @@ void MD_M13_class::init() { // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 6; // Default value: white
   MIDI_channel = M13_MIDI_CHANNEL; // Default value
-  my_device_page1 = M13_DEFAULT_PAGE1; // Default value
-  my_device_page2 = M13_DEFAULT_PAGE2; // Default value
-  my_device_page3 = M13_DEFAULT_PAGE3; // Default value
-  my_device_page4 = M13_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(M13_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = M13_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = M13_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = M13_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = M13_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = M13_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = M13_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = M13_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = M13_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = M13_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = M13_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = M13_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = M13_DEFAULT_VC_PAGE4; // Default value
+#endif
   tuner_active = false;
   memset(par_on, 0, M13_PAR_ON_SIZE);
   //overdub = false;
   midi_timer = 0;
   max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
+
+#ifdef IS_VCTOUCH
+  device_pic = img_M13;
+#endif
 }
 
-void MD_M13_class::update() {
+FLASHMEM void MD_M13_class::update() {
   if (!connected) return;
   if (midi_timer > 0) { // Check timer is running
     if (millis() > midi_timer) {
@@ -79,10 +97,10 @@ void MD_M13_class::update() {
 
 // ********************************* Section 2: M13 common MIDI in functions ********************************************
 
-void MD_M13_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_M13_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a M13
-  if ((port == MIDI_port) && (sxdata[1] == 0x00) && (sxdata[2] == 0x01) && (sxdata[3] == 0x0C) && (sxdata[4] == 0x0E) && (sxdata[5] == 0x01)) {
+  if ((port == MIDI_in_port) && (sxdata[1] == 0x00) && (sxdata[2] == 0x01) && (sxdata[3] == 0x0C) && (sxdata[4] == 0x0E) && (sxdata[5] == 0x01)) {
 
     if (sxdata[6] <= read_scene_byte) { // Check if we are reading the proper part of the scene
       read_scene_byte++;
@@ -210,10 +228,10 @@ void MD_M13_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
   }
 }
 
-void MD_M13_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_M13_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // M13 sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // M13 sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program;
@@ -223,9 +241,9 @@ void MD_M13_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   }
 }
 
-void MD_M13_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
+FLASHMEM void MD_M13_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // M13 sends a CC message
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // M13 sends a CC message
     if ((control >= 11) && (control <= 22)) { // FX on M13 switched on or off
       uint8_t number = control - 11;
       uint8_t FX = number / 3;
@@ -241,7 +259,7 @@ void MD_M13_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, 
 
 // Detection of M13
 
-void MD_M13_class::check_still_connected() { // Started from MIDI/MIDI_check_all_devices_still_connected()
+FLASHMEM void MD_M13_class::check_still_connected() { // Started from MIDI/MIDI_check_all_devices_still_connected()
   if ((connected) && (enabled == DEVICE_DETECT) && (tuner_active == false)) {
     //DEBUGMSG(device_name + " not detected times " + String(no_response_counter));
     if (no_response_counter >= max_times_no_response) disconnect();
@@ -250,15 +268,15 @@ void MD_M13_class::check_still_connected() { // Started from MIDI/MIDI_check_all
 }
 
 
-void MD_M13_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+FLASHMEM void MD_M13_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a M13
   if ((sxdata[5] == 0x00) && (sxdata[6] == 0x01) && (sxdata[7] == 0x0C) && (sxdata[8] == 0x0E) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
-void MD_M13_class::do_after_connect() {
+FLASHMEM void MD_M13_class::do_after_connect() {
   // Allocate memory to the M13 data struct
   if (M13_data == NULL) M13_data = (struct M13_data_struct *) malloc(M13_NUMBER_OF_SCENES * sizeof(struct M13_data_struct));
   memset(M13_data, 0, M13_NUMBER_OF_SCENES * sizeof(struct M13_data_struct));
@@ -271,51 +289,51 @@ void MD_M13_class::do_after_connect() {
   update_page = REFRESH_PAGE;
 }
 
-void MD_M13_class::do_after_disconnect() {
+FLASHMEM void MD_M13_class::do_after_disconnect() {
   free(M13_data);
   M13_data = NULL;
 }
 
 
 // ********************************* Section 3: M13 common MIDI out functions ********************************************
-void MD_M13_class::request_scene(uint8_t number) {
+FLASHMEM void MD_M13_class::request_scene(uint8_t number) {
   read_scene = number;
   read_scene_byte = 0;
   if (number == 0) midi_timer = millis() + M13_TIME_BEFORE_FIRST_SCENE_READ;
   else midi_timer = millis() + M13_DELAY_AFTER_SCENE_READ;
 }
 
-void MD_M13_class::send_midi_request_for_scene(uint8_t number) {
+FLASHMEM void MD_M13_class::send_midi_request_for_scene(uint8_t number) {
   uint8_t sysexmessage[9] = {0xF0, 0x00, 0x01, 0x0C, 0x0E, 0x00, 0x03, number, 0xF7};
   DEBUGMSG("M13 request scene " + String(number));
-  MIDI_send_sysex(sysexmessage, 9, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 9, MIDI_out_port);
   midi_timer = millis() + M13_TIMEOUT_FOR_READING_CURRENT_SCENE; // Set the timer
   MIDI_disable_device_check();
 }
 
-void MD_M13_class::bpm_tap() {
+FLASHMEM void MD_M13_class::bpm_tap() {
   if (connected) {
-    MIDI_send_CC(64, 127, MIDI_channel, MIDI_port); // Tap tempo on M13
+    MIDI_send_CC(64, 127, MIDI_channel, MIDI_out_port); // Tap tempo on M13
   }
 }
 
-void MD_M13_class::start_tuner() {
+FLASHMEM void MD_M13_class::start_tuner() {
   if (connected) {
-    MIDI_send_CC(69, 127, MIDI_channel, MIDI_port); // Start tuner on M13
+    MIDI_send_CC(69, 127, MIDI_channel, MIDI_out_port); // Start tuner on M13
     tuner_active = true;
   }
 }
 
-void MD_M13_class::stop_tuner() {
+FLASHMEM void MD_M13_class::stop_tuner() {
   if (connected) {
-    MIDI_send_CC(69, 0, MIDI_channel, MIDI_port); // Stop tuner on M13
+    MIDI_send_CC(69, 0, MIDI_channel, MIDI_out_port); // Stop tuner on M13
     tuner_active = false;
   }
 }
 
 // ********************************* Section 4: M13 program change ********************************************
 
-void MD_M13_class::do_after_patch_selection() {
+FLASHMEM void MD_M13_class::do_after_patch_selection() {
   is_on = connected;
   if ((Setting.Send_global_tempo_after_patch_change == true) && (read_scene >= 11)) { // Retapping tempo messes with the scene reading - it should be done after scene reading is done
     SCO_retap_tempo();
@@ -326,10 +344,11 @@ void MD_M13_class::do_after_patch_selection() {
   MD_base_class::do_after_patch_selection();
 }
 
-bool MD_M13_class::request_patch_name(uint8_t sw, uint16_t number) {
-  //String msg = "Scene ";
-  //number_format(number, msg);
-  //LCD_set_SP_label(sw, msg);
+FLASHMEM bool MD_M13_class::request_patch_name(uint8_t sw, uint16_t number) {
+  if (M13_data == NULL) {
+    LCD_clear_SP_label(sw);
+    return true;
+  }
   String msg = M13_data[number].Name;
   if (number < M13_NUMBER_OF_SCENES) LCD_set_SP_label(sw, msg);
   //PAGE_request_next_switch();
@@ -494,7 +513,7 @@ const PROGMEM M13_FX_type_struct M13_FX_types[] = { // Table with the name of ev
 
 const uint8_t M13_NUMBER_OF_FX = sizeof(M13_FX_types) / sizeof(M13_FX_types[0]);
 
-uint8_t MD_M13_class::FXsearch(uint8_t type, uint8_t number) {
+FLASHMEM uint8_t MD_M13_class::FXsearch(uint8_t type, uint8_t number) {
   for (uint8_t i = 0; i < M13_NUMBER_OF_FX; i++) {
     if ((M13_FX_types[i].Type == type) && (M13_FX_types[i].Number == number)) {
       return i;
@@ -503,7 +522,8 @@ uint8_t MD_M13_class::FXsearch(uint8_t type, uint8_t number) {
   return 0; // Return default
 }
 
-void MD_M13_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_M13_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+  if (M13_data == NULL) return;
   // Send cc command to Line6 M13
   uint8_t value = 0; // = SCO_return_parameter_value(Sw, cmd);
   if (number < 12) { // FX UNITS buttons
@@ -530,20 +550,21 @@ void MD_M13_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number)
   }
 
   // Send the CC message
-  if (SP[Sw].Latch == RANGE) MIDI_send_CC(M13_parameters[number].CC, SP[Sw].Target_byte1, MIDI_channel, MIDI_port);
-  else if (value == 1) MIDI_send_CC(M13_parameters[number].CC, 127, MIDI_channel, MIDI_port);
-  else MIDI_send_CC(M13_parameters[number].CC, 0, MIDI_channel, MIDI_port);
+  if (SP[Sw].Latch == RANGE) MIDI_send_CC(M13_parameters[number].CC, SP[Sw].Target_byte1, MIDI_channel, MIDI_out_port);
+  else if (value == 1) MIDI_send_CC(M13_parameters[number].CC, 127, MIDI_channel, MIDI_out_port);
+  else MIDI_send_CC(M13_parameters[number].CC, 0, MIDI_channel, MIDI_out_port);
   LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_M13_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {}
+FLASHMEM void MD_M13_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {}
 
-void MD_M13_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_M13_class::read_parameter_title(uint16_t number, String &Output) {
   Output += M13_parameters[number].Name;
 }
 
-void MD_M13_class::read_parameter_title_short(uint16_t number, String &Output) {
+FLASHMEM void MD_M13_class::read_parameter_title_short(uint16_t number, String &Output) {
+  if (M13_data == NULL) return;
   Output += M13_parameters[number].Short_name;
   if (number < 12) {
     Output += ':';
@@ -557,7 +578,8 @@ void MD_M13_class::read_parameter_title_short(uint16_t number, String &Output) {
   }
 }
 
-bool MD_M13_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_M13_class::request_parameter(uint8_t sw, uint16_t number) {
+  if (M13_data == NULL) return false;
   //Effect type and state are stored in the M13_FX array
   //Effect can have three states: 0 = no effect, 1 = on, 2 = off
   DEBUGMSG("M13 parameter request number: " + String(number));
@@ -604,22 +626,22 @@ bool MD_M13_class::request_parameter(uint8_t sw, uint16_t number) {
 }
 
 // Menu options for FX states
-void MD_M13_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_M13_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = M13_parameters[number].Name;
   else Output = "?";
 }
 
-uint16_t MD_M13_class::number_of_parameters() {
+FLASHMEM uint16_t MD_M13_class::number_of_parameters() {
   return M13_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_M13_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_M13_class::number_of_values(uint16_t parameter) {
   if ((parameter == M13_SW_EXP1) || (parameter == M13_SW_EXP2)) return 128; // Return 128 for the expression pedals
   if (parameter < number_of_parameters()) return 2; // So far all parameters have two states: on and bypass
   else return 0;
 }
 
-void MD_M13_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_M13_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if ((number == M13_SW_EXP1) || (number == M13_SW_EXP2)) Output += String(value); // Return the number for the expression pedals
   else if (number < number_of_parameters())  {
     if (value == 1) Output += "ON";
@@ -630,10 +652,10 @@ void MD_M13_class::read_parameter_value_name(uint16_t number, uint16_t value, St
 
 // ********************************* Section 6: M13 expression pedal control ********************************************
 
-void MD_M13_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_M13_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal > 0) {
-    LCD_show_bar(0, value); // Show it on the main display
+    LCD_show_bar(0, value, 0); // Show it on the main display
     SP[sw].Latch = RANGE;
     SCO_update_parameter_state(sw, 0, 127, 1);
     parameter_press(sw, 0, SP[sw].PP_number);
@@ -641,7 +663,7 @@ void MD_M13_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   }
 }
 
-void MD_M13_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_M13_class::toggle_expression_pedal(uint8_t sw) {
   //uint8_t value;
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
@@ -649,7 +671,7 @@ void MD_M13_class::toggle_expression_pedal(uint8_t sw) {
   update_page = REFRESH_FX_ONLY;
 }
 
-bool MD_M13_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_M13_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   uint8_t number = 0;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal == 1) number = M13_SW_EXP1;
@@ -664,7 +686,7 @@ bool MD_M13_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
 
 // ********************************* Section 7: M13 looper control ********************************************
 
-bool MD_M13_class::looper_active() { // M13 has a looper and it is always on
+FLASHMEM bool MD_M13_class::looper_active() { // M13 has a looper and it is always on
   return true;
 }
 
@@ -693,6 +715,6 @@ const PROGMEM M13_looper_cc_struct M13_looper_cc[] = { // Table with the cc mess
 
 const uint8_t M13_LOOPER_NUMBER_OF_CCS = sizeof(M13_looper_cc) / sizeof(M13_looper_cc[0]);
 
-void MD_M13_class::send_looper_cmd(uint8_t cmd) {
-  if (cmd < M13_LOOPER_NUMBER_OF_CCS) MIDI_send_CC(M13_looper_cc[cmd].cc, M13_looper_cc[cmd].value, MIDI_channel, MIDI_port);
+FLASHMEM void MD_M13_class::send_looper_cmd(uint8_t cmd) {
+  if (cmd < M13_LOOPER_NUMBER_OF_CCS) MIDI_send_CC(M13_looper_cc[cmd].cc, M13_looper_cc[cmd].value, MIDI_channel, MIDI_out_port);
 }

@@ -154,9 +154,6 @@ uint32_t Hold_time;
 bool switch_was_held = false;
 bool inta_triggered = false;
 uint8_t skip_release_and_hold_until_next_press = 0;
-#define SKIP_RELEASE 1
-#define SKIP_LONG_PRESS 2
-#define SKIP_HOLD 4
 
 #define DEBOUNCE_TIMER_LENGTH 20 // Time between reading the display boards
 uint32_t Debounce_timer = 0;
@@ -526,6 +523,10 @@ inline bool SC_switch_triggered_by_PC() {
   return (switch_type == SW_TYPE_MIDI_PC);
 }
 
+inline bool SC_switch_triggered_by_CC_range() {
+  return ((switch_type == SW_TYPE_MIDI_CC) || (switch_type == SW_TYPE_MIDI_CC_NO_RELEASE));
+}
+
 // ********************************* Section 4: Switch Dual Press / Long Press / Extra Long Press and Hold Detection ********************************************
 void SC_update_long_presses_and_hold() {
   if (switch_released > 0) { // First check if the release was valid when in multi_switch mode
@@ -694,6 +695,7 @@ void SC_remote_switch_released(uint8_t sw, bool from_editor) {
 
 void SC_remote_switch_pressed_no_release(uint8_t sw) {
   if (SC_check_valid_switch(sw)) {
+    DEBUGMAIN("Remote cc switch " + String(sw) + " triggered (no release)");
     time_switch_pressed = micros();
     switch_pressed = sw;
     switch_type = SW_TYPE_MIDI_CC_NO_RELEASE;
@@ -702,6 +704,7 @@ void SC_remote_switch_pressed_no_release(uint8_t sw) {
 
 void SC_remote_expr_pedal(uint8_t sw, uint8_t value) {
   if (SC_check_valid_switch(sw)) {
+    DEBUGMAIN("Remote cc pedal " + String(sw) + " triggered with valuem " + String(value));
     time_switch_pressed = micros();
     switch_type = SW_TYPE_EXPRESSION_PEDAL;
     Expr_ped_value = value;
@@ -711,6 +714,7 @@ void SC_remote_expr_pedal(uint8_t sw, uint8_t value) {
 
 void SC_remote_switch_select_program(uint8_t sw, uint8_t program) {
   if (SC_check_valid_switch(sw)) {
+    DEBUGMAIN("Remote pc switch " + String(sw) + " triggered with program " + String(program));
     time_switch_pressed = micros();
     switch_type = SW_TYPE_MIDI_PC;
     PC_value = program;
@@ -726,6 +730,10 @@ void SC_skip_release_and_hold_until_next_press(uint8_t val) { // Called from SCO
   skip_release_and_hold_until_next_press = val;
   DEBUGMSG("Set switches to skip release, hold or long press - " + String(val));
   //multi_switch_booleans = 0;
+}
+
+void SC_reset_multipress() {
+  multi_switch_booleans = 0;
 }
 
 void SC_set_enc1_acceleration(bool state) {

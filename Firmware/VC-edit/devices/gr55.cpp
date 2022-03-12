@@ -1,6 +1,7 @@
 #include "gr55.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 void GR55_class::init()
 {
@@ -10,13 +11,28 @@ void GR55_class::init()
     patch_max = GR55_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 3; // Default value: blue
+    MIDI_port_manual = MIDI_port_number(GR55_MIDI_PORT);
     MIDI_channel = GR55_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = GR55_DEFAULT_PAGE1; // Default value
-    my_device_page2 = GR55_DEFAULT_PAGE2; // Default value
-    my_device_page3 = GR55_DEFAULT_PAGE3; // Default value
-    my_device_page4 = GR55_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = GR55_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = GR55_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = GR55_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = GR55_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = GR55_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = GR55_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = GR55_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = GR55_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = GR55_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = GR55_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = GR55_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = GR55_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
     preset_banks = 40; // Default number of preset banks is 40. When we are in bass mode, there are only 12.
 }
 

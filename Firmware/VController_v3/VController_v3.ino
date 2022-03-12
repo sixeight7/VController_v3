@@ -18,9 +18,10 @@
 ** with this program; if not, write to the Free Software Foundation, Inc.,
 ** 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 **
-** If you use this code in a homnebuild project, please support me by sending
-** a donation via https://www.paypal.me/sixeight 
-** If you want to build VControllers or VC-mini's commerically, please contact me.
+** If you use this code in a homebuild project, please support me by sending
+** a donation via https://www.paypal.me/sixeight
+** If you want to build VControllers, VC-mini's or VC-touches commercially, 
+** please contact me on SixEightSoundControl|@gmail.com.
 ****************************************************************************/
 
 // This page has the following parts:
@@ -34,20 +35,24 @@
 // **** Choose the correct hardware below and update the Arduino compiler settings ****
 // Current version of Arduino: 1.8.9 and TeensyDuino: 1.46
 
-// Hardware of production model 
-//#include "hardware.h" 
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII 
+// Hardware of production model
+//#include "hardware.h"
+// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
 
-// Hardware of VC-mini rev. B 
-#include "hardware_VCmini_b.h" 
+// Hardware of VC-mini rev. B
+#include "hardware_VCmini_b.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
 
-// Hardware of VController V1 model of sixeight 
-//#include "hardware1.h" 
+// Hardware of production model
+//#include "hardware_VCtouch.h"
+// Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
+
+// Hardware of VController V1 model of sixeight
+//#include "hardware1.h"
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
 
 // Hardware of VController model of Willem Smith
-//#include "hardware_WS.h" 
+//#include "hardware_WS.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast, Programmer: AVRISP mkII
 
 // In order for the Serial MIDI ports to receive larger messages the following files have to be edited:
@@ -59,11 +64,22 @@
 
 // ********************************* Section 2: Library declaration and main setup() and loop() ********************************************
 
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
 #include <i2c_t3.h>
+#else
+#include <Wire.h>
+//#include <i2c_driver.h>
+//#include <i2c_driver_wire.h>
+#endif
+
+#ifdef IS_VCTOUCH
+#include <Goodix.h> // Must be declared on first page, otherwise sketch will not compile
+#endif
+
 #include "debug.h"
 #include "globals.h"
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 7
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 9
 #define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
@@ -72,7 +88,12 @@ void setup() {
   setup_debug();
 
   // Wire speeds are set in hardware.h
+#if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
   Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, WIRE_SPEED);
+#else
+  Wire.setClock(WIRE_SPEED);
+  Wire.begin();
+#endif
 #ifdef WIRE1_SPEED
   Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_29_30, I2C_PULLUP_INT, WIRE1_SPEED);
 #endif
@@ -119,14 +140,14 @@ void loop() {
   - Teensy 3.6
   - 2 MIDI input/outputs, a USB MIDI host port and MIDI over USB. Support for external Raspberry Pi running VCbridge to add extra ports.
   - Extra EEPROM Flash memory: 24LC512
-  
+
   Software features:
   - Patch and parameter control for the following devices:
-    * Boss GP-10, Roland GR-55, Roland VG-99, Boss Katana
-    * Zoom G3, Zoom MS70-cdr
-    * Line6 M13, Line6 Helix 
-    * AxeFX II (other types implemented but not tested)
-    * Kemper Profiling Amp
+      Boss GP-10, Roland GR-55, Roland VG-99, Boss Katana
+      Zoom G3, Zoom MS70-cdr
+      Line6 M13, Line6 Helix
+      AxeFX II (other types implemented but not tested)
+      Kemper Profiling Amp
   - Patchnames are read from devices (apart from the Line6 Helix)
   - Parameter states and assigns are read from devices (apart from Line6 Helix)
   - Programmable pages of switches. These can be programmed on the VController of VC-mini or via the external editor
@@ -258,7 +279,7 @@ void loop() {
   09-09-2019 Uploaded V3.3.0 firmware to Github.
   29-09-2019 Implemented new library for encoders that is more stable and supports encoder acceleration - when the encoder is rotated faster, the encoders value will increment faster.
   05-10-2019 Memory versions of external memory are stored on the external EEPROM instead of internal. This is easier when swapping memory chips.
-  30-10-2019 v.3.3.3 Solved an issue with changing devices from an external MIDI foot controller. Some MIDI messages were not received, because writing i2c is blocking midi data reception. Writing the current page and device is now delayed. 
+  30-10-2019 v.3.3.3 Solved an issue with changing devices from an external MIDI foot controller. Some MIDI messages were not received, because writing i2c is blocking midi data reception. Writing the current page and device is now delayed.
   02-11-2019 v.3.3.4 Added high string priority. Also added basic support for the Strymon Volante.
   18-11-2019 v.3.3.5 Added custom effect types of the MS-50G and th MS-60B to the MS70-cdr. Thanks to Dr. Michael Cvachovec for supplying the custom firmware packages for this.
   30-12-2019 Added Katana patch dump from and to editor
@@ -309,6 +330,32 @@ void loop() {
   04-04-2021 SY-1000: Added harmony mode.
   10-04-2021 SY-1000: Added "change to all scenes" to SY1000 menu - to allow updating of changed parameter in all scenes!
   10-04-2021 Changed the memory division: now 150 patches can be stored. The number of commands is now 1737.
-  12-04-2021 MIDI CC sequencer can be programmed from editor
+  12-04-2021 Helix MIDI CC sequencer can be programmed from editor
   13-04-2021 Release of firmware 3.7.0
-*/
+  19-04-2021 Added MIDI learn mode for connecting external controllers. It will detect CC_MOMENTARY, CC_RANGE and PC mnessages from external MIDI controllers.
+  20-04-2021 FW3.7.1: Changed defaults for MIDI switch and fixed an issue where MIDI channel could be set to zero, resulting in the external MIDI pedal not responding.
+  04-05-2021 FW3.7.2: Started with VC-touch implementation
+  24-05-2021 FW3.7.3: SY-1000 - Added editor data forwarding, so BTS for SY-1000 can connect through the VC-mini. Selecting scenes on the VC-mini is now properly updated in BTS.
+  14-06-2021 Added MIDI forwarding. You can make three "connections" between a srouce and a destination port to forward MIDI data. Forwarded data includes MIDI note on/off, pitch bend, pc, cc and sysex.
+  05-07-2021 SY-1000: Added per scene option to mute the inputs while the scene is loaded. This will remove any pops or burts of sound during scene change, but will introduce a minor gap.
+  19-07-2021 VC-touch: added on-screen keyboard
+  22-07-2021 VC-touch: started with Bluetooth and Wifi support via ESP32 DevKit v1.
+  23-07-2021 Improved writing speed of patches. Data of empty patches is no longer sent. Also fixed a bug in writing patch data to EEPROM
+  20-09-2021 Improved tap tempo. LED timing is better and max bpm (250) is now easier to tap.
+  27-09-2021 Added option to detect different midi in and out port.
+  11-10-2021 Added buffers to seral midi ports. This improves serial midi communications and avoids dropouts or sysex errors.
+  25-10-2021 Port names and types are made device specific and are set from hardware.h
+  08-11-2021 MG-300: Added support for firmware 3.10.13 with the new STAGEMAN amp model.
+  13-12-2021 VC-touch: optimized backlight brightnes control
+  02-01-2021 VC-edit: made one editor for all three VC versions
+  05-01-2022 VC-touch and VC-mini: fixed patch selection on G3 and MS70CDR via USB host port not working.
+  06-01-2022 VC-touch: improved switchpad routine for multipress switches, improved edit screen for VG99 and Katana and added colours to the looper progress bar
+  21-01-2022 SY-1000: fewer pops in scene change by always first turning parameters off or down before turning parameters on or up.
+  31-01-2022 Added automatic tempo following. The tempo is extracted from the Guitar2midi MIDI note information.
+  22-02-2022 Katana MK2: GEQ data was not stored and recalled properly. Midi timing has also been tweaked to make sure all data is written to the Katana.
+  23-02-2022 Katana: added Global Option to select Katana type. Now CH5-6 will be skipped when using Katana 50W (4CH) 
+  24-02-2022 Katana: fixed bug where FX chain would not be updated occasionally when moving from Katana channel patch to VC patch.
+  28-02-2022 VC-touch: Titles and labels of switches now contain 16 characters. Text is compressed slightly by eating one pixel of the width of each character.
+  01-03-2022 A VC-device can now be extended with another VC-device, by connecting them together. Patches, scenes, tempo, tuner and looper status are synced between the devices. (work in progress)
+  12-03-2022 Release of firmware 3.9.0
+  */

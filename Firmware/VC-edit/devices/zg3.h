@@ -5,6 +5,7 @@
 #include <QApplication>
 
 // Zoom G3 settings:
+#define ZG3_MIDI_PORT USBHMIDI_PORT
 #define ZG3_MIDI_CHANNEL 1
 #define ZG3_PATCH_MIN 0
 #define ZG3_PATCH_MAX 99

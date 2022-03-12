@@ -6,14 +6,14 @@
 void StartFreeTimer();
 
 // Enable normal debugging (put // in front of #define to disable it
-//#define DEBUG_NORMAL
+#define DEBUG_NORMAL
 
 // Enable debugging of main events (put // in front of the next line to disable it
 //#define DEBUG_MAIN
 
 // Midi debugging
-//#define DEBUG_MIDI
-//#define DEBUG_SYSEX
+#define DEBUG_MIDI
+#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
 
 #define DEBUG_SYSEX_MAX_LENGTH 256 // The maximum numbers of bytes shown in the debug window
@@ -58,14 +58,16 @@ void setup_debug() {
 #define MIDI1_PORT 0x10
 #define MIDI2_PORT 0x20
 #define MIDI3_PORT 0x30
-#define USBHMIDI_PORT 0x40
+#define MIDI4_PORT 0x40
+#define USBHMIDI_PORT 0x50
+#define MIDI5_PORT 0x60
 #define ALL_MIDI_PORTS 0xF0
 
 //Debug sysex messages by sending them to the serial monitor
 void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port, bool is_out) {
 
 #ifndef DEBUG_SYSEX_UNIVERSAL
-  if (sxdata[1] == 0x7D) return; // Quit if we have a universal midi message
+  //if (sxdata[1] == 0x7D) return; // Quit if we have a universal midi message
   if (sxdata[1] == 0x7E) return; // Quit if we have a universal midi message
   if (sxdata[2] == 0x7F) return; // Quit if we have an FC300 bloat message
   if ((sxdata[3] == 0x74) && (sxdata[4] == 0x7F)) return; // Quit if we have a Fractal connect message
@@ -88,6 +90,12 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
       break;
     case MIDI3_PORT:
       Serial.print("MIDI3:" + String(VCbridge_port) + ' ');
+      break;
+    case MIDI4_PORT:
+      Serial.print("MIDI4:" + String(VCbridge_port) + ' ');
+      break;
+    case MIDI5_PORT:
+      Serial.print("MIDI5:" + String(VCbridge_port) + ' ');
       break;
     case USBHMIDI_PORT:
       Serial.print("USBH_M:" + String(VCbridge_port) + ' ');

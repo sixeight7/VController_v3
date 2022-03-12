@@ -15,7 +15,7 @@
 
 // Fractal AxeFX default settings:
 #define FAS_MIDI_CHANNEL 1
-#define FAS_MIDI_PORT 1 // Default port is MIDI1
+#define FAS_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define FAS_PATCH_MIN 0
 #define FAS_PATCH_MAX 383
 
@@ -87,7 +87,7 @@
 
 // Initialize device variables
 // Called at startup of VController
-void MD_FAS_class::init() { // Default values for variables
+FLASHMEM void MD_FAS_class::init() { // Default values for variables
   MD_base_class::init();
 
   // AXE-FX variables:
@@ -101,25 +101,40 @@ void MD_FAS_class::init() { // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 1; // Default value: green
   MIDI_channel = FAS_MIDI_CHANNEL; // Default value
-  MIDI_port = FAS_MIDI_PORT; // Default value
-  my_device_page1 = FAS_DEFAULT_PAGE1; // Default value
-  my_device_page2 = FAS_DEFAULT_PAGE2; // Default value
-  my_device_page3 = FAS_DEFAULT_PAGE3; // Default value
-  my_device_page4 = FAS_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(FAS_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = FAS_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = FAS_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = FAS_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = FAS_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = FAS_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = FAS_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = FAS_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = FAS_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = FAS_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = FAS_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = FAS_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = FAS_DEFAULT_VC_PAGE4; // Default value
+#endif
   clear_FX_states();
   number_of_active_blocks = 0;
   looper_block_detected = false;
   //max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
+#ifdef IS_VCTOUCH
+  device_pic = img_FAS_AXEFX2;
+#endif
 }
 
-void MD_FAS_class::update() {
+FLASHMEM void MD_FAS_class::update() {
   if (!connected) return;
   looper_timer_check();
 }
 
 // ********************************* Section 2: FAS common MIDI in functions ********************************************
 
-void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from an AXEFX
   if ((sxdata[1] == 0x00) && (sxdata[2] == 0x01) && (sxdata[3] == 0x74)) {
@@ -127,10 +142,10 @@ void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
     // Check if it is GET_FIRMWARE_RESPONSE - used for device detection of the AxeFX
     if (((sxdata[5] == FAS_FIRMWARE_VERSION) || (sxdata[5] == FAS_FIRMWARE_VERSION_AF2)) && (!connected) && (enabled == DEVICE_DETECT)) {
       set_type(sxdata[4]); // Will change the device name after a succesful detection
-      connect(sxdata[4], port); // Will connect to the device
+      connect(sxdata[4], port, Current_MIDI_out_port | (port & 0x0F)); // Will connect to the device
     }
 
-    else if ((port == MIDI_port) && (sxdata[4] == model_number)) { // Check the other messages
+    else if ((port == MIDI_in_port) && (sxdata[4] == model_number)) { // Check the other messages
 
       uint16_t new_patch;
       bool end_reached;
@@ -249,10 +264,10 @@ void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 }
 
 
-void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
       prev_patch_number = patch_number;
@@ -268,19 +283,15 @@ void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
 
 // Detection of the Axe-FX
 
-void MD_FAS_class::send_alternative_identity_request(uint8_t check_device_no) {
+FLASHMEM void MD_FAS_class::send_alternative_identity_request(uint8_t check_device_no) {
   if ((enabled == DEVICE_DETECT) && (!connected)) {
     uint8_t sysexmessage[8] = {0xF0, 0x00, 0x01, 0x74, 0x7F, 0x00, 0x7A, 0xF7}; // Will get any fractal device to respond - The Fractal editor uses this command as well
     check_sysex_delay();
-    if (check_device_no == 0 ) MIDI_send_sysex(sysexmessage, 8, USBMIDI_PORT);
-    if (check_device_no == 1 ) MIDI_send_sysex(sysexmessage, 8, MIDI1_PORT);
-    if (check_device_no == 2 ) MIDI_send_sysex(sysexmessage, 8, MIDI2_PORT);
-    if (check_device_no == 3 ) MIDI_send_sysex(sysexmessage, 8, MIDI3_PORT);
-    if (check_device_no == 4 ) MIDI_send_sysex(sysexmessage, 8, USBHMIDI_PORT);
+    MIDI_send_sysex(sysexmessage, 8, Current_MIDI_out_port);
   }
 }
 
-void MD_FAS_class::set_type(uint8_t device_type) { // Is run just before we connect.
+FLASHMEM void MD_FAS_class::set_type(uint8_t device_type) { // Is run just before we connect.
   model_number = device_type;
   switch (device_type) { // First determine which Fractal Audio device has connected...
     case FAS_MODEL_STANDARD: // Axe-Fx Standard
@@ -342,7 +353,7 @@ void MD_FAS_class::set_type(uint8_t device_type) { // Is run just before we conn
 }
 
 
-void MD_FAS_class::do_after_connect() {
+FLASHMEM void MD_FAS_class::do_after_connect() {
   current_exp_pedal = 1;
   write_sysex(FAS_GET_PRESET_NUMBER);
   write_sysex(FAS_GET_PRESET_NAME); // So the main display always show the correct patch
@@ -351,39 +362,39 @@ void MD_FAS_class::do_after_connect() {
   update_page = REFRESH_PAGE;
 }
 
-void MD_FAS_class::check_still_connected() {} // Never disconnect
+FLASHMEM void MD_FAS_class::check_still_connected() {} // Never disconnect
 
 // ********************************* Section 3: FAS common MIDI out functions ********************************************
 
-void MD_FAS_class::write_sysex(uint8_t byte1) {
+FLASHMEM void MD_FAS_class::write_sysex(uint8_t byte1) {
   uint8_t sysexmessage[8] = {0xF0, 0x00, 0x01, 0x74, model_number, byte1, 0, 0xF7};
   sysexmessage[6] = calc_FS_checksum(sysexmessage, 6); // Calculate the Fractal Systems checksum over the first 6 bytes and add it to the message
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 8, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 8, MIDI_out_port);
 }
 
-void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2) {
+FLASHMEM void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2) {
   uint8_t sysexmessage[9] = {0xF0, 0x00, 0x01, 0x74, model_number, byte1, byte2, 0, 0xF7};
   sysexmessage[7] = calc_FS_checksum(sysexmessage, 7); // Calculate the Fractal Systems checksum over the first 7 bytes and add it to the message
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 9, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 9, MIDI_out_port);
 }
 
-void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2, uint8_t byte3) {
+FLASHMEM void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2, uint8_t byte3) {
   uint8_t sysexmessage[10] = {0xF0, 0x00, 0x01, 0x74, model_number, byte1, byte2, byte3, 0, 0xF7};
   sysexmessage[8] = calc_FS_checksum(sysexmessage, 8); // Calculate the Fractal Systems checksum over the first 8 bytes and add it to the message
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 10, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 10, MIDI_out_port);
 }
 
-void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7, uint8_t byte8, uint8_t byte9) {
+FLASHMEM void MD_FAS_class::write_sysex(uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6, uint8_t byte7, uint8_t byte8, uint8_t byte9) {
   uint8_t sysexmessage[16] = {0xF0, 0x00, 0x01, 0x74, model_number, byte1, byte2, byte3, byte4, byte5, byte6, byte7, byte8, byte9, 0, 0xF7};
   sysexmessage[14] = calc_FS_checksum(sysexmessage, 14); // Calculate the Fractal Systems checksum over the first 14 bytes and add it to the message
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 16, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 16, MIDI_out_port);
 }
 
-uint8_t MD_FAS_class::calc_FS_checksum(const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM uint8_t MD_FAS_class::calc_FS_checksum(const unsigned char* sxdata, short unsigned int sxlength) {
   // In order to calculate the Checksum, you basically have to XOR every byte from the start of the SysEx message, up to the character BEFORE the terminating F7 byte. For example, to send the following SysEx message (to fetch a preset name):
   // F0 00 01 74 03 0F F7
   // We would have to XOR all the byte values from the starting 'F0' to the '0F' which is the second last byte:
@@ -397,7 +408,7 @@ uint8_t MD_FAS_class::calc_FS_checksum(const unsigned char* sxdata, short unsign
   return cs & 0x7F;
 }
 
-void MD_FAS_class::set_bpm() {
+FLASHMEM void MD_FAS_class::set_bpm() {
   // If you want to send a BPM value to the Axe-Fx II/AX8 you can do this via Function 0x02 GET/SET_BLOCK_PARAMETER_VALUE.
   // To do this you will send the parameter to the "CONTROLLERS" Block (ID 141), Parameter ID 32, and the value would be a number between 30 and 250
 
@@ -419,33 +430,33 @@ void MD_FAS_class::set_bpm() {
   }
 }
 
-void MD_FAS_class::start_tuner() {
+FLASHMEM void MD_FAS_class::start_tuner() {
   if (connected) {
-    MIDI_send_CC(FAS_TUNER_CC, 127, MIDI_channel, MIDI_port);
+    MIDI_send_CC(FAS_TUNER_CC, 127, MIDI_channel, MIDI_out_port);
   }
 }
 
-void MD_FAS_class::stop_tuner() {
+FLASHMEM void MD_FAS_class::stop_tuner() {
   if (connected) {
-    MIDI_send_CC(FAS_TUNER_CC, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(FAS_TUNER_CC, 0, MIDI_channel, MIDI_out_port);
   }
 }
 
 // ********************************* Section 4: FAS program change ********************************************
 
-void MD_FAS_class::select_patch(uint16_t new_patch) {
+FLASHMEM void MD_FAS_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
-  MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_port);
-  MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_port);
+  MIDI_send_CC(0, new_patch >> 7, MIDI_channel, MIDI_out_port);
+  MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_out_port);
   DEBUGMSG("out(AXEFX) PC" + String(new_patch)); //Debug
   do_after_patch_selection();
   update_page = REFRESH_PAGE;
 }
 
-void MD_FAS_class::do_after_patch_selection() {
+FLASHMEM void MD_FAS_class::do_after_patch_selection() {
   request_onoff = false;
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) {
@@ -468,7 +479,7 @@ void MD_FAS_class::do_after_patch_selection() {
   }
 }
 
-bool MD_FAS_class::request_patch_name(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_FAS_class::request_patch_name(uint8_t sw, uint16_t number) {
   uint8_t msb = number >> 7;
   uint8_t lsb = number & 0x7F;
   write_sysex(FAS_GET_PRESET_NAME_BY_NUMBER, msb, lsb); // F0 00 01 74 03 15 7F 7F 13 F7
@@ -477,17 +488,17 @@ bool MD_FAS_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void MD_FAS_class::request_current_patch_name() {
+FLASHMEM void MD_FAS_class::request_current_patch_name() {
   write_sysex(FAS_GET_PRESET_NAME);
 }
 
-void MD_FAS_class::number_format(uint16_t number, String & Output) {
+FLASHMEM void MD_FAS_class::number_format(uint16_t number, String & Output) {
   char BankChar = 65 + (number >> 7);
   uint16_t number_plus_one = number + 1;
   Output += BankChar + String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
 }
 
-void MD_FAS_class::direct_select_format(uint16_t number, String & Output) {
+FLASHMEM void MD_FAS_class::direct_select_format(uint16_t number, String & Output) {
   if (direct_select_state == 0) {
     char BankChar = 65 + ((bank_select_number * 100 + number * 10) >> 7);
     Output +=  BankChar + String(bank_select_number) + String(number) + "_";
@@ -498,15 +509,15 @@ void MD_FAS_class::direct_select_format(uint16_t number, String & Output) {
   }
 }
 
-void MD_FAS_class::unmute() {
+FLASHMEM void MD_FAS_class::unmute() {
   is_on = connected;
-  MIDI_send_CC(FAS_BYPASS_CC, 0, MIDI_channel, MIDI_port);
+  MIDI_send_CC(FAS_BYPASS_CC, 0, MIDI_channel, MIDI_out_port);
 }
 
-void MD_FAS_class::mute() {
+FLASHMEM void MD_FAS_class::mute() {
   if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
-    MIDI_send_CC(FAS_BYPASS_CC, 127, MIDI_channel, MIDI_port);
+    MIDI_send_CC(FAS_BYPASS_CC, 127, MIDI_channel, MIDI_out_port);
   }
 }
 
@@ -633,12 +644,12 @@ const uint16_t FAS_NUMBER_OF_PARAMETERS = sizeof(FAS_parameters) / sizeof(FAS_pa
 #define FAS_FIRST_EXTERNAL_PEDAL 85
 #define FAS_FIRST_EXTERNAL_PEDAL_CC 16
 
-void MD_FAS_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
+FLASHMEM void MD_FAS_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
   if (number < number_of_parameters())  Output = FAS_parameters[number].Name;
   else Output = "?";
 }
 
-void MD_FAS_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) { // Called from menu
+FLASHMEM void MD_FAS_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) { // Called from menu
   if (number < FAS_FIRST_EXTERNAL_PEDAL) { // Show ON/OFF for IA and XY switches
     if (value == 1) Output += "ON";
     else Output += "OFF";
@@ -652,18 +663,18 @@ void MD_FAS_class::read_parameter_value_name(uint16_t number, uint16_t value, St
   Output += "?";
 }
 
-void MD_FAS_class::clear_FX_states() {
+FLASHMEM void MD_FAS_class::clear_FX_states() {
   memset(effect_state, 0, FAS_NUMBER_OF_FX);
 }
 
-void MD_FAS_class::set_FX_state(uint8_t cc, bool state) {
+FLASHMEM void MD_FAS_class::set_FX_state(uint8_t cc, bool state) {
   if (cc < FAS_FX_FIRST_CC) return; // Exit if the CC is smaller than FAS_FX_FIRST_CC (37)
   uint8_t index = cc - FAS_FX_FIRST_CC;
   if (index < FAS_NUMBER_OF_FX) effect_state[index] = (state == 0) ? 2 : 1; // Set state to 2 if state is zero and to 1 if state is not zero
 }
 
 // Toggle AXEFX stompbox parameter
-void MD_FAS_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+FLASHMEM void MD_FAS_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
 
   if (number >= FAS_NUMBER_OF_PARAMETERS) return; // Quit if number is out of range
 
@@ -673,12 +684,12 @@ void MD_FAS_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
   uint8_t cc;
   if (number < FAS_FIRST_EXTERNAL_PEDAL) { // IA or XY switch
     cc = number + FAS_FX_FIRST_CC;
-    if (value == 1) MIDI_send_CC(cc, 127, MIDI_channel, MIDI_port);
-    else  MIDI_send_CC(cc, 0, MIDI_channel, MIDI_port);
+    if (value == 1) MIDI_send_CC(cc, 127, MIDI_channel, MIDI_out_port);
+    else  MIDI_send_CC(cc, 0, MIDI_channel, MIDI_out_port);
   }
   else { // External pedal
     cc = number - FAS_FIRST_EXTERNAL_PEDAL + FAS_FIRST_EXTERNAL_PEDAL_CC;
-    MIDI_send_CC(cc, value, MIDI_channel, MIDI_port);
+    MIDI_send_CC(cc, value, MIDI_channel, MIDI_out_port);
   }
 
   if (value == 1) effect_state[number] = 1; // Store the new effect state
@@ -691,19 +702,19 @@ void MD_FAS_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
   if ((SP[Sw].Latch != RANGE) && (SP[Sw].Latch != UPDOWN)) update_page = REFRESH_PAGE;
 }
 
-void MD_FAS_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+FLASHMEM void MD_FAS_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
   // Work out state of pedal
   if (SP[Sw].Latch == MOMENTARY) {
     effect_state[number] = 2; // Switch state off
     SP[Sw].State = 2;
     uint8_t cc = number + FAS_FX_FIRST_CC;
-    MIDI_send_CC(cc, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(cc, 0, MIDI_channel, MIDI_out_port);
 
     update_page = REFRESH_PAGE;
   }
 }
 
-void MD_FAS_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_FAS_class::read_parameter_title(uint16_t number, String &Output) {
   if (number < FAS_NUMBER_OF_PARAMETERS) {
     if (number < FAS_FIRST_EXTERNAL_PEDAL) { // IA or XY switch
       Output += FAS_parameters[number].Name; // Set the label
@@ -718,7 +729,7 @@ void MD_FAS_class::read_parameter_title(uint16_t number, String &Output) {
   }
 }
 
-bool MD_FAS_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_FAS_class::request_parameter(uint8_t sw, uint16_t number) {
   //Effect type and state are stored in the effect_state array
   //Effect can have three states: 0 = no effect, 1 = on, 2 = off
 
@@ -746,7 +757,7 @@ bool MD_FAS_class::request_parameter(uint8_t sw, uint16_t number) {
   return true; // Move to next switch is true
 }
 
-void MD_FAS_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_FAS_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number; // Read the parameter number (index to AXEFX-parameter array)
   if ((index >= FAS_FIRST_EXTERNAL_PEDAL) && (index < FAS_NUMBER_OF_PARAMETERS)) {
     String msg = "";
@@ -759,22 +770,22 @@ void MD_FAS_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates th
 }
 
 
-uint16_t MD_FAS_class::number_of_parameters() {
+FLASHMEM uint16_t MD_FAS_class::number_of_parameters() {
   return FAS_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_FAS_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_FAS_class::number_of_values(uint16_t parameter) {
   if (parameter < FAS_FIRST_EXTERNAL_PEDAL) return 2; // IA or XY switch
   if (parameter < FAS_NUMBER_OF_PARAMETERS) return 128; // External pedal
   return 0; // Out of range
 }
 
-uint16_t MD_FAS_class::number_of_parbank_parameters() {
+FLASHMEM uint16_t MD_FAS_class::number_of_parbank_parameters() {
   if (enabled == DEVICE_DETECT) return number_of_active_blocks * 2; // Every active block has a bypass and an XY state
   else return FAS_NUMBER_OF_PARAMETERS; // When not connected bi-directionally, just show all the parameters
 }
 
-uint16_t MD_FAS_class::get_parbank_parameter_id(uint16_t par_number) {
+FLASHMEM uint16_t MD_FAS_class::get_parbank_parameter_id(uint16_t par_number) {
   //Find the correct parameter number for this parameter number
   if (enabled == DEVICE_DETECT) {
     uint8_t active_fx_number = 0;
@@ -791,17 +802,17 @@ uint16_t MD_FAS_class::get_parbank_parameter_id(uint16_t par_number) {
   }
 }
 
-void MD_FAS_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_FAS_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal == 0) return;
-  LCD_show_bar(0, value); // Show it on the main display
-  MIDI_send_CC(FAS_FIRST_EXTERNAL_PEDAL_CC + exp_pedal - 1, value, MIDI_channel, MIDI_port);
+  LCD_show_bar(0, value, 0); // Show it on the main display
+  MIDI_send_CC(FAS_FIRST_EXTERNAL_PEDAL_CC + exp_pedal - 1, value, MIDI_channel, MIDI_out_port);
   check_update_label(sw, value);
   LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
   update_page = REFRESH_PAGE; // To update the other switch states, we re-load the current page
 }
 
-bool MD_FAS_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_FAS_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal > 0) {
     uint8_t number = FAS_FIRST_EXTERNAL_PEDAL + exp_pedal - 1;
@@ -816,27 +827,35 @@ bool MD_FAS_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
 }
 // ********************************* Section 6: FAS scene and looper control ********************************************
 
-void MD_FAS_class::get_snapscene_title(uint8_t number, String & Output) {
+FLASHMEM void MD_FAS_class::get_snapscene_title(uint8_t number, String & Output) {
   Output += "SCENE " + String(number);
 }
 
-/*bool MD_FAS_class::request_snapscene_name(uint8_t sw, uint8_t number) {
+/*FLASHMEM bool MD_FAS_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3) {
 
   return true;
   }*/
 
 
-/*void MD_FAS_class::set_snapscene_name(uint8_t number, String &Output) {
+/*FLASHMEM void MD_FAS_class::set_snapscene_name(uint8_t number, String &Output) {
   Output += "SCENE " + String(number);
   }*/
 
-void MD_FAS_class::set_snapscene(uint8_t sw, uint8_t number) {
+FLASHMEM void MD_FAS_class::set_snapscene(uint8_t sw, uint8_t number) {
   if (!is_on) unmute();
+  if ((number < 1) || (number > 8)) return;
   current_snapscene = number;
-  MIDI_send_CC(FAS_SCENE_SELECT_CC, number - 1, MIDI_channel, MIDI_port);
+  MIDI_send_CC(FAS_SCENE_SELECT_CC, number - 1, MIDI_channel, MIDI_out_port);
+  MIDI_send_current_snapscene(my_device_number, current_snapscene);
 }
 
-bool MD_FAS_class::looper_active() { // Is there a way to detect if the current patch contains a looper block?
+FLASHMEM void MD_FAS_class::show_snapscene(uint8_t  number) {
+  if ((number < 1) || (number > 8)) return;
+  if (number == current_snapscene) return;
+  current_snapscene = number;
+}
+
+FLASHMEM bool MD_FAS_class::looper_active() { // Is there a way to detect if the current patch contains a looper block?
   return looper_block_detected;
 }
 
@@ -907,23 +926,23 @@ const uint8_t AXEFX2_LOOPER_NUMBER_OF_CCS = sizeof(AXEFX2_looper_cc) / sizeof(AX
 
 // The Axe-Fx III does not have pre-set MIDI CCs. These can be selected in the MIDI menu.
 
-void MD_FAS_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM void MD_FAS_class::send_looper_cmd(uint8_t cmd) {
   // Execute commands for looper of the AxeFX2 and up, FX8 and AX8
   if (model_number >= FAS_MODEL_AF2) {
     if (cmd < AXEFX2_LOOPER_NUMBER_OF_CCS) {
-      if (AXEFX2_looper_cc[cmd].cc > 0) MIDI_send_CC(AXEFX2_looper_cc[cmd].cc, AXEFX2_looper_cc[cmd].value, MIDI_channel, MIDI_port);
+      if (AXEFX2_looper_cc[cmd].cc > 0) MIDI_send_CC(AXEFX2_looper_cc[cmd].cc, AXEFX2_looper_cc[cmd].value, MIDI_channel, MIDI_out_port);
     }
   }
   // Execute commands for looper 1 of the AxeFX Ultra if looper_pre is on
   if ((model_number == FAS_MODEL_ULTRA) && (looper_pre)) {
     if (cmd < AXEFXU_LOOPER1_NUMBER_OF_CCS) {
-      if (FAS_Ultra_looper1_cc[cmd].cc > 0) MIDI_send_CC(FAS_Ultra_looper1_cc[cmd].cc, FAS_Ultra_looper1_cc[cmd].value, MIDI_channel, MIDI_port);
+      if (FAS_Ultra_looper1_cc[cmd].cc > 0) MIDI_send_CC(FAS_Ultra_looper1_cc[cmd].cc, FAS_Ultra_looper1_cc[cmd].value, MIDI_channel, MIDI_out_port);
     }
   }
   // Execute commands for looper 2 of the AxeFX Ultra if looper_pre is off
   if ((model_number == FAS_MODEL_ULTRA) && (!looper_pre)) {
     if (cmd < AXEFXU_LOOPER2_NUMBER_OF_CCS) {
-      if (FAS_Ultra_looper2_cc[cmd].cc > 0) MIDI_send_CC(FAS_Ultra_looper2_cc[cmd].cc, FAS_Ultra_looper2_cc[cmd].value, MIDI_channel, MIDI_port);
+      if (FAS_Ultra_looper2_cc[cmd].cc > 0) MIDI_send_CC(FAS_Ultra_looper2_cc[cmd].cc, FAS_Ultra_looper2_cc[cmd].value, MIDI_channel, MIDI_out_port);
     }
   }
 }

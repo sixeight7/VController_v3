@@ -40,6 +40,7 @@ public:
     virtual QString patchFileHeader();
     virtual QString DefaultPatchFileName(int index);
     QString numConv(int number) const;
+    virtual uint16_t patch_min_as_stored_on_VC();
 
     // Variables
     QString device_name;
@@ -48,7 +49,6 @@ public:
     uint16_t patch_max;
     uint16_t patch_min;
     uint16_t patch_max_as_stored_on_VC = 0;
-    uint16_t patch_min_as_stored_on_VC = 0;
 
     uint8_t my_LED_colour;
     uint8_t MIDI_channel;
@@ -61,6 +61,9 @@ public:
     uint8_t my_device_page3;
     uint8_t my_device_page4;
     uint8_t enabled;
+
+protected:
+    uint8_t MIDI_port_number(uint8_t port);
 
 #define NUMBER_OF_DEVICE_SETTINGS 11
 };

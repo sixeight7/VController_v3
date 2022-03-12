@@ -5,6 +5,7 @@
 #include "vcdevices.h"
 #include <QDebug>
 #include <QThread>
+#include <QSettings>
 
 Midi::Midi(QObject *parent) : QObject(parent),
     _midiIn(new RtMidiIn), _midiOut(new RtMidiOut)
@@ -13,7 +14,6 @@ Midi::Midi(QObject *parent) : QObject(parent),
 }
 
 void Midi::openMidiIn(QString port) {
-    //std::cout << "Try to connect to port" ;
     unsigned int numInPorts = _midiIn->getPortCount();
     if(_midiIn && !_midiIn->isPortOpen() && (numInPorts > 0)) {
         int port_number = 255;
@@ -22,17 +22,17 @@ void Midi::openMidiIn(QString port) {
                 port_number = i;
         }
         if (port_number == 255) {
-            std::cout << "Midi in port not available" ;
+            std::cout << "Midi in port not available" << std::endl;
             return;
         }
+        _midiIn->closePort();
         _midiIn->openPort(port_number);
         _midiIn->ignoreTypes( false, true, true ); // Ignore timing and active sensing, but not sysex
-        std::cout << "Connected to MIDI in port" << _midiIn->getPortName();
+        std::cout << "Connected to MIDI in port " << _midiIn->getPortName(port_number) << std::endl;
     }
 }
 
 void Midi::openMidiOut(QString port){
-    //std::cout << "Try to connect to port" ;
     unsigned int numOutPorts = _midiOut->getPortCount();
     if(_midiOut && !_midiOut->isPortOpen() && (numOutPorts > 0)) {
         int port_number = 255;
@@ -41,12 +41,72 @@ void Midi::openMidiOut(QString port){
                 port_number = i;
         }
         if (port_number == 255) {
-            std::cout << "Midi in port not available" ;
+            std::cout << "Midi out port not available" << std::endl;
             return;
         }
+        _midiOut->closePort();
         _midiOut->openPort(port_number);
-        std::cout << "Connected to MIDI out port" << _midiOut->getPortName();
+        std::cout << "Connected to MIDI out port " << _midiOut->getPortName(port_number) << std::endl;
     }
+}
+
+void Midi::checkForVCmidi()
+{
+    std::string portName;
+    unsigned int numInPorts = _midiIn->getPortCount();
+    if(_midiIn  && (numInPorts > 0)) {
+        for ( unsigned int i = 0; i < numInPorts; i++ )
+        {
+            portName = _midiIn->getPortName(i);
+            if (portName == "VC MIDI") {
+                QSettings appSettings;
+                appSettings.beginGroup("Midi");
+                appSettings.setValue("midiInPort", QString::fromStdString(portName));
+                appSettings.endGroup();
+                //openMidiIn(QString::fromStdString(portName));
+            }
+        }
+    }
+    unsigned int numOutPorts = _midiOut->getPortCount();
+    if(_midiOut  && (numOutPorts > 0)) {
+        for ( unsigned int i = 0; i < numOutPorts; i++ )
+        {
+            portName = _midiOut->getPortName(i);
+            if (portName == "VC MIDI") {
+                QSettings appSettings;
+                appSettings.beginGroup("Midi");
+                appSettings.setValue("midiOutPort", QString::fromStdString(portName));
+                appSettings.endGroup();
+                //openMidiOut(QString::fromStdString(portName));
+            }
+        }
+    }
+}
+
+bool Midi::checkMidiPortStillAvailable(QString inPort, QString outPort)
+{
+    bool inPortAvailable = false;
+    bool outPortAvailable = false;
+    std::string portName;
+    unsigned int numInPorts = _midiIn->getPortCount();
+    if (_midiIn  && (numInPorts > 0)) {
+        for ( unsigned int i = 0; i < numInPorts; i++ )
+        {
+            portName = _midiIn->getPortName(i);
+            if (QString::fromStdString(portName) == inPort) inPortAvailable = true;
+        }
+    }
+    if (!inPortAvailable) _midiIn->closePort();
+    unsigned int numOutPorts = _midiOut->getPortCount();
+    if (_midiOut  && (numOutPorts > 0)) {
+        for ( unsigned int i = 0; i < numOutPorts; i++ )
+        {
+            portName = _midiOut->getPortName(i);
+            if (QString::fromStdString(portName) == outPort) outPortAvailable = true;
+        }
+    }
+    if (!outPortAvailable) _midiOut->closePort();
+    return (inPortAvailable & outPortAvailable);
 }
 
 QStringList Midi::fillMidiInPortItems() { // Will return a list of the input ports
@@ -66,13 +126,13 @@ QStringList Midi::fillMidiInPortItems() { // Will return a list of the input por
         }
         catch ( RtMidiError &error ) {
           error.printMessage();
-          std::cout<<"Error getting input ports."<<std::endl;
+          std::cout<<"Error getting input ports.\n" << std::endl;
         }
-        std::cout << "Input Port #" << i+1 << ": " << portName << '\n';
+        std::cout << "Input Port #" << i+1 << ": " << portName << std::endl;
      }
 
   } else {
-      std::cout<<"No input ports available."<<std::endl;
+      std::cout << "No input ports available." << std::endl;
   }
   return items;
 }
@@ -93,20 +153,20 @@ QStringList Midi::fillMidiOutPortItems() { // Will return a list of the output p
         }
         catch ( RtMidiError &error ) {
           error.printMessage();
-          std::cout<<"Error getting Output ports."<<std::endl;
+          std::cout << "Error getting Output ports." << std::endl;
         }
-        std::cout << "Output Port #" << i+1 << ": " << portName << '\n';
+        std::cout << "Output Port #" << i+1 << ": " << portName << std::endl;
      }
 
   } else {
-      std::cout<<"No Output ports available."<<std::endl;
+      std::cout << "No Output ports available." << std::endl;
   }
   return items;
 }
 
 void Midi::sendSysexCommand(int size, ...) {
     if (_midiOut && !_midiOut->isPortOpen()) {
-        std::cout<<"No Output port open."<<std::endl;
+        std::cout << "No Output port open." << std::endl;
         return; // Exit if port is not open.
     }
 
@@ -117,7 +177,7 @@ void Midi::sendSysexCommand(int size, ...) {
     message.push_back( 0xF0 );
     message.push_back( VC_MANUFACTURING_ID );
     message.push_back( VC_FAMILY_CODE );
-    message.push_back( VC_MODEL_NUMBER );
+    message.push_back( VCmidi_model_number );
     message.push_back( VC_DEVICE_ID );
     va_start(data, size);
     for(int i = 0; i < size; i++)
@@ -148,12 +208,14 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
     if ((message->at(0) == 0xF0) && (message->at(1) == 0x7E) && (message->at(2) == VC_DEVICE_ID) && (message->at(3) == 0x06)
             && (message->at(4) == 0x02) && (message->at(5) == VC_MANUFACTURING_ID) && (message->at(7) == VC_FAMILY_CODE)) {
         emit VControllerDetected(message->at(9), message->at(10), message->at(11), message->at(12));
-        qDebug() << "VController detected";
+        if (message->at(9) == 0x01) qDebug() << "VController detected";
+        if (message->at(9) == 0x02) qDebug() << "VC-mini detected";
+        if (message->at(9) == 0x03) qDebug() << "VC-touch detected";
     }
 
     // Check if sysexmessage is from the VController
     if ((message->at(0) == 0xF0) && (message->at(1) == VC_MANUFACTURING_ID) && (message->at(2) == VC_FAMILY_CODE) &&
-            (message->at(3) == VC_MODEL_NUMBER) && (message->at(4) == VC_DEVICE_ID)) {
+            (message->at(3) == VCmidi_model_number) && (message->at(4) == VC_DEVICE_ID)) {
         MIDI_debug_data(message, true);
         switch (message->at(5)) { // Check for the sysex command
         case VC_REMOTE_UPDATE_DISPLAY:
@@ -194,6 +256,9 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
             break;
         case VC_SET_DEVICE_PATCH:
             MIDI_editor_receive_device_patch(message);
+            break;
+        case VC_INITIALIZE_DEVICE_PATCH:
+            MIDI_editor_receive_initialize_device_patch(message);
             break;
         case VC_FINISH_DEVICE_PATCH_DUMP:
             MIDI_editor_receive_finish_device_patch_dump(message);
@@ -284,7 +349,7 @@ void Midi::MIDI_editor_send_finish_commands_dump()
     message.push_back( 0xF0 );
     message.push_back( VC_MANUFACTURING_ID );
     message.push_back( VC_FAMILY_CODE );
-    message.push_back( VC_MODEL_NUMBER );
+    message.push_back( VCmidi_model_number );
     message.push_back( VC_DEVICE_ID );
     message.push_back( VC_FINISH_COMMANDS_DUMP );
     message.push_back((uint8_t)((Number_of_pages >> 7) & 0x7F));
@@ -319,7 +384,7 @@ void Midi::MIDI_send_device_patch(uint16_t patch_no)
     message.push_back( 0xF0 );
     message.push_back( VC_MANUFACTURING_ID );
     message.push_back( VC_FAMILY_CODE );
-    message.push_back( VC_MODEL_NUMBER );
+    message.push_back( VCmidi_model_number );
     message.push_back( VC_DEVICE_ID );
     message.push_back( VC_SET_DEVICE_PATCH);
     message.push_back( patch_no >> 7 );
@@ -352,6 +417,26 @@ void Midi::MIDI_send_device_patch(uint16_t patch_no)
     _midiOut->sendMessage(&message);
     MIDI_debug_data(&message, false);
     QThread::msleep(10);
+}
+
+void Midi::MIDI_send_initialize_device_patch(uint16_t patch_no)
+{
+    if (_midiOut && !_midiOut->isPortOpen()) return; // Exit if port is not open.
+
+    std::vector<unsigned char> message;
+    message.clear();
+    message.push_back( 0xF0 );
+    message.push_back( VC_MANUFACTURING_ID );
+    message.push_back( VC_FAMILY_CODE );
+    message.push_back( VCmidi_model_number );
+    message.push_back( VC_DEVICE_ID );
+    message.push_back( VC_INITIALIZE_DEVICE_PATCH);
+    message.push_back( patch_no >> 7 );
+    message.push_back( patch_no & 0x7F );
+    message.push_back( 0xF7 );
+    _midiOut->sendMessage(&message);
+    MIDI_debug_data(&message, false);
+    QThread::msleep(1);
 }
 
 void Midi::MIDI_editor_finish_device_patch_dump()
@@ -395,7 +480,7 @@ void Midi::MIDI_send_data(uint8_t cmd, uint8_t *my_data, uint16_t my_len)
     message.push_back( 0xF0 );
     message.push_back( VC_MANUFACTURING_ID );
     message.push_back( VC_FAMILY_CODE );
-    message.push_back( VC_MODEL_NUMBER );
+    message.push_back( VCmidi_model_number );
     message.push_back( VC_DEVICE_ID );
     message.push_back( cmd );
     for (uint8_t i = 0; i < my_len; i++) {
@@ -419,9 +504,11 @@ void Midi::MIDI_read_data(std::vector<unsigned char> *message, uint8_t *my_data,
 void Midi::MIDI_debug_data(std::vector<unsigned char> *message, bool isMidiIn)
 {
     QString messageString;
-    if (isMidiIn) messageString = "In: ";
+    if (isMidiIn) messageString = "In: (";
     else messageString = "Out:";
     int size = message->size();
+    messageString.append(QString::number(size));
+    messageString.append(" bytes) ");
     for (int i = 0; i < size; i++) {
         int n = ((int)message->at(i));					// convert std::vector to QString
         QString hex = QString::number(n, 16).toUpper();
@@ -553,6 +640,14 @@ void Midi::MIDI_editor_receive_device_patch(std::vector<unsigned char> *message)
     emit updatePatchListBox();
 }
 
+void Midi::MIDI_editor_receive_initialize_device_patch(std::vector<unsigned char> *message)
+{
+    int patch_index = (message->at(6) << 7) + message->at(7);
+    InitializePatch(patch_index);
+    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving device patches");
+    emit updateProgressBar(patch_index);
+}
+
 void Midi::MIDI_editor_receive_finish_device_patch_dump(std::vector<unsigned char> *message)
 {
     emit closeProgressBar("Patch download succesful");
@@ -587,5 +682,12 @@ void Midi::WritePatch(int number, QByteArray patch)
     if (patch.size() > VC_PATCH_SIZE) return;
     for (int i = 0; i < VC_PATCH_SIZE; i++) {
         Device_patches[number][i] = patch[i];
+    }
+}
+
+void Midi::InitializePatch(int number)
+{
+    for (int i = 0; i < VC_PATCH_SIZE; i++) {
+        Device_patches[number][i] = 0;
     }
 }

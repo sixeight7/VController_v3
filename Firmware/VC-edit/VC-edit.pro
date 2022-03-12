@@ -21,10 +21,6 @@
 ##
 #############################################################################
 
-# Compiling options are set in Headers/VController/config.h
-# To compile the editor for the full VController, add // before the line #define IS_VCMINI
-# To compile the editor for the VC-mini, remove the // before the line //#define IS_VCMINI
-
 QT       += core gui
 
 QMAKE_CXXFLAGS += -std=c++11
@@ -37,7 +33,10 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
     RtMidi.cpp\
+    customdisplaylabel.cpp \
+    customled.cpp \
     customlineedit.cpp \
+    customswitch.cpp \
     mainwindow.cpp \
     midi.cpp \
     scenedialog.cpp \
@@ -74,7 +73,10 @@ SOURCES += main.cpp\
     devices/mg300.cpp
 
 HEADERS  += RtMidi.h \
+    customdisplaylabel.h \
+    customled.h \
     customlineedit.h \
+    customswitch.h \
     mainwindow.h \
     midi.h \
     scenedialog.h \
@@ -117,9 +119,7 @@ FORMS += \
     vceditsettingsdialog.ui \
     commandeditdialog.ui \
     mainwindow_VC-full.ui \
-    aboutdialog_VC-full.ui \
-    aboutdialog_VC-mini.ui \
-    mainwindow_VC-mini.ui
+    aboutdialog_VC-full.ui
 
 RESOURCES += \
     myresources.qrc

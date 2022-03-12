@@ -14,6 +14,24 @@
 
 // ********************************* Section 1: Switch Action Trigger and Command Lookup ********************************************
 
+#ifdef CONFIG_CUSTOM
+#define PAGE_KPA_LOOPER PAGE_CUSTOM_KPA_LOOPER
+#define PAGE_FULL_LOOPER PAGE_CUSTOM_FULL_LOOPER
+#else
+#ifdef CONFIG_VCTOUCH
+#define PAGE_KPA_LOOPER PAGE_VCTOUCH_KPA_LOOPER
+#define PAGE_FULL_LOOPER PAGE_VCTOUCH_FULL_LOOPER
+#else
+#ifdef CONFIG_VCMINI
+#define PAGE_KPA_LOOPER PAGE_VCMINI_KPA_LOOPER
+#define PAGE_FULL_LOOPER PAGE_VCMINI_FULL_LOOPER
+#else
+#define PAGE_KPA_LOOPER PAGE_VC_KPA_LOOPER
+#define PAGE_FULL_LOOPER PAGE_VC_FULL_LOOPER
+#endif
+#endif
+#endif
+
 bool updown_direction_can_change;
 bool master_expr_from_cc = false;
 
@@ -480,10 +498,15 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if (SC_switch_is_expr_pedal()) SCO_move_master_exp_pedal(Sw, Dev);
         break;
       case SNAPSCENE:
-        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_is_expr_pedal()) { // Is used when controlling snapscene via MIDI CC command
+          Device[Dev]->set_snapscene(Sw, Expr_ped_value + 1);
+          update_page = REFRESH_PAGE;
+          switch_controlled_by_master_exp_pedal = 0;
+          break;
+        }
         mute_all_but_me(Dev); // mute all the other devices
         if (SC_switch_triggered_by_PC()) {
-          Device[Dev]->set_snapscene(Sw, PC_value);
+          Device[Dev]->set_snapscene(Sw, PC_value + 1);
           update_page = REFRESH_PAGE;
           switch_controlled_by_master_exp_pedal = 0;
           break;
@@ -498,6 +521,7 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) break;
         Device[Dev]->looper_press(Data1, true);
+        MIDI_send_looper_state(Dev, Data1);
         update_page = REFRESH_PAGE;
         switch_controlled_by_master_exp_pedal = 0;
         break;
@@ -808,8 +832,8 @@ bool SCO_update_parameter_state_exp_pedal(uint8_t Sw, uint16_t _min, uint16_t _m
         isnew = true;
       }
     }
-    LCD_show_bar(0, Expr_ped_value); // Show it on the main display
-    if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show the bar on the individual display when using the MEP
+    LCD_show_bar(0, Expr_ped_value, 0); // Show it on the main display
+    if (switch_controlled_by_master_exp_pedal > 0) LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value, 0); // Show the bar on the individual display when using the MEP
     return isnew;
   }
   return true;
@@ -920,9 +944,9 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
         MIDI_remember_CC(CC_number, val, channel, port);
         SP[Sw].Target_byte1 = val;
       }
-      LCD_show_bar(0, Expr_ped_value); // Show it on the main display
+      LCD_show_bar(0, Expr_ped_value, 0); // Show it on the main display
       if (switch_controlled_by_master_exp_pedal > 0) {
-        LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value); // Show it on the individual display
+        LCD_show_bar(switch_controlled_by_master_exp_pedal, Expr_ped_value, 0); // Show it on the individual display
         update_lcd = switch_controlled_by_master_exp_pedal;
       }
 
@@ -1021,7 +1045,7 @@ void SCO_select_page(uint8_t new_page) {
     my_looper_lcd = 0;
     update_page = RELOAD_PAGE;
     update_main_lcd = true;
-    SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_HOLD); // So no release, long press or hold commands will be triggered on the new page by the switch that is still pressed now
+    SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_HOLD); // So no release or hold commands will be triggered on the new page by the switch that is still pressed now
     if (Current_page != PAGE_MENU) LCD_show_page_name(); // Temporary show page name on main display
     DEBUGMAIN("*** SCO_select_page: " + String(new_page));
   }
@@ -1124,19 +1148,6 @@ void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page
 
 void SCO_page_up_down(signed int delta) {
   uint8_t New_page = update_encoder_value(delta, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
-  /*uint8_t New_page = 0;
-    if (delta > 0) {
-    for (uint8_t i = 0; i < delta; i++) {
-      if (Current_page < (Number_of_pages - 1)) New_page = Current_page + 1;
-      else New_page = LOWEST_USER_PAGE;
-    }
-    }
-    if (delta < 0) {
-    for (uint8_t i = 0; i < abs(delta); i++) {
-      if (Current_page > LOWEST_USER_PAGE) New_page = Current_page - 1;
-      else New_page = Number_of_pages - 1;
-    }
-    }*/
   SCO_trigger_default_page_cmds(New_page);
   SCO_select_page(New_page);
 }
@@ -1181,6 +1192,7 @@ void SCO_global_tuner_start() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     Device[d]->start_tuner();
   }
+  MIDI_send_tuner_mode();
   update_main_lcd = true;
 }
 
@@ -1190,6 +1202,7 @@ void SCO_global_tuner_stop() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     Device[d]->stop_tuner();
   }
+  MIDI_send_tuner_mode();
   update_main_lcd = true;
 }
 
@@ -1197,8 +1210,9 @@ void SCO_global_tuner_stop() {
 
 // Call global_tap_tempo()
 // We only support bpms from 40 to 250:
-#define MIN_BPM_TIME 240000 // (60.000.000 / 250 bpm)
-#define MAX_BPM_TIME 1500000 // (60.000.000 / 40 bpm)
+#define MIN_BPM 40
+#define MAX_BPM 250
+#define MAX_BPM_TIME 60000000 / MIN_BPM
 #define NUMBER_OF_TAPS 4 // When tapping a new tempo, this is the number of taps that are sent
 uint8_t tap = 0;
 
@@ -1209,6 +1223,8 @@ uint32_t new_time, time_diff, avg_time;
 uint32_t prev_time = 0;
 bool tap_array_full = false;
 bool send_new_bpm_value = false;
+bool tap_tempo_pressed_once = false;
+#define SWITCH_TEMPO_FOLLOW_MODE_TIME 2000000 // Time before switching tap tempo follow mode
 
 #define NUMBER_OF_MIDI_CLOCK_MEMS 10
 uint8_t do_not_tap_port = 255;
@@ -1221,6 +1237,11 @@ bool MIDI_clock_received = false;
 bool update_tempo = false;
 IntervalTimer MIDI_clock_timer;
 uint8_t bpm_LED_tick = 0;
+
+#define NUMBER_OF_BPM_FOLLOW_MEMS 6
+uint32_t tap_follow_mems[NUMBER_OF_BPM_FOLLOW_MEMS];
+uint8_t tap_follow_bpm_index = 0;
+bool tap_follow_buffer_full = false;
 
 void SCO_MIDI_clock_start() {
   long timer_interval = 60000000 / (24 * Setting.Bpm);
@@ -1237,13 +1258,29 @@ void SCO_check_update_tempo() {
     SCO_update_tap_tempo_LED();
     update_tempo = false;
   }
+  if (tap_tempo_pressed_once) {
+    if ((Setting.Follow_tempo_from_G2M > 0) && (micros() > tap_time[0] + SWITCH_TEMPO_FOLLOW_MODE_TIME)) {
+      if (Setting.Follow_tempo_from_G2M == 1) {
+        Setting.Follow_tempo_from_G2M = 2;
+        LCD_show_popup_label("Tempo follow on", ACTION_TIMER_LENGTH);
+      }
+      else {
+        Setting.Follow_tempo_from_G2M = 1;
+        LCD_show_popup_label("Tempo follow off", ACTION_TIMER_LENGTH);
+      }
+      tap_tempo_pressed_once = false;
+    }
+  }
 }
 
 void SCO_MIDI_clock_timer_expired() {
   __disable_irq();
   MIDI_send_clock();
   update_tempo = true;
-  //My_HLX.update_sequencer = true;
+  bpm_LED_tick++;
+  if (bpm_LED_tick >= 24) { // 24 ticks per beat
+    bpm_LED_tick = 0;
+  }
   __enable_irq();
 }
 
@@ -1267,15 +1304,15 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
   prev_time = new_time;
   //DEBUGMSG("*** Tap no:" + String(tap_time_index) + " with difference " + String(time_diff));
 
-  // If time difference between two taps is too short or too long, we will start new tapping sequence
-  if ((time_diff < MIN_BPM_TIME) || (time_diff > MAX_BPM_TIME)) {
+  // If time difference between two taps is too long, we will start new tapping sequence
+  if (time_diff > MAX_BPM_TIME) {
     tap_time_index = 1;
     tap_array_full = false;
     tap_time[0] = new_time;
+    tap_tempo_pressed_once = true;
     //DEBUGMSG("!!! STARTED NEW TAP SEQUENCE");
   }
   else {
-
     //Calculate the average time depending on if the tap_time array is full or not
     if (tap_array_full) {
       avg_time = (new_time - tap_time[tap_time_index]) / (NUMBER_OF_TAPMEMS);
@@ -1286,17 +1323,10 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
 
     // Store new time in memory
     tap_time[tap_time_index] = new_time;
-    //DEBUGMSG("Wrote tap_time[" + String(tap_time_index) + "] with time " + String(new_time));
-
+    
     // Calculate the bpm
-    Setting.Bpm = ((60000000 + (avg_time >> 1)) / avg_time); // Calculate the bpm
-    //EEPROM.write(EEPROM_bpm, bpm);  // Store it in EEPROM
-    //DEBUGMSG("avg time:" + String(avg_time) + " => bpm: " + String(bpm));
-
-    // Send it to the devices
-    for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
-      Device[d]->set_bpm();
-    }
+    uint16_t new_bpm = ((60000000 + (avg_time >> 1)) / avg_time); // Calculate the bpm
+    SCO_update_bpm(new_bpm);
 
     // Move to the next memory slot
     tap_time_index++;
@@ -1304,6 +1334,7 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
       tap_time_index = 0;
       tap_array_full = true; // So we need to calculate the average tap time in a different way
     }
+    tap_tempo_pressed_once = false;
   }
   if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
   else update_main_lcd = true;
@@ -1313,11 +1344,27 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
   SCO_delay_receiving_MIDI_clock();
   SCO_MIDI_clock_update();
   SCO_reset_tap_tempo_LED(); // Reset the LED state, so it will flash in time with the new tempo
+  reset_tempo_following();
+}
+
+bool SCO_update_bpm(uint8_t new_bpm) {
+  if (new_bpm > MAX_BPM) new_bpm = MAX_BPM;
+  if (Setting.Bpm == new_bpm) return false;
+  Setting.Bpm = new_bpm;
+
+  // Send it to the devices
+  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    Device[d]->set_bpm();
+  }
+  if (VC_device_connected) MIDI_send_current_bpm();
+  EEPROM_update_when_quiet();
+  return true;
 }
 
 void SCO_set_global_tempo_press(uint8_t new_bpm) {
-  if (new_bpm < 40) return;
-  if (new_bpm > 250) return;
+  if (new_bpm < MIN_BPM) return;
+  if (new_bpm > MAX_BPM) return;
+  if (new_bpm == Setting.Bpm) return;
   Setting.Bpm = new_bpm;
   // Send it to the devices
   send_new_bpm_value = true; // Will delay sending the data, but also hangs the VC-mini when using the encoder for tempo change
@@ -1328,14 +1375,13 @@ void SCO_set_global_tempo_press(uint8_t new_bpm) {
   do_not_tap_port = 255;
   SCO_delay_receiving_MIDI_clock();
   SCO_MIDI_clock_update();
+  reset_tempo_following();
   update_page = REFRESH_PAGE; //Refresh the page, so any present tap tempo button display will also be updated.
 }
 
 void SCO_set_global_tempo_with_encoder(signed int delta) {
   if (delta > 15) delta = 15;
-  uint8_t new_bpm = update_encoder_value(delta, Setting.Bpm, 40, 240);
-  //if (new_bpm > 240) new_bpm = 240;
-  //if (new_bpm < 40) new_bpm = 40;
+  uint8_t new_bpm = update_encoder_value(delta, Setting.Bpm, MIN_BPM, MAX_BPM);
   SCO_set_global_tempo_press(new_bpm);
   if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Set tempo: " + String(Setting.Bpm), ACTION_TIMER_LENGTH);
 }
@@ -1346,12 +1392,14 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
   uint32_t current_time = micros();
 
   if (!MIDI_clock_received) {
-    DEBUGMSG("Clock received from port " + String(Current_MIDI_port >> 4));
+    DEBUGMSG("Clock received from port " + String(Current_MIDI_in_port >> 4));
   }
+
+  if (millis() < ignore_midi_clock_timer) return;
+    
 
   if (previous_midi_clock_time > 0) {
     if (current_time - previous_midi_clock_time < 9999) return; // time too short
-    if (millis() < ignore_midi_clock_timer) return;
     uint16_t bpm_course = 25000000 / (current_time - previous_midi_clock_time);
     uint8_t bpm_new = (bpm_course + 5) / 10; // Calculate a correct average
     MIDI_CLOCK_BPM_MEMS[MIDI_clock_bpm_mem_index] = bpm_new;
@@ -1359,27 +1407,27 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
     if (MIDI_clock_bpm_mem_index >= NUMBER_OF_MIDI_CLOCK_MEMS) {
       MIDI_clock_bpm_mem_index = 0;
       uint16_t total = 0;
-      /*for (uint8_t i = 0; i < NUMBER_OF_TAPMEMS; i++) {
-        total += MIDI_CLOCK_BPM_MEMS[i];
-      }
-      */
+      
       uint8_t bpm = MIDI_CLOCK_BPM_MEMS[0];
       total = bpm;
       uint8_t dev = bpm / 5;
       for (uint8_t i = 1; i < NUMBER_OF_MIDI_CLOCK_MEMS; i++) {
-        if ((MIDI_CLOCK_BPM_MEMS[i] < bpm - dev) || (MIDI_CLOCK_BPM_MEMS[i] > bpm + dev)) return; // Quit if tempo deviates too much
+        if ((MIDI_CLOCK_BPM_MEMS[i] < bpm - dev) || (MIDI_CLOCK_BPM_MEMS[i] > bpm + dev)) {
+          DEBUGMSG("Too much deviation in MIDI clock");
+          return; // Quit if tempo deviates too much
+        }
         bpm = MIDI_CLOCK_BPM_MEMS[i];
         total += bpm;
       }
       uint8_t avg_bpm = total / NUMBER_OF_MIDI_CLOCK_MEMS;
       if ((avg_bpm < Setting.Bpm - 1) || (avg_bpm > Setting.Bpm + 1)) { // Check if tempo has changed
-      //if (avg_bpm != Setting.Bpm) {
-        Setting.Bpm = avg_bpm; // Smooth out the values, so they don't jitter
+        Setting.Bpm = avg_bpm;
         SCO_MIDI_clock_update();
         MIDI_clock_received = true;
         for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
-          if (Device[d]->MIDI_port != port) Device[d]->set_bpm();
+          if (Device[d]->MIDI_out_port != port) Device[d]->set_bpm();
         }
+        if (VC_device_connected) MIDI_send_current_bpm();
         tap = 0;
         do_not_tap_port = port;
         update_page = REFRESH_PAGE; //Refresh the page, so any present tap tempo button display will also be updated.
@@ -1396,20 +1444,15 @@ void SCO_delay_receiving_MIDI_clock() {
 
 void SCO_update_tap_tempo_LED() {
 
-  // Check if timer needs to be set
-  bpm_LED_tick++;
-  if (bpm_LED_tick >= 24) { // 24 ticks per beat
-    bpm_LED_tick = 0;
-  }
-
   // If this is the first tick
-  if (bpm_LED_tick == 0) {
+  if ((bpm_LED_tick < 6) && (global_tap_tempo_LED == 0)) {
     // Check if we lost the bpm clock
     if (micros() - previous_midi_clock_time > MAX_BPM_TIME) MIDI_clock_received = false;
 
-    if (!Setting.Hide_tap_tempo_LED) {
-      if (!MIDI_clock_received) global_tap_tempo_LED = Setting.LED_bpm_colour;   // Turn the LED on
-      else global_tap_tempo_LED = Setting.LED_bpm_synced_colour;
+    if (!Setting.Hide_tap_tempo_LED) {// Turn the LED on
+      if (MIDI_clock_received) global_tap_tempo_LED = Setting.LED_bpm_synced_colour;
+      else if (Setting.Follow_tempo_from_G2M < 2) global_tap_tempo_LED = Setting.LED_bpm_colour;
+      else global_tap_tempo_LED = Setting.LED_bpm_follow_colour;
       update_LEDS = true;
     }
 
@@ -1418,6 +1461,8 @@ void SCO_update_tap_tempo_LED() {
       for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
         Device[d]->set_bpm();
       }
+      if (VC_device_connected) MIDI_send_current_bpm();
+      EEPROM_update_when_quiet();
     }
 
     if (tap < NUMBER_OF_TAPS) { // Send automatic cc tap message
@@ -1427,7 +1472,7 @@ void SCO_update_tap_tempo_LED() {
     else do_not_tap_port = 255;
   }
 
-  if ((bpm_LED_tick == 6) && (!Setting.Hide_tap_tempo_LED)) { // The sixth tick is at a quarter of 24 ticks
+  if ((bpm_LED_tick >= 6) && (global_tap_tempo_LED != 0) && (!Setting.Hide_tap_tempo_LED)) { // The sixth tick is at a quarter of 24 ticks
     global_tap_tempo_LED = 0;  // Turn the LED off
     update_LEDS = true;
   }
@@ -1443,8 +1488,68 @@ void SCO_retap_tempo() { // Retap the tempo on all external devices (that suppor
 
 void SCO_tap_on_device() {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) { // Tap this tempo on the device
-    if (Device[d]->MIDI_port != do_not_tap_port) Device[d]->bpm_tap();
+    if (Device[d]->MIDI_out_port != do_not_tap_port) Device[d]->bpm_tap();
   }
+}
+
+// Automatic tempo following from Guitar2MIDI
+uint32_t prev_note_on_time = 0;
+uint32_t start_measurement_time = 0;
+uint8_t number_of_intervals = 0;
+#define MSEC_TIME_BETWEEN_CHORD_PLAYING 100000
+
+void SCO_tempo_following_receive_note_on(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
+  if (Setting.Follow_tempo_from_G2M != 2) return;
+  if (velocity == 0) return; // filter out note off
+  if ((channel >= Setting.Bass_mode_G2M_channel) && (channel <= Setting.Bass_mode_G2M_channel + 6)) {
+    // First check if time delta is long enough to make sure we are not strumming
+    uint32_t delta = MIDI_note_on_time - prev_note_on_time;
+    prev_note_on_time = MIDI_note_on_time;
+    if (delta < MSEC_TIME_BETWEEN_CHORD_PLAYING) return;
+
+    // Now calculate the real delta
+    delta = MIDI_note_on_time - start_measurement_time;
+    uint32_t average_delta_from_tempo = 60000000 / Setting.Bpm;
+    if (delta > (average_delta_from_tempo * 17 / 20)) {
+      start_measurement_time = MIDI_note_on_time;
+      number_of_intervals = 0;
+    }
+    number_of_intervals++;
+    /*if (delta < (average_delta_from_tempo * 11 / 10)) {
+      tap_follow_bpm_index = 0; // Restart getting tempo
+      tap_follow_buffer_full = false;
+      }*/
+
+    DEBUGMSG("Delta: " + String(delta) + ", avg delta: " + String(average_delta_from_tempo));
+    if (number_of_intervals > 2) return;
+    if ((delta > (average_delta_from_tempo * 17 / 20)) && (delta < (average_delta_from_tempo * 23 / 20))) {
+      tap_follow_mems[tap_follow_bpm_index] = delta;
+      tap_follow_bpm_index++;
+      if (tap_follow_bpm_index >= NUMBER_OF_BPM_FOLLOW_MEMS) {
+        tap_follow_bpm_index = 0;
+        tap_follow_buffer_full = true;
+      }
+
+      if (tap_follow_buffer_full) {
+        uint32_t total = 0;
+        for (uint8_t i = 0; i < NUMBER_OF_BPM_FOLLOW_MEMS; i++) total += tap_follow_mems[i];
+
+        uint32_t avg_time = total / NUMBER_OF_BPM_FOLLOW_MEMS;
+        //if ((avg_time < (average_delta_from_tempo * 9 / 10)) || (avg_time > (average_delta_from_tempo * 11 / 10))) { // If outside 1% deviation
+        uint8_t new_tempo = 60000000 / avg_time;
+        if (SCO_update_bpm(new_tempo)) {
+          tap = 0;
+          do_not_tap_port = port;
+          update_page = REFRESH_PAGE;
+        }
+      }
+    }
+  }
+}
+
+void reset_tempo_following() {
+  tap_follow_bpm_index = 0;
+  tap_follow_buffer_full = false;
 }
 
 // ********************************* Section 8: Bass Mode (Low/High String Priority) ********************************************
@@ -1519,7 +1624,7 @@ void SCO_bass_mode_check_string() {
   if (lowest_string_played != bass_string) {
     bass_string = lowest_string_played;
     if (Setting.Bass_mode_device < NUMBER_OF_DEVICES)
-      MIDI_send_CC(Setting.Bass_mode_cc_number , bass_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
+      MIDI_send_CC(Setting.Bass_mode_cc_number , bass_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_out_port);
     DEBUGMAIN("Set lowest string: " + String(bass_string));
   }
 }
@@ -1532,7 +1637,7 @@ void SCO_bass_mode_check_high_string() {
   if (highest_string_played != top_string) {
     top_string = highest_string_played;
     if (Setting.Bass_mode_device < NUMBER_OF_DEVICES)
-      MIDI_send_CC(Setting.HNP_mode_cc_number, top_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_port);
+      MIDI_send_CC(Setting.HNP_mode_cc_number, top_string, Device[Setting.Bass_mode_device]->MIDI_channel, Device[Setting.Bass_mode_device]->MIDI_out_port);
     DEBUGMAIN("Set highest string: " + String(top_string));
   }
 }
@@ -1556,14 +1661,21 @@ void SCO_switch_power_off() {
 
 #ifdef POWER_PIN
   // Lower the power pin
+  delay(600);
   digitalWrite(POWER_PIN, LOW);
-  delay(10000); // Wait forever
+  // VController of VC-touch will have switched off, but VC-touch on USB power will not switch off, so we simulate this.
+#ifdef MAIN_TFT_DISPLAY
+  TFT_switch_off_main_window(); // Clear main TFT screen
+#else
+  delay(1000);
+#endif
 
 #else
   // Simulate power down as there is no power pin
   // Here we start a temporary loop to emulate being switched off in case there is no poer switching
   LCD_show_popup_label("", MESSAGE_TIMER_LENGTH); // Clear Bye bye
   LCD_backlight_off();
+#endif
 
   while (switch_pressed == 0) { // Wait for switch being pressed
     main_switch_check();
@@ -1571,14 +1683,8 @@ void SCO_switch_power_off() {
 
   //LCD_backlight_on();
   reboot(); // Do a proper reboot!
-#endif
-}
 
-#ifdef IS_VCMINI
-#define YES_SWITCH 7
-#else
-#define YES_SWITCH 10
-#endif
+}
 
 bool SCO_are_you_sure() {
 
@@ -1588,6 +1694,9 @@ bool SCO_are_you_sure() {
   while (switch_pressed == 0) { // Wait for switch being pressed
     main_switch_check();
     main_MIDI_common(); // So we can press remote as well
+#ifdef IS_VCTOUCH
+    touch.loop();
+#endif
 
     // Update the SP.Pressed variable
     if (switch_pressed > 0) {
@@ -1602,6 +1711,7 @@ bool SCO_are_you_sure() {
   }
   bool pressed_yes = (switch_pressed == YES_SWITCH);
   switch_pressed = 0;
+  multi_switch_booleans = 0;
 
   if (pressed_yes) {
     DEBUGMSG("Pressed YES");
@@ -1617,9 +1727,27 @@ bool SCO_are_you_sure() {
 
 void SCO_move_master_exp_pedal(uint8_t Sw, uint8_t Dev) {
 
+  if (SCO_change_menu_or_parameter_switch()) return;
+
+  // Go to the current device and operate the correct function there
+  if (Dev < NUMBER_OF_DEVICES) {
+    Device[Dev]->move_expression_pedal(Sw, Expr_ped_value, SP[Sw].Exp_pedal);
+  }
+}
+
+void SCO_move_touch_screen_parameter(uint8_t sw, uint8_t val) { // Dragging a touch screen switch takes you here.
+  switch_controlled_by_master_exp_pedal = sw;
+  Expr_ped_value = val;
+  switch_type = SW_TYPE_EXPRESSION_PEDAL;
+  SCO_change_menu_or_parameter_switch();
+}
+
+
+
+bool SCO_change_menu_or_parameter_switch() { // Also used from touch menu
   if (Current_page == PAGE_MENU) { // if menu active, change the selected field
     menu_move_expr_pedal(Expr_ped_value);
-    return;
+    return true;
   }
 
   if (switch_controlled_by_master_exp_pedal > 0) { // If updown or step switch is pressed last, update this switch with the expression pedal
@@ -1635,11 +1763,8 @@ void SCO_move_master_exp_pedal(uint8_t Sw, uint8_t Dev) {
     SP[switch_controlled_by_master_exp_pedal].Latch = prev_latch_type;
     prev_switch_pressed = switch_controlled_by_master_exp_pedal; // To trigger a re-read again
     update_page = REFRESH_FX_ONLY;
-    return;
+    return true;
   }
 
-  // Go to the current device and operate the correct function there
-  if (Dev < NUMBER_OF_DEVICES) {
-    Device[Dev]->move_expression_pedal(Sw, Expr_ped_value, SP[Sw].Exp_pedal);
-  }
+  return false;
 }

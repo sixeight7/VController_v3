@@ -13,11 +13,6 @@
 // Midi IDs for sysex messages of the VController
 #define VC_MANUFACTURING_ID 0x7D // Universal for simple midi device
 #define VC_FAMILY_CODE 0x68 // Family code for Sixeight's products
-#ifndef IS_VCMINI
-#define VC_MODEL_NUMBER 0x01     // The product code for the VController
-#else
-#define VC_MODEL_NUMBER 0x02     // The product code for the VC-mini
-#endif
 #define VC_DEVICE_ID 0x01
 
 // Midi commands for VController
@@ -41,6 +36,7 @@
 #define VC_FINISH_DEVICE_PATCH_DUMP 17
 #define VC_REQUEST_SEQ_PATTERNS 18
 #define VC_SET_SEQ_PATTERN 19
+#define VC_INITIALIZE_DEVICE_PATCH 20
 
 class Midi : public QObject
 {
@@ -50,6 +46,8 @@ public:
     explicit Midi(QObject *parent = 0);
     void openMidiIn(QString port);
     void openMidiOut(QString port);
+    void checkForVCmidi();
+    bool checkMidiPortStillAvailable(QString inPort, QString outPort);
     QStringList fillMidiInPortItems();
     QStringList fillMidiOutPortItems();
     void sendSysexCommand(int size, ...);
@@ -68,6 +66,7 @@ public:
     void MIDI_editor_send_start_commands_dump();
     void MIDI_editor_send_command(uint16_t cmd_no);
     void MIDI_send_device_patch(uint16_t patch_no);
+    void MIDI_send_initialize_device_patch(uint16_t patch_no);
     void MIDI_editor_finish_device_patch_dump();
     void send_universal_identity_request();
 
@@ -99,9 +98,11 @@ private:
     void MIDI_editor_receive_midi_switch_settings(std::vector< unsigned char > *message);
     void MIDI_editor_receive_seq_pattern(std::vector< unsigned char > *message);
     void MIDI_editor_receive_device_patch(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_initialize_device_patch(std::vector< unsigned char > *message);
     void MIDI_editor_receive_finish_device_patch_dump(std::vector< unsigned char > *message);
     QByteArray ReadPatch(int number);
     void WritePatch(int number, QByteArray patch);
+    void InitializePatch(int number);
 };
 
 #endif // MIDI_H

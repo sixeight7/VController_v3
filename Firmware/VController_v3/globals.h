@@ -8,14 +8,14 @@
 // Table below has a copy in VC-edit/Headers/VController/globals.cpp
 
 struct Setting_struct { // All the global settings in one place.
-  bool Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
-  bool Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
-  bool Physical_LEDs; // Does the VController have Physical LEDs
-  bool Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
+  bool    Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
+  bool    Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
+  bool    Physical_LEDs; // Does the VController have Physical LEDs
+  bool    Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
   uint8_t LED_brightness; // The neopixels are very bright. I find setting them to 10 is just fine for an indicator light.
   uint8_t Backlight_brightness; //In case of RGB displays, here the backlight brightness is set
   uint8_t Bpm; // The current tempo
-  bool LED_FX_off_is_dimmed; // When an effect is off, the LED will be dimmed
+  bool    LED_FX_off_is_dimmed; // When an effect is off, the LED will be dimmed
   uint8_t LED_global_colour; // Colour of Global functions
   uint8_t LED_bpm_colour; // Colour of the tempo LED
   uint8_t FX_default_colour; // Default colour
@@ -48,7 +48,21 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Main_display_show_top_right; // What will be shown top right on the main display 
   uint8_t HNP_mode_cc_number; // Addition to Bass mode
   uint8_t CURNUM_action; // What to do when current patch number is pressed again
+  uint8_t MIDI_forward_source_port[3]; // Input ports for MIDI forwarding
+  uint8_t MIDI_forward_dest_port[3]; // Output ports for MIDI forwarding
+  uint8_t MIDI_forward_filter[3]; // Filters for MIDI forwarding
+  uint8_t BLE_mode; // Bluetooth mode
+  uint8_t WIFI_mode; // WIFI mode
+  bool    RTP_enabled; // Status of AppleMIDI / RTPMIDI
+  bool    WIFI_server_enabled; // Enable the WIFI server for OTA updates
+  uint8_t Follow_tempo_from_G2M; // Tempo is updated from playing speed using Guitar2midi
+  uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
+  uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
+  bool    Is_katana50; // 50W version of Katana
 };
+
+#define SETTING_BACKLIGHT_BRIGHTNESS_BYTE 5
+#define SETTING_BPM_BYTE 6
 
 #ifdef IS_VCMINI
 #define DEFAULT_MAIN_DISPLAY_MODE 3
@@ -59,7 +73,7 @@ struct Setting_struct { // All the global settings in one place.
 // Table below has a copy in VC-edit/Sources/VController/globals.cpp 
 const Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
-  false,  // Hide tap tempo LED
+  false, // Hide tap tempo LED
   true,  // Physical_LEDs
   false, // Virtual_LEDs
   10,    // LED_brightness
@@ -98,6 +112,17 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // Main_display_show_top_right: show current device
   16,    // HNP_mode_cc_number
   2,     // CURNUM_action: Tap temp
+  {0, 0, 0}, // Input ports for MIDI forwarding
+  {0, 0, 0}, // Output ports for MIDI forwarding
+  {0, 0, 0}, // Filters for MIDI forwarding
+  1,     // Bluetooth mode
+  1,     // WIFI mode
+  true,  // Status of AppleMIDI / RTPMIDI
+  true,  // Enable the WIFI server for OTA updates
+  1,     // Enable Follow_tempo_from_G2M
+  1,     // Colour of tap tempo LED when tempo following is on: green
+  0,     // Forward midi in both directions
+  false, // 50W version of Katana
 };
 
 Setting_struct Setting;
@@ -141,38 +166,38 @@ struct MIDI_switch_settings_struct {
 MIDI_switch_settings_struct MIDI_switch[TOTAL_NUMBER_OF_SWITCHES + 1];
 
 const MIDI_switch_settings_struct MIDI_switch_default_settings[NUMBER_OF_DEFAULT_MIDI_SWITCHES] = {
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 0
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 1
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 2
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 3
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 4
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 5
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 6
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 7
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 8
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 9
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 10
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 11
-  { MIDI_SWITCH_CC_MOMENTARY, 1, 9, 26 }, // switch 12
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 13
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 14
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 15
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 16
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 17
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 18
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 19
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 20
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 21
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 22
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 23
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 24
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 25
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 26
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 27
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 28
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 29
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 30
-  { MIDI_SWITCH_OFF, 0, 0, 0 }, // switch 31
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 0
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 1
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 2
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 3
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 4
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 5
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 6
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 7
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 8
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 9
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 10
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 11
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 12
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 13
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 14
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 15
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 16
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 17
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 18
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 19
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 20
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 21
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 22
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 23
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 24
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 25
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 26
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 27
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 28
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 29
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 30
+  { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 31
 };
 
 // Switch parameter memory

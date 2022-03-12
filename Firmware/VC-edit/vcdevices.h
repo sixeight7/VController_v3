@@ -59,9 +59,10 @@ private slots:
     void deviceSettingChanged(int, int, int);
     void devicePageSettingChanged(int, int, int);
 
-private:
+public:
     void setup_devices();
 
+private:
     QVector<uint8_t> Patch_copy_buffer;
     bool copyBufferFilled = false;
 
@@ -76,18 +77,20 @@ private:
     };
 
 #define PAGE_SUBLIST 254
+#define MIDI_PORT_SUBLIST1 253
+#define LAST_FIXED_CMD_PAGE_MAX 255 //!!!
 
     const QVector<Device_menu_struct> VCdeviceMenu
     {
         { "Enabled", OPTION, 1, 0, 2, 10 }, // Switch 2
         { "Midi channel", VALUE, 0, 1, 16, 1 }, // Switch 3
-        { "Midi port", OPTION, 23, 0, NUMBER_OF_MIDI_PORTS, 2 }, // Switch 4
+        { "Midi port", OPTION, MIDI_PORT_SUBLIST1, 0, 1, 2 }, // Switch 4
         { "Colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, 0 }, // Switch 9
         { "Is always on", OPTION, 1, 0, 1, 5 }, // Switch 10
-        { "Device page #1", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, 6 },// Switch 5
-        { "Device page #2", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, 7 }, // Switch 6
-        { "Device page #3", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, 8 }, // Switch 7
-        { "Device page #4", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, 9 }, // Switch 8
+        { "Device page #1", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 6 },// Switch 5
+        { "Device page #2", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 7 }, // Switch 6
+        { "Device page #3", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 8 }, // Switch 7
+        { "Device page #4", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 9 }, // Switch 8
     };
 
     const uint16_t NUMBER_OF_DEVICE_MENU_ITEMS = VCdeviceMenu.size();
@@ -102,10 +105,10 @@ private:
       // Sublist 20 - 22: Main display modes
       "PAGE NAME", "PATCH NAME", "PATCHES COMBINED",
 
-      // Sublist 23 - 30: MIDI ports
-      "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB MIDI HOST", "ALL PORTS", "", "",
+      // Sublist 23 - 32: MIDI ports
+      "OFF", MIDI_PORT_NAMES,
 
-      // Sublist 31 - 34: Expression pedals
+      // Sublist 33 - 36: Expression pedals
       "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
     };
 

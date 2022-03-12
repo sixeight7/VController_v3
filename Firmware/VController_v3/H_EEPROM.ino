@@ -6,7 +6,7 @@
 // Section 3: External EEPROM (24LC512) Functions
 // Section 4: Command and index functions
 // Section 5: Reading/writing titles to EEPROM
-// Section 6: Reading/writing Patch data to EEPROM
+// Section 6: Reading/writing device patch data to EEPROM
 // Section 7: HELIX forward messaging storage
 // Section 8: MG300 effect type storage
 // Section 9: Sequencer patterns storage
@@ -18,8 +18,16 @@
 // The external 24LC512 chip has 64 kB of EEPROM - this storage memory is used for VController commands, BOSS Patch presets and Line6 Helix forward messaging
 
 #include <EEPROM.h>
-//#include <Wire.h>
-#include <i2c_t3.h>
+
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+#ifdef USE_SPI_MEMORY_CHIP
+#include <extRAM_t4.h>
+extRAM_t4 eep_t4;
+#else
+#include <extEEPROM.h> // https://github.com/JChristensen/extEEPROM
+extEEPROM eep(kbits_512, 1, 128);         //device size, number of devices, page size
+#endif
+#endif
 
 #define CURRENT_EEPROM_VERSION 5 // Increase this value whenever there is an update of the internal EEPROM structure 
 #define CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION 5 // Increase this value whenever there is an update of the external EEPROM structure - data will be overwritten!!!!
@@ -104,10 +112,10 @@ unsigned long WriteDelay = 0;
 #define MAX_NUMBER_OF_PAGES 256
 
 // We will create a number of indexes to quickly find the commands that are assigned to a switch of the VController
-uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; // Gives the index number of every first command for every dwitch on every page
-uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS]; // Gives the number of the next command that needs to be read from EEPROM
-uint16_t Next_internal_cmd_index[NUMBER_OF_INTERNAL_COMMANDS]; // Gives the index of the next command that needs to be read from Fixed_commands[]
-uint16_t Title_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; // gives the index number of the title command for page 0 (page title) and every switch with a display
+DMAMEM uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; // Gives the index number of every first command for every dwitch on every page
+DMAMEM uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS]; // Gives the number of the next command that needs to be read from EEPROM
+DMAMEM uint16_t Next_internal_cmd_index[NUMBER_OF_INTERNAL_COMMANDS]; // Gives the index of the next command that needs to be read from Fixed_commands[]
+DMAMEM uint16_t Title_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; // gives the index number of the title command for page 0 (page title) and every switch with a display
 uint16_t number_of_cmds; // Contains the total number of commands stored in EEPROM.
 
 #define INTERNAL_CMD 0x8000 // MSB of an index set indicates the command is an internal command
@@ -132,6 +140,14 @@ patch_data_index_struct patch_data_index[EXT_MAX_NUMBER_OF_PATCH_PRESETS];
 
 void setup_eeprom()
 {
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+#ifdef USE_SPI_MEMORY_CHIP
+  eep_t4.begin(1);
+#else
+  eep.begin(extEEPROM::twiClock400kHz);
+#endif
+#endif
+
   if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
   else EEP_check_internal_eeprom_data(false);
   if (read_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION) EEP_initialize_command_data();
@@ -183,6 +199,7 @@ void EEP_read_eeprom_common_data() {
     MIDI_switch[s].type = EEPROM.read(address + EEPROM_MIDI_SWITCH_TYPE_ADDR);
     MIDI_switch[s].port = EEPROM.read(address + EEPROM_MIDI_SWITCH_PORT_ADDR);
     MIDI_switch[s].channel = EEPROM.read(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR);
+    if (MIDI_switch[s].channel == 0) MIDI_switch[s].channel = 1;
     MIDI_switch[s].cc = EEPROM.read(address + EEPROM_MIDI_SWITCH_CC_ADDR);
   }
 
@@ -226,7 +243,7 @@ void EEP_write_eeprom_common_data() {
 void EEP_initialize_internal_eeprom_data() {
   // Initialize settings for VController and devices from Teensy EEPROM and write default configuration to external EEPROM
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("Init settings...", MESSAGE_TIMER_LENGTH);
   EEPROM_write(EEPROM_VERSION_ADDR, CURRENT_EEPROM_VERSION); // Save the current eeprom version
   EEPROM_write(EEPROM_CURRENT_PAGE_ADDR, DEFAULT_PAGE);
   EEPROM_write(EEPROM_CURRENT_DEVICE_ADDR, 0); // Select first device
@@ -251,6 +268,7 @@ void EEP_check_internal_eeprom_data(bool initialize) {
     if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_PORT_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_PORT_ADDR, MIDI_switch_default_settings[s].port);
     if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_CHANNEL_ADDR, MIDI_switch_default_settings[s].channel);
     if ((initialize) || (EEPROM.read(address + EEPROM_MIDI_SWITCH_CC_ADDR) == 0xFF)) EEPROM_write(address + EEPROM_MIDI_SWITCH_CC_ADDR, MIDI_switch_default_settings[s].cc);
+    if (initialize) LCD_show_bar(0, map(s, 0, no_of_midi_switches + NUMBER_OF_DEVICES, 0, 127), 0);
   }
 
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
@@ -262,6 +280,7 @@ void EEP_check_internal_eeprom_data(bool initialize) {
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) { // Just write the settings from EEPROM
       if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
       //DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
+      if (initialize) LCD_show_bar(0, map(d + no_of_midi_switches, 0, no_of_midi_switches + NUMBER_OF_DEVICES, 0, 127), 0);
     }
   }
 }
@@ -282,6 +301,9 @@ void EEPROM_write_patch_number(uint8_t dev, uint16_t number) {
   }
 }
 
+uint8_t EEPROM_read_brightness() {
+  return EEPROM.read(EEPROM_GENERAL_SETTINGS_BASE_ADDRESS + SETTING_BACKLIGHT_BRIGHTNESS_BYTE);
+}
 
 // ********************************* Section 3: External EEPROM (24LC512) Functions ********************************************
 
@@ -298,14 +320,7 @@ void write_ext_EEPROM(unsigned int eeaddress, byte data )
 // Write a single byte to 24LC512 chip
 {
   if (data != read_ext_EEPROM(eeaddress)) {
-
-    EEPROM_delay();
-
-    Wire.beginTransmission(EEPROM_ADDRESS);
-    Wire.send((int)(eeaddress >> 8));   // MSB
-    Wire.send((int)(eeaddress & 0xFF)); // LSB
-    Wire.send(data);
-    Wire.endTransmission();
+    EEPROM_EEP_write_ext_data(eeaddress, &data, 1);
   }
 }
 
@@ -315,14 +330,7 @@ byte read_ext_EEPROM(unsigned int eeaddress )
   EEPROM_wait_ready();
   byte rdata = 0xFF;
 
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom(EEPROM_ADDRESS, 1);
-
-  if (Wire.available()) rdata = Wire.receive();
+  EEPROM_EEP_read_ext_data(eeaddress, &rdata, 1);
 
   return rdata;
 }
@@ -346,17 +354,8 @@ void write_cmd_EEPROM(uint16_t memloc, const Cmd_struct* cmd ) // Write a comman
     }
 
     if (changed) {
-      EEPROM_delay();
-
-      Wire.beginTransmission(EEPROM_ADDRESS);
-      Wire.send((int)(eeaddress >> 8));   // MSB
-      Wire.send((int)(eeaddress & 0xFF)); // LSB
-
       cmdbytes = (const byte*)cmd; // Reset the pointer
-      for (uint8_t c = 0; c < cmdsize; c++) {
-        Wire.send(*cmdbytes++);
-      }
-      Wire.endTransmission();
+      EEPROM_EEP_write_ext_data(eeaddress, cmdbytes, cmdsize);
     }
   }
 }
@@ -373,18 +372,7 @@ void read_cmd_EEPROM(uint16_t memloc, Cmd_struct* cmd)
     byte* cmdbytes = (byte*)cmd;
     uint8_t cmdsize = sizeof(*cmd);
 
-    EEPROM_wait_ready();
-
-    Wire.beginTransmission(EEPROM_ADDRESS);
-    Wire.send((int)(eeaddress >> 8));   // MSB
-    Wire.send((int)(eeaddress & 0xFF)); // LSB
-    Wire.endTransmission();
-
-    Wire.requestFrom (EEPROM_ADDRESS, (int) cmdsize);
-    for (uint8_t c = 0; c < cmdsize; c++) {
-      uint8_t newbyte = Wire.receive();
-      *cmdbytes++ = newbyte;
-    }
+    EEPROM_EEP_read_ext_data(eeaddress, cmdbytes, cmdsize);
   }
 }
 
@@ -413,14 +401,15 @@ void copy_cmd(const Cmd_struct* source, Cmd_struct* dest) {
 void EEP_initialize_command_data() {
   write_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION); // Save the current eeprom version
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("Init cmds...", MESSAGE_TIMER_LENGTH);
 
   // Write commands to external EEPROM
   for (uint16_t c = 0; c < NUMBER_OF_INIT_COMMANDS; c++) {
     write_cmd_EEPROM(c, &Default_commands[c]);
+    LCD_show_bar(0, map(c, 0, NUMBER_OF_INIT_COMMANDS, 0, 127), 0);
   }
   EEP_write_number_of_commands(NUMBER_OF_INIT_COMMANDS);
-  delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
+  //delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
 
   EEPROM_create_command_indexes();
   LED_turn_all_off();
@@ -755,47 +744,34 @@ void EEPROM_delete_title(uint8_t pg, uint8_t sw) {
   write_cmd_EEPROM(cmd_index, &empty_cmd);
 }
 
-// ********************************* Section 6: Reading/writing Device patch data to EEPROM ********************************************
-
-/*void EEP_update_patch_preset_memory() {
-
-  uint8_t current_version = read_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR);
-  if ((current_version != 1) && (current_version != 2)) {
-    EEP_initialize_patch_data();
-    return;
-  }
-
-  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
-    EEPROM_load_KTN_patch(i, My_KTN.KTN_patch_buffer, VC_PATCH_SIZE);
-    My_KTN.update_patch(current_version, i);
-    EEPROM_save_KTN_patch(i, My_KTN.KTN_patch_buffer, VC_PATCH_SIZE);
-  }
-  write_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_PATCH_DATA_VERSION);
-  }*/
+// ********************************* Section 6: Reading/writing device patch data to EEPROM ********************************************
 
 void EEP_initialize_patch_data() {
   write_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_PATCH_DATA_VERSION);
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
 
   uint8_t empty_buffer[VC_PATCH_SIZE];
   memset(empty_buffer, 0, VC_PATCH_SIZE);
+  LCD_show_popup_label("Init patches...", MESSAGE_TIMER_LENGTH);
 
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+    LCD_show_bar(0, map(i, 0, EXT_MAX_NUMBER_OF_PATCH_PRESETS, 0, 127), 0);
     EEPROM_save_device_patch_by_index(i, empty_buffer, VC_PATCH_SIZE);
+    delay(20);
   }
 
-  //delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
   LED_turn_all_off();
 }
 
 void EEPROM_initialize_device_patch(uint8_t type, uint16_t number) {
   uint16_t index = EEPROM_find_patch_data_index(type, number);
   if (index == PATCH_INDEX_NOT_FOUND) return;
+  EEPROM_initialize_device_patch_by_index(index);
+}
 
+void EEPROM_initialize_device_patch_by_index(uint16_t index) {
   uint8_t empty_buffer[VC_PATCH_SIZE] = { 0 };
   EEPROM_save_device_patch_by_index(index, empty_buffer, VC_PATCH_SIZE);
-  delay(30);
 }
 
 void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
@@ -808,18 +784,15 @@ void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
   // The patch name is stored in the first 16 bytes of a patch.
   uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
+  uint16_t part1_address = base_address + ((index % 2) * 128) + 7; // Point to the first or second page
 
   DEBUGMSG("Reading patch name for number " + String(number) + " at Addr1:" + String(part1_address));
 
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(part1_address >> 8));   // MSB
-  Wire.send((int)(part1_address & 0xFF)); // LSB
-  Wire.endTransmission();
+  uint8_t data[16] = { 0 };
+  EEPROM_EEP_read_ext_data(part1_address, data, 16);
 
-  Wire.requestFrom (EEPROM_ADDRESS, (int) 16);
-  for (uint8_t c = 7; c < 23; c++) {
-    uint8_t newbyte = Wire.receive();
+  for (uint8_t c = 0; c < 16; c++) {
+    uint8_t newbyte = data[c];
     if ((newbyte > 31) && (newbyte < 128)) title += static_cast<char>(newbyte);
     else title += ' ';
   }
@@ -830,19 +803,11 @@ void EEPROM_create_patch_data_index() {
   for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
     uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((i / 2) * 384); // Point to the base address of 2 patches
     uint16_t part1_address = base_address + ((i % 2) * 128); // Point to the first or second page
+    uint8_t data[3] = { 0 };
+    EEPROM_EEP_read_ext_data(part1_address, data, 3);
 
-    Wire.beginTransmission(EEPROM_ADDRESS);
-    Wire.send((int)(part1_address >> 8));   // MSB
-    Wire.send((int)(part1_address & 0xFF)); // LSB
-    Wire.endTransmission();
-
-    Wire.requestFrom (EEPROM_ADDRESS, (int) 3);
-
-    uint8_t type = Wire.receive();
-    uint8_t msb = Wire.receive();
-    uint8_t lsb = Wire.receive();
-    patch_data_index[i].Type = type;
-    patch_data_index[i].Patch_number = (msb << 8) + lsb;
+    patch_data_index[i].Type = data[0];
+    patch_data_index[i].Patch_number = (data[1] << 8) + data[2];
   }
 }
 
@@ -880,27 +845,10 @@ void EEPROM_load_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint
   uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
   uint16_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
 
-  DEBUGMSG("Readng patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
+  DEBUGMSG("Reading patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(part1_address >> 8));   // MSB
-  Wire.send((int)(part1_address & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) 128);
-  for (uint8_t i = 0; i < 128; i++) {
-    patch_data[i] = Wire.receive();
-  }
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(part2_address >> 8));   // MSB
-  Wire.send((int)(part2_address & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) (data_length - 128));
-  for (uint8_t i = 128; i < data_length; i++) {
-    patch_data[i] = Wire.receive();
-  }
+  EEPROM_EEP_read_ext_data(part1_address, patch_data, 128);
+  EEPROM_EEP_read_ext_data(part2_address, &patch_data[128], data_length - 128);
 }
 
 bool EEPROM_save_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data, uint8_t data_length) {
@@ -920,7 +868,7 @@ bool EEPROM_save_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data
 
   patch_data_index[index].Type = type;
   patch_data_index[index].Patch_number = number;
-  delay(30); // Time for data to settle
+  //delay(30); // Time for data to settle
   return true;
 }
 
@@ -937,26 +885,8 @@ void EEPROM_save_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint
 
   DEBUGMSG("Storing patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
-  EEPROM_delay();
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(part1_address >> 8));   // MSB
-  Wire.send((int)(part1_address & 0xFF)); // LSB
-  for (uint8_t i = 0; i < 128; i++) {
-    Wire.send(patch_data[i]);
-  }
-  Wire.endTransmission();
-
-  delay(30); // Allow extra time for the data to settle
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(part2_address >> 8));   // MSB
-  Wire.send((int)(part2_address & 0xFF)); // LSB
-  for (uint8_t i = 128; i < data_length; i++) {
-    Wire.send(patch_data[i]);
-  }
-  Wire.endTransmission();
-
-  EEPROM_delay();
+  EEPROM_EEP_write_ext_data(part1_address, patch_data, 128);  
+  EEPROM_EEP_write_ext_data(part2_address, &patch_data[128], data_length - 128);
 }
 
 void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2, uint8_t patch_size) {
@@ -971,7 +901,6 @@ void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2
     patch_buffer[2] = patch2 & 0xFF;
     EEPROM_save_device_patch_by_index(index1, patch_buffer, patch_size);
     patch_data_index[index1].Patch_number = patch2;
-    delay(30); // Time for data to settle
   }
 
   if (index2 != PATCH_INDEX_NOT_FOUND)  {
@@ -981,7 +910,6 @@ void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2
     patch_buffer[2] = patch1 & 0xFF;
     EEPROM_save_device_patch_by_index(index2, patch_buffer, patch_size);
     patch_data_index[index2].Patch_number = patch1;
-    delay(30); // Time for data to settle
   }
 }
 
@@ -993,17 +921,13 @@ void EEPROM_store_HELIX_message(uint8_t number, uint8_t setlist) { // Store HLX_
   const uint8_t* msg_ptr = (const uint8_t*)HLX_messages;
   uint8_t msgsize = sizeof(HLX_messages);
 
-  EEPROM_delay();
+  uint8_t buf[msgsize + 1];
 
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-
-  Wire.send(setlist); // Send the setlist number first
+  buf[0] = setlist;
   for (uint8_t c = 0; c < msgsize; c++) {
-    Wire.send(*msg_ptr++);
+    buf[c + 1] = *msg_ptr++;
   }
-  Wire.endTransmission();
+  EEPROM_EEP_write_ext_data(eeaddress, buf, msgsize + 1);
 
   DEBUGMSG("EEPROM: Wrote Helix program " + String(number) + ", setlist " + String(setlist) + ", size: " + String(msgsize));
 }
@@ -1014,30 +938,24 @@ void EEPROM_load_HELIX_message(uint8_t number) { // Read HLX_messages[5][3] arra
   uint8_t* msg_ptr = (uint8_t*)HLX_messages;
   uint8_t msgsize = sizeof(HLX_messages) + 1;
 
-  EEPROM_wait_ready();
+  uint8_t buf[msgsize + 1];
 
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize);
-  HLX_message_setlist = Wire.receive();
+  EEPROM_EEP_read_ext_data(eeaddress, buf, msgsize + 1);
+  HLX_message_setlist = buf[0];
   for (uint8_t c = 0; c < msgsize; c++) {
-    uint8_t newbyte = Wire.receive();
-    *msg_ptr++ = newbyte;
+    *msg_ptr++ = buf[c + 1];
   }
-
   DEBUGMSG("EEPROM: Read Helix program " + String(number) + " and setlist " + String(HLX_message_setlist));
 }
 
 void EEP_initialize_Helix_data() {
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("Init HLX data...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR, CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION); // Save the current eeprom version
   EEPROM_clear_HLX_message_array();
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_HELIX_MESSAGES; i++) {
     EEPROM_store_HELIX_message(i, 0);
+    LCD_show_bar(0, map(i, 0, EXT_MAX_NUMBER_OF_HELIX_MESSAGES, 0, 127), 0);
   }
 }
 
@@ -1054,19 +972,13 @@ void EEPROM_store_MG300_effect_types(uint8_t number, uint16_t checksum) { // Sto
   const uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
   uint8_t msgsize = MG300_NUMBER_OF_FX;
 
-  EEPROM_delay();
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-
-  Wire.send((int)(checksum >> 8));   // MSB
-  Wire.send((int)(checksum & 0xFF)); // LSB
+  uint8_t buf[msgsize + 2];
+  buf[0] = checksum >> 8;
+  buf[1] = checksum & 0xFF;
   for (uint8_t c = 0; c < msgsize; c++) {
-    DEBUGMSG("Writing byte " + String(c) + ": " + String(*msg_ptr));
-    Wire.send(*msg_ptr++);
+    buf[c + 2] = *msg_ptr++;
   }
-  Wire.endTransmission();
+  EEPROM_EEP_write_ext_data(eeaddress, buf, msgsize + 2);
 
   DEBUGMSG("EEPROM: Wrote MG300 program " + String(number) + ", size: " + String(msgsize) + ", checksum: " + String(checksum));
 }
@@ -1076,24 +988,13 @@ bool EEPROM_load_MG300_effect_types(uint8_t number, uint16_t checksum) {
   uint16_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
   uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
   uint8_t msgsize = MG300_NUMBER_OF_FX;
+  uint8_t buf[msgsize + 2];
 
-  EEPROM_wait_ready();
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize + 2);
-  uint8_t cs_msb = Wire.receive();
-  uint8_t cs_lsb = Wire.receive();
-  if (checksum != ((cs_msb << 8) | cs_lsb)) return false; // exit when checksum does not match.
+  EEPROM_EEP_read_ext_data(eeaddress, buf, msgsize + 2);
+  if (checksum != ((buf[0] << 8) | buf[1])) return false; // exit when checksum does not match.
   for (uint8_t c = 0; c < msgsize; c++) {
-    uint8_t newbyte = Wire.receive();
-    *msg_ptr++ = newbyte;
-    DEBUGMSG("Read byte " + String(c) + ": " + String(newbyte));
+    *msg_ptr++ = buf[c + 2];
   }
-
   DEBUGMSG("EEPROM: Read MG300 program " + String(number) + ", checksum: " + String(checksum));
   return true;
 }
@@ -1107,68 +1008,31 @@ void EEPROM_exchange_MG300_patches(uint8_t patch1, uint8_t patch2) {
   uint16_t eeaddress1 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch1 * 16);
   uint8_t* msg_ptr1 = (uint8_t*)temp1;
 
-  EEPROM_wait_ready();
   // Read patch 1 into temp1
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress1 >> 8));   // MSB
-  Wire.send((int)(eeaddress1 & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize);
-  for (uint8_t c = 0; c < msgsize; c++) {
-    uint8_t newbyte = Wire.receive();
-    *msg_ptr1++ = newbyte;
-  }
+  EEPROM_EEP_read_ext_data(eeaddress1, msg_ptr1, msgsize);
 
   uint8_t temp2[msgsize];
   uint16_t eeaddress2 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch2 * 16);
   uint8_t* msg_ptr2 = (uint8_t*)temp2;
 
-  EEPROM_wait_ready();
   // Read patch 2 into temp2
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress2 >> 8));   // MSB
-  Wire.send((int)(eeaddress2 & 0xFF)); // LSB
-  Wire.endTransmission();
+  EEPROM_EEP_read_ext_data(eeaddress2, msg_ptr2, msgsize);
 
-  Wire.requestFrom (EEPROM_ADDRESS, (int) msgsize);
-  for (uint8_t c = 0; c < msgsize; c++) {
-    uint8_t newbyte = Wire.receive();
-    *msg_ptr2++ = newbyte;
-  }
-
-  EEPROM_delay();
   // Write temp2 into patch 1
-  msg_ptr2 = (uint8_t*)temp2;
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress1 >> 8));   // MSB
-  Wire.send((int)(eeaddress1 & 0xFF)); // LSB
+  EEPROM_EEP_write_ext_data(eeaddress1, msg_ptr2, msgsize);
 
-  for (uint8_t c = 0; c < msgsize; c++) {
-    Wire.send(*msg_ptr2++);
-  }
-  Wire.endTransmission();
-
-  EEPROM_delay();
   // Write temp1 into patch 2
-  msg_ptr1 = (uint8_t*)temp1;
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress2 >> 8));   // MSB
-  Wire.send((int)(eeaddress2 & 0xFF)); // LSB
-
-  for (uint8_t c = 0; c < msgsize; c++) {
-    Wire.send(*msg_ptr1++);
-  }
-  Wire.endTransmission();
+  EEPROM_EEP_write_ext_data(eeaddress2, msg_ptr1, msgsize);
 }
 
 void EEP_initialize_MG300_data() {
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("Init MG300 data", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_MG300_DATA_VERSION); // Save the current eeprom version
   EEPROM_clear_MG300_message_array();
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_MG300_PRESETS; i++) {
     EEPROM_store_MG300_effect_types(i, 0);
+    LCD_show_bar(0, map(i, 0, EXT_MAX_NUMBER_OF_MG300_PRESETS, 0, 127), 0);
   }
 }
 
@@ -1184,31 +1048,11 @@ void EEPROM_store_seq_pattern(uint8_t number, uint8_t * data) { // Store MG300 e
 
   // Store first four bytes on first page.
   uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
-  EEPROM_delay();
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-
-  for (uint8_t c = 0; c < 4; c++) {
-    DEBUGMSG("Writing byte " + String(c) + ": " + String(*data));
-    Wire.send(*data++);
-  }
-  Wire.endTransmission();
+  EEPROM_EEP_write_ext_data(eeaddress, data, 4);
 
   // Store the rest on page 2 - 9
   eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
-  EEPROM_delay();
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-
-  for (uint8_t c = 0; c < 32; c++) {
-    DEBUGMSG("Writing byte " + String(c) + ": " + String(*data));
-    Wire.send(*data++);
-  }
-  Wire.endTransmission();
+  EEPROM_EEP_write_ext_data(eeaddress, data + 4, 32);
 
   DEBUGMSG("EEPROM: Wrote sequencer pattern " + String(number));
 }
@@ -1219,32 +1063,11 @@ bool EEPROM_load_seq_pattern(uint8_t number, uint8_t *data) {
 
   // Read first four bytes from first page.
   uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
-  EEPROM_wait_ready();
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) 4);
-  for (uint8_t c = 0; c < 4; c++) {
-    uint8_t newbyte = Wire.receive();
-    *data++ = newbyte;
-  }
+  EEPROM_EEP_read_ext_data(eeaddress, data, 4);
 
   // Read the rest from page 2 - 9
   eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
-
-  Wire.beginTransmission(EEPROM_ADDRESS);
-  Wire.send((int)(eeaddress >> 8));   // MSB
-  Wire.send((int)(eeaddress & 0xFF)); // LSB
-  Wire.endTransmission();
-
-  Wire.requestFrom (EEPROM_ADDRESS, (int) 32);
-  for (uint8_t c = 0; c < 32; c++) {
-    uint8_t newbyte = Wire.receive();
-    *data++ = newbyte;
-  }
+  EEPROM_EEP_read_ext_data(eeaddress, data + 4, 32);
 
   DEBUGMSG("EEPROM: Read sequencer pattern " + String(number));
   return true;
@@ -1253,11 +1076,12 @@ bool EEPROM_load_seq_pattern(uint8_t number, uint8_t *data) {
 
 void EEPROM_EEP_initialize_seq_patterns_data() {
   LED_show_initializing_data();
-  LCD_show_popup_label("Initializing...", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("Init seq data...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR, CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION); // Save the current eeprom version
   EEPROM_initialize_seq_patterns_message_array();
   for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_SEQ_PATTERNS; i++) {
     EEPROM_store_seq_pattern(i, EEPROM_seq_pattern);
+    LCD_show_bar(0, map(i, 0, EXT_MAX_NUMBER_OF_SEQ_PATTERNS, 0, 127), 0);
   }
 }
 
@@ -1265,4 +1089,58 @@ const PROGMEM uint8_t EEPROM_default_seq_pattern[36] = { 4, 4, 0, 0, 127, 32, 64
 
 void EEPROM_initialize_seq_patterns_message_array() {
   memcpy(EEPROM_seq_pattern, EEPROM_default_seq_pattern, 36);
+}
+
+void EEPROM_EEP_read_ext_data(uint16_t address, uint8_t *data, uint16_t data_size) {
+#ifdef USE_SPI_MEMORY_CHIP
+  eep_t4.writeArrayDMA(address, data_size, data);
+#elif defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+  eep.read(address, data, data_size);
+#else
+  EEPROM_wait_ready();
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(address >> 8));   // MSB
+  Wire.send((int)(address & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) data_size);
+  for (uint16_t c = 0; c < data_size; c++) {
+    *data++ = Wire.receive();
+  }
+#endif
+}
+
+inline void EEPROM_EEP_write_ext_data(uint16_t address, const uint8_t *data, uint16_t data_size) {
+#ifdef USE_SPI_MEMORY_CHIP
+  eep_t4.readArrayDMA(address, data_size, (byte *) data);
+#elif defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+  eep.write(address, (byte *) data, data_size);
+#else
+  // First read the data
+  bool changed = false;
+  const uint8_t *read_data = data;
+  EEPROM_wait_ready();
+  Wire.beginTransmission(EEPROM_ADDRESS);
+  Wire.send((int)(address >> 8));   // MSB
+  Wire.send((int)(address & 0xFF)); // LSB
+  Wire.endTransmission();
+
+  Wire.requestFrom (EEPROM_ADDRESS, (int) data_size);
+  for (uint16_t c = 0; c < data_size; c++) {
+    if (*read_data++ != Wire.receive()) changed = true;
+  }
+
+  if (changed) {
+    EEPROM_delay();
+    Wire.beginTransmission(EEPROM_ADDRESS);
+    Wire.send((int)(address >> 8));   // MSB
+    Wire.send((int)(address & 0xFF)); // LSB
+
+    for (uint16_t c = 0; c < data_size; c++) {
+      Wire.send(*data++);
+    }
+    Wire.endTransmission();
+    delay(30); // Time for the data to settle
+  }
+#endif
 }

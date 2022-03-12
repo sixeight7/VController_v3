@@ -39,6 +39,12 @@ void VCsettings::fillTreeWidget(QTreeWidget *my_tree)
                         for(int d = 0; d < NUMBER_OF_DEVICES; d++)
                             comboBox->addItem(Device[d]->full_device_name);
                     }
+                    else if (VCsettingMenu[i].sublist == MIDI_PORT_SUBLIST) {
+                        comboBox->addItem("OFF");
+                        for (int p = 0; p < number_of_midi_ports + VCsettingMenu[i].max; p++) {
+                            comboBox->addItem(midi_port_names[p]);
+                        }
+                    }
                     else {
                         int number_of_items = VCsettingMenu[i].max - VCsettingMenu[i].min + 1;
                         for (int j = 0; j < number_of_items; j++)

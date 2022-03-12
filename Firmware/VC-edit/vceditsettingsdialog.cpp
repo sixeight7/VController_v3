@@ -1,7 +1,9 @@
 #include "vceditsettingsdialog.h"
 #include "ui_vceditsettingsdialog.h"
+
 #include <QSettings>
 #include <QDebug>
+#include <QMessageBox>
 
 vcEditSettingsDialog::vcEditSettingsDialog(QWidget *parent, Midi *midi) :
     QDialog(parent),
@@ -10,6 +12,8 @@ vcEditSettingsDialog::vcEditSettingsDialog(QWidget *parent, Midi *midi) :
     ui->setupUi(this);
 
     // Populate the combo boxes
+    QStringList deviceModeItems = {"VController", "VC-mini", "VC-touch"};
+    ui->deviceModeComboBox->addItems(deviceModeItems);
     _midi = midi;
     QStringList inPortItems = _midi->fillMidiInPortItems();
     QStringList outPortItems = _midi->fillMidiOutPortItems();
@@ -39,8 +43,11 @@ void vcEditSettingsDialog::loadSettings()
     appSettings.endGroup();
 
     appSettings.beginGroup("MainWindow");
-    ui->hideKatanaTabCheckBox->setChecked(appSettings.value("hideKatanaTab").toBool());
+    my_VC_type = appSettings.value("VC_type").toUInt();
+    ui->deviceModeComboBox->setCurrentIndex(my_VC_type);
     appSettings.endGroup();
+
+    booted = true;
 }
 
 void vcEditSettingsDialog::saveSettings()
@@ -64,6 +71,11 @@ void vcEditSettingsDialog::on_buttonBox_accepted()
     if (outPort != "") appSettings.setValue("midiOutPort", outPort);
     appSettings.endGroup();
     qDebug() << "Midi settings saved:" << inPort << outPort;
+
+    appSettings.beginGroup("MainWindow");
+    appSettings.setValue("VC_type", ui->deviceModeComboBox->currentIndex());
+    appSettings.endGroup();
+
     emit appSettingsChanged();
 }
 
@@ -71,7 +83,17 @@ void vcEditSettingsDialog::on_hideKatanaTabCheckBox_stateChanged(int arg1)
 {
     QSettings appSettings;
     appSettings.beginGroup("MainWindow");
-    appSettings.setValue("hideKatanaTab", ui->hideKatanaTabCheckBox->isChecked());
+    //appSettings.setValue("hideKatanaTab", ui->hideKatanaTabCheckBox->isChecked());
     appSettings.endGroup();
     emit appSettingsChanged();
+}
+
+void vcEditSettingsDialog::on_deviceModeComboBox_currentIndexChanged(int index)
+{
+    if (!booted) return;
+    if (index == my_VC_type) return;
+    if (QMessageBox::No == QMessageBox(QMessageBox::Warning, "Change VController type", "VC-edit needs to restart to change to VController type! Are you sure you want to proceed?",
+                                    QMessageBox::Yes|QMessageBox::No).exec()) {ui->deviceModeComboBox->setCurrentIndex(my_VC_type); return;};
+    on_buttonBox_accepted();
+    close();
 }

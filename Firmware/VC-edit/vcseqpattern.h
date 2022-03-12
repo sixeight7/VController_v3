@@ -100,16 +100,16 @@ private:
           // Sublist 20 - 22: Main display modes
           "PAGE NAME", "PATCH NAME", "PATCHES COMBINED",
 
-          // Sublist 23 - 30: MIDI ports
-          "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USB HOST PORT", "ALL PORTS", "", "",
+          // Sublist 23 - 32: MIDI ports
+          "OFF", MIDI_PORT_NAMES,
 
-          // Sublist 31 - 34: Expression pedals
+          // Sublist 33 - 36: Expression pedals
           "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-          // Sublist 35 - 37: MEP control options
+          // Sublist 37 - 39: MEP control options
           "NONE", "UP/DOWN", "UP/DN + STEP",
 
-          // Sublist 38 - 45: MIDI switch types
+          // Sublist 40 - 47: MIDI switch types
           "OFF", "CC MOMENTARY", "CC TOGGLE", "CC RANGE", "PC", "", "", "",
     };
 };

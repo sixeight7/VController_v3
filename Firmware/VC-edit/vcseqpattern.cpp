@@ -13,7 +13,7 @@ VCseqPattern::VCseqPattern(QObject *parent) : QObject(parent)
 void VCseqPattern::fillTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn)
 {
     QTreeWidgetItem *parent = new QTreeWidgetItem(my_tree);
-    parent->setText(0, "Sequence patterns");
+    parent->setText(0, "Sequence Patterns");
     my_tree->addTopLevelItem(parent);
 
     for (int p = 0; p < NUMBER_OF_SEQ_PATTERNS; p++) {

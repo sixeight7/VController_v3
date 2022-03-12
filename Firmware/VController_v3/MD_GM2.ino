@@ -12,6 +12,7 @@
 
 // TC-electronics G-Major 2 settings:
 #define GM2_MIDI_CHANNEL 1
+#define GM2_MIDI_PORT MIDI1_PORT
 #define GM2_PATCH_MIN 0
 #define GM2_PATCH_MAX 199
 #define GM2_MIDI_TIMER_LENGTH 100 // Minimal time inbetween requests for patch data from MS70
@@ -46,23 +47,40 @@ void MD_GM2_class::init() // Default values for variables
   max_times_no_response = MAX_TIMES_NO_RESPONSE; // The number of times the TC-electronics G-Major 2 does not have to respond before disconnection
   my_LED_colour = 1; // Default value: green
   MIDI_channel = GM2_MIDI_CHANNEL; // Default value
+  MIDI_port_manual = MIDI_port_number(GM2_MIDI_PORT); // Default value
   //bank_number = 0; // Default value
-  my_device_page1 = GM2_DEFAULT_PAGE1; // Default value
-  my_device_page2 = GM2_DEFAULT_PAGE2; // Default value
-  my_device_page3 = GM2_DEFAULT_PAGE3; // Default value
-  my_device_page4 = GM2_DEFAULT_PAGE4; // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = GM2_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = GM2_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = GM2_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = GM2_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = GM2_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = GM2_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = GM2_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = GM2_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = GM2_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = GM2_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = GM2_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = GM2_DEFAULT_VC_PAGE4; // Default value
+#endif
   current_exp_pedal = 1;
 
   for (uint8_t i = 0; i < GM2_NUMBER_OF_FX; i++) {
     FX_state[i] = 1;
     FX_type[i] = 0;
   }
+
+#ifdef IS_VCTOUCH
+  device_pic = img_GM2;
+#endif
 }
 
 void MD_GM2_class::update() {
   if ((send_patch_change) && (millis() > midi_timer)) { // We delay the sending of a PC message if these come to close together.
-    MIDI_send_CC(0, patch_number >> 7, MIDI_channel, MIDI_port);
-    MIDI_send_PC(patch_number & 0x7F, MIDI_channel, MIDI_port);
+    MIDI_send_CC(0, patch_number >> 7, MIDI_channel, MIDI_out_port);
+    MIDI_send_PC(patch_number & 0x7F, MIDI_channel, MIDI_out_port);
     DEBUGMSG("out(" + String(device_name) + ") PC" + String(patch_number)); //Debug
     do_after_patch_selection();
     midi_timer = millis() + GM2_MIDI_TIMER_LENGTH;
@@ -76,7 +94,7 @@ void MD_GM2_class::update() {
 void MD_GM2_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from a TC-electronics G-Major 2
-  if ((port == MIDI_port) && (sxdata[2] == 0x20) && (sxdata[3] == 0x1F) && (sxdata[4] == MIDI_device_id) && (sxdata[5] == GM2_MODEL_NUMBER)) {
+  if ((port == MIDI_in_port) && (sxdata[2] == 0x20) && (sxdata[3] == 0x1F) && (sxdata[4] == MIDI_device_id) && (sxdata[5] == GM2_MODEL_NUMBER)) {
 
     // Check if it is the patch data of a specific patch
     if ((sxdata[6] == 0x20) && ((sxdata[7] + (sxdata[8] << 7)) == last_requested_sysex_patch_number)) {
@@ -156,7 +174,7 @@ void MD_GM2_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 void MD_GM2_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
       prev_patch_number = patch_number;
@@ -169,11 +187,11 @@ void MD_GM2_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
 }
 // Detection of TC-electronics G-Major 2
 
-void MD_GM2_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_GM2_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a TC-electronics G-Major 2: F0 7E 7F 06 02 00 20 1F 66 01 00 03 F7
   if ((sxdata[6] == 0x20) && (sxdata[7] == 0x1F) && (sxdata[8] == GM2_MODEL_NUMBER) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
   }
 }
 
@@ -191,25 +209,25 @@ void MD_GM2_class::do_after_connect() {
 void MD_GM2_class::write_sysex(uint8_t address, uint8_t data1, uint8_t data2) { // F0 00 20 1F 7F 66 32 37 00 val 00 00 00 F7
   uint8_t sysexmessage[14] = {0xF0, 0x00, 0x20, 0x1F, MIDI_device_id, GM2_MODEL_NUMBER, 0x32, (uint8_t) (address & 0x7F), (uint8_t) (address >> 7), data1, data2, 0x00, 0x00, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 14, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 14, MIDI_out_port);
 }
 
 void MD_GM2_class::request_sysex(uint8_t address) { // F0 00 20 1F 7F 66 47 37 00 F7
   uint8_t sysexmessage[10] = {0xF0, 0x00, 0x20, 0x1F, MIDI_device_id, GM2_MODEL_NUMBER, 0x47, (uint8_t) (address & 0x7F), (uint8_t) (address >> 7), 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 10, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 10, MIDI_out_port);
 }
 
 void MD_GM2_class::request_patch(uint16_t number) {
   uint8_t sysexmessage[10] = {0xF0, 0x00, 0x20, 0x1F, MIDI_device_id, GM2_MODEL_NUMBER, GM2_PATCH_REQUEST, (uint8_t) (number & 0x7F), (uint8_t) (number >> 7), 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 10, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 10, MIDI_out_port);
 }
 
 void MD_GM2_class::request_current_patch() { //F0 00 20 1F 7F 66 45 00 00 F7
   uint8_t sysexmessage[10] = {0xF0, 0x00, 0x20, 0x1F, MIDI_device_id, GM2_MODEL_NUMBER, GM2_PATCH_REQUEST, 0x00, 0x00, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 10, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 10, MIDI_out_port);
 }
 
 void MD_GM2_class::set_bpm() { //Will change the bpm to the specified value
@@ -221,13 +239,13 @@ void MD_GM2_class::set_bpm() { //Will change the bpm to the specified value
 
 void MD_GM2_class::start_tuner() {
   if (connected) {
-    MIDI_send_CC(GM2_TUNER_CC, 0x7F, MIDI_channel, MIDI_port);
+    MIDI_send_CC(GM2_TUNER_CC, 0x7F, MIDI_channel, MIDI_out_port);
   }
 }
 
 void MD_GM2_class::stop_tuner() {
   if (connected) {
-    MIDI_send_CC(GM2_TUNER_CC, 0x00, MIDI_channel, MIDI_port);
+    MIDI_send_CC(GM2_TUNER_CC, 0x00, MIDI_channel, MIDI_out_port);
   }
 }
 
@@ -407,11 +425,11 @@ void MD_GM2_class::read_parameter_name(uint16_t number, String & Output) { // Ca
   else Output = "?";
 }
 
-uint16_t MD_GM2_class::number_of_parameters() {
+FLASHMEM uint16_t MD_GM2_class::number_of_parameters() {
   return GM2_NUMBER_OF_FX;
 }
 
-uint8_t MD_GM2_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_GM2_class::number_of_values(uint16_t parameter) {
   if (parameter < number_of_parameters()) return 2; // So far all parameters have two states: on and off
   else return 0;
 }
@@ -439,8 +457,8 @@ void MD_GM2_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
     lbl += '2';
   }
   else return;
-  LCD_show_bar(0, value); // Show it on the main display
-  MIDI_send_CC(number, value, MIDI_channel, MIDI_port);
+  LCD_show_bar(0, value, 0); // Show it on the main display
+  MIDI_send_CC(number, value, MIDI_channel, MIDI_out_port);
   lbl += ':';
   LCD_add_3digit_number(value, lbl);
   LCD_show_popup_label(lbl, ACTION_TIMER_LENGTH);

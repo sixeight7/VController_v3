@@ -15,12 +15,13 @@
 // A few notes about the Boss SY-1000:
 // * The VController switches editor mode on before any data is sent, otherwise the SY-1000 will display a message "Receiving data" and all further sysex midi data is on hold.
 // * Editor mode produces a lot of data. So after the sysex data has been sent, edit mode will be switched off, but only for 100 ms seconds, otherwise we still get the Receiving data message.
-// * Quirk that needed a workaround: when the SY1000 is connected with regular MIDI cables (not USB midi) and edit mode is sitched on on the SY1000, the SY1000 is no longer sending CC messages when pressing
+// * Quirk that needed a workaround: when the SY1000 is connected with regular MIDI cables (not USB midi) and edit mode is switched on on the SY1000, the SY1000 is no longer sending CC messages when pressing
 //   switches on this unit. Therefore we switch edit mode off when in this mode, apart from when data is sent to avoid the "Receiving data" message. But now commands like Write, Exchange, Initialize and
 //   Insert Patch is no longer received. Regular writing can be simulated by detecting a PC message of the current patch. But for the other operations, the VC-mini must be in Patch, Manual or Num mode.
 
 // Boss SY-1000 settings:
-#define SY1000_MIDI_CHANNEL 1
+#define SY1000_MIDI_CHANNEL 7
+#define SY1000_MIDI_PORT USBHMIDI_PORT
 #define SY1000_PATCH_MIN 0
 #define SY1000_PATCH_MAX 399
 #define SY1000_NUMBER_OF_ASSIGNS 16
@@ -39,7 +40,7 @@
 
 #define SY1000_PATCH_SELECT 0x7F000100
 
-#define SY1000_TUNER_ON 0x7F000002, 0x01 // 0x01 for polytuner, 0x002 for normal tuner
+#define SY1000_TUNER_ON 0x7F000002, 0x01 // 0x01 for polytuner, 0x02 for normal tuner
 #define SY1000_TUNER_OFF 0x7F000002, 0x00 //Changes the running mode of the SY1000 to play.
 //#define SY1000_SOLO_ON 0x2000500B, 0x01
 //#define SY1000_SOLO_OFF 0x2000500B, 0x00
@@ -103,13 +104,12 @@
 
 // Initialize device variables
 // Called at startup of VController
-void MD_SY1000_class::init() { // Default values for variables
+FLASHMEM void MD_SY1000_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Boss SY-1000 variables:
   enabled = DEVICE_DETECT; // Default value
   //enabled = DEVICE_ON; // Default value
-  //MIDI_port_manual = 4;
   strcpy(device_name, "SY1000");
   strcpy(full_device_name, "Boss SY-1000");
   patch_min = SY1000_PATCH_MIN;
@@ -122,15 +122,31 @@ void MD_SY1000_class::init() { // Default values for variables
   sysex_delay_length = 5; // minimum delay time between sysex messages (in msec).
   my_LED_colour = 11; // Default value: light blue
   MIDI_channel = SY1000_MIDI_CHANNEL; // Default value
-  //bank_number = 0; // Default value
-  my_device_page1 = SY1000_DEFAULT_PAGE1; // Default value
-  my_device_page2 = SY1000_DEFAULT_PAGE2; // Default value
-  my_device_page3 = SY1000_DEFAULT_PAGE3; // Default value
-  my_device_page4 = SY1000_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(SY1000_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = SY1000_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = SY1000_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = SY1000_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = SY1000_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = SY1000_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = SY1000_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = SY1000_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = SY1000_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = SY1000_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = SY1000_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = SY1000_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = SY1000_DEFAULT_VC_PAGE4; // Default value
+#endif
   initialize_patch_space();
   //bass_mode = true;
   initialize_scene_assigns();
   //edit_mode_always_on = false;
+
+#ifdef IS_VCTOUCH
+  device_pic = img_SY1000;
+#endif
 }
 
 void MD_SY1000_class::update() {
@@ -160,7 +176,7 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
 
   // Check if it is a message from a SY-1000
   uint8_t data3 = sxdata[3];
-  if ((port == MIDI_port) && (sxdata[sx_index(data3, 1)] == 0x41) && (sxdata[sx_index(data3, 2)] == MIDI_device_id) && (sxdata[sx_index(data3, 3)] == 0x00) && (sxdata[sx_index(data3, 4)] == 0x00) && (sxdata[sx_index(data3, 5)] == 0x00) && (sxdata[sx_index(data3, 6)] == 0x69) && (sxdata[sx_index(data3, 7)] == 0x12)) {
+  if ((port == MIDI_in_port) && (sxdata[sx_index(data3, 1)] == 0x41) && (sxdata[sx_index(data3, 2)] == MIDI_device_id) && (sxdata[sx_index(data3, 3)] == 0x00) && (sxdata[sx_index(data3, 4)] == 0x00) && (sxdata[sx_index(data3, 5)] == 0x00) && (sxdata[sx_index(data3, 6)] == 0x69) && (sxdata[sx_index(data3, 7)] == 0x12)) {
     uint32_t address = (sxdata[sx_index(data3, 8)] << 24) + (sxdata[sx_index(data3, 9)] << 16) + (sxdata[sx_index(data3, 10)] << 8) + sxdata[sx_index(data3, 11)]; // Make the address 32 bit
 
     // Check checksum
@@ -173,13 +189,13 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
     // Check if it is the current patch number
     if (((address == SY1000_GM_CURRENT_PATCH_NUMBER) || (address == SY1000_BM_CURRENT_PATCH_NUMBER)) && (checksum_ok)) {
       uint16_t new_patch = (sxdata[sx_index(data3, 12)] << 12) + (sxdata[sx_index(data3, 13)] << 8) + (sxdata[sx_index(data3, 14)] << 4) + sxdata[sx_index(data3, 15)];
-      if (patch_number != new_patch) { // Right after a patch change the patch number is sent again. So here we catch that message.
+      if ((patch_number != new_patch) || (data_item == 3)) { // Right after a patch change the patch number is sent again. So here we catch that message.
         prev_patch_number = patch_number;
         patch_number = new_patch;
         //page_check();
         set_patch_gap_timer();
-        //do_after_patch_selection();
-        //update_page = REFRESH_PAGE;
+        do_after_patch_selection();
+        update_page = REFRESH_PAGE;
         return;
       }
     }
@@ -258,7 +274,7 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
 
     // Check for tempo
     if ((address == SY1000_GM_TEMPO) || (address == SY1000_BM_TEMPO)) {
-      if (checksum_ok) {
+      if ((checksum_ok) && (millis() > patch_gap_timer + 1500)) {
         uint16_t new_tempo = (sxdata[sx_index(data3, 12)] << 12) + (sxdata[sx_index(data3, 13)] << 8) + (sxdata[sx_index(data3, 14)] << 4) + sxdata[sx_index(data3, 15)];
         DEBUGMSG("Tempo received: " + String(new_tempo / 10));
         SCO_set_global_tempo_press(new_tempo / 10);
@@ -324,25 +340,46 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
 
     // Check if it is some other stompbox function and copy the status to the right LED
     if (!PAGE_update_running()) update_switches_on_page(address, sxdata[sx_index(data3, 12)]);
-  }
 
+    // Check if edit mode is switched off
+    if (address == 0x7F000001) {
+      if ((sxdata[sx_index(data3, 12)] == 0x00) && (edit_mode)) write_sysex(SY1000_EDITOR_MODE_ON); // Turn it back on
+    }
+
+    // Midi forwarding to allow editing via VController
+    if ((MIDI_in_port != USBMIDI_PORT) && (connected)) { // Forward data from Katana to editor
+      MIDI_send_sysex(sxdata, sxlength, USBMIDI_PORT);
+    }
+  }
+}
+
+void MD_SY1000_class::forward_MIDI_message(const unsigned char* sxdata, short unsigned int sxlength) { // Forward data from editor to Katana
+  uint8_t data3 = sxdata[3];
+  if ((connected) && (sxdata[sx_index(data3, 1)] == 0x41) && (sxdata[sx_index(data3, 2)] == MIDI_device_id) && (sxdata[sx_index(data3, 3)] == 0x00) && (sxdata[sx_index(data3, 4)] == 0x00) && (sxdata[sx_index(data3, 5)] == 0x00) && (sxdata[sx_index(data3, 6)] == 0x69)) {
+    editor_connected = true;
+    check_sysex_delay();
+    MIDI_send_sysex(sxdata, sxlength, MIDI_out_port);
+
+    // Update switches on VController when state is changed from editor
+    if (sxdata[sx_index(data3, 7)] == 0x12) {
+      uint32_t address = (sxdata[sx_index(data3, 8)] << 24) + (sxdata[sx_index(data3, 9)] << 16) + (sxdata[sx_index(data3, 10)] << 8) + sxdata[sx_index(data3, 11)]; // Make the address 32 bit
+      update_switches_on_page(address, sxdata[sx_index(data3, 12)]);
+    }
+  }
 }
 
 void MD_SY1000_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // SY1000 sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // SY1000 sends a program change
     uint16_t new_patch = (CC00 * 100) + program;
     if (patch_number != new_patch) {
       prev_patch_number = patch_number;
       patch_number = new_patch;
-      //request_current_patch_name(); // So the main display always show the correct patch
-      //page_check();
       do_after_patch_selection();
-      //update_page = REFRESH_PAGE;
       check_ample_time_between_pc_messages_timer = millis() + CHECK_AMPLE_TIME_BETWEEN_PC_MESSAGES_TIME; // Fix for patch up/down on SY1000 sending double PC messages, triggering save patch on VController!
     }
-    else if ((!edit_mode_always_on) && (!patch_gap_timer_running) && (millis() > check_ample_time_between_pc_messages_timer) && ((MIDI_port & 0xF0) != USBHMIDI_PORT)) {
+    else if ((!edit_mode_always_on) && (!patch_gap_timer_running) && (millis() > check_ample_time_between_pc_messages_timer) && ((port & 0xF0) != USBHMIDI_PORT)) { // Alternative way to detect WRITE pressed on SY1000.
       bool saved = store_patch(new_patch);
       if (saved) LCD_show_popup_label("Patch saved.", MESSAGE_TIMER_LENGTH);
     }
@@ -352,7 +389,7 @@ void MD_SY1000_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port
 void MD_SY1000_class::check_CC_in(uint8_t control, uint8_t value, uint8_t channel, uint8_t port) {
   if (!connected) return;
   DEBUGMAIN("CC" + String(control));
-  if ((port == MIDI_port) && (channel == MIDI_channel)) {
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) {
     if (control == 0) {
       CC00 = value;
       control_edit_mode();
@@ -371,39 +408,58 @@ void MD_SY1000_class::check_note_in(uint8_t note, uint8_t velocity, uint8_t chan
 
 // Detection of SY-1000
 
-void MD_SY1000_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) {
+void MD_SY1000_class::identity_check(const unsigned char* sxdata, short unsigned int sxlength, uint8_t in_port, uint8_t out_port) {
   // Check if it is a SY-1000
   if ((sxdata[5] == 0x41) && (sxdata[6] == 0x69) && (sxdata[7] == 0x03) && (enabled == DEVICE_DETECT)) {
     no_response_counter = 0;
-    if (connected == false) connect(sxdata[2], port); //Byte 2 contains the correct device ID
+    if (connected == false) connect(sxdata[2], in_port, out_port); //Byte 2 contains the correct device ID
+
+    // Midi forwarding to allow editing via VController
+    for (uint8_t b = 0; b < SY1000_IDENTITY_MESSAGE_SIZE; b++) {
+      identity_message[b] = sxdata[b];
+    }
   }
 }
 
-void MD_SY1000_class::do_after_connect() {
-  if (edit_mode_always_on) {
+FLASHMEM void MD_SY1000_class::respond_to_identity_request_of_editor() {
+  if (identity_message[0] == 0xF0) MIDI_send_sysex(identity_message, SY1000_IDENTITY_MESSAGE_SIZE, USBMIDI_PORT);
+}
+
+FLASHMEM void MD_SY1000_class::do_after_connect() {
+  if (edit_mode_always_on) { // Force edit_mode on
+    edit_mode = false;
     set_editor_mode(true);
-    delay(10);
   }
+  /*else { // Force edit_mode off
+    edit_mode = true;
+    set_editor_mode(false);
+    }*/
+  delay(10);
   request_first_data_item();
   current_exp_pedal = 1;
   if (!can_request_sysex_data()) do_after_patch_selection();
   //update_page = REFRESH_PAGE;
 }
 
-void MD_SY1000_class::request_first_data_item() {
+FLASHMEM void MD_SY1000_class::do_after_disconnect() {
+  /*edit_mode = false;
+    write_sysex(SY1000_EDITOR_MODE_OFF);*/
+}
+
+FLASHMEM void MD_SY1000_class::request_first_data_item() {
   if (!can_request_sysex_data()) return;
   data_item = 1;
   request_current_data_item();
 }
 
-void MD_SY1000_class::request_next_data_item() {
+FLASHMEM void MD_SY1000_class::request_next_data_item() {
   if (!can_request_sysex_data()) return;
   if (data_item == 0) return;
   data_item++;
   request_current_data_item();
 }
 
-void MD_SY1000_class::request_current_data_item() {
+FLASHMEM void MD_SY1000_class::request_current_data_item() {
   bool set_timer = false;
   DEBUGMSG("Requesting data item " + String(data_item));
   switch (data_item) {
@@ -416,7 +472,7 @@ void MD_SY1000_class::request_current_data_item() {
       set_timer = true;
       break;
     case 3:
-      request_current_patch_number(); // Will trigger do)after_patch_change after receiving data
+      request_current_patch_number(); // Will trigger do_after_patch_change after receiving data
       set_timer = true;
       break;
     case 5: // After patch change
@@ -424,20 +480,21 @@ void MD_SY1000_class::request_current_data_item() {
       set_timer = true;
       break;
     case 6:
+      request_current_patch_name();
+      set_timer = true;
+      break;
+    case 7:
       if (!bass_mode) request_sysex(SY1000_GM_MASTER_KEY, 1);
       else request_sysex(SY1000_BM_MASTER_KEY, 1);
       set_timer = true;
       break;
-    case 7:
+    case 8:
       if (!bass_mode) request_sysex(SY1000_GM_PATCH_MIDI, 52);
       else request_sysex(SY1000_BM_PATCH_MIDI, 52);
       set_timer = true;
       break;
-    case 8:
-      request_current_patch_name();
-      set_timer = true;
-      break;
     case 9:
+      if (Setting.Send_global_tempo_after_patch_change == true) set_bpm(); // Set tempo again, so the SY1000 will not lose it when changing patches quickly
       request_full_assign(0);
       data_item = 0; // Done requesting items after patch change
       break;
@@ -446,7 +503,7 @@ void MD_SY1000_class::request_current_data_item() {
   else midi_timer = 0;
 }
 
-void MD_SY1000_class::check_midi_timer() {
+FLASHMEM void MD_SY1000_class::check_midi_timer() {
   if (midi_timer == 0) return;
   if (millis() > midi_timer) {
     request_current_data_item();
@@ -457,56 +514,60 @@ void MD_SY1000_class::check_midi_timer() {
 
 // ********************************* Section 3: SY1000 common MIDI out functions ********************************************
 
-void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
+FLASHMEM void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value) { // For sending one data byte
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value); // Calculate the Roland checksum
   uint8_t sysexmessage[15] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x69, 0x12, ad[3], ad[2], ad[1], ad[0], value, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 15, MIDI_port); // SY-1000 connected via USBHost_t36 library will only supoort sysex messages via cable 1 (default 0)
+  MIDI_send_sysex(sysexmessage, 15, MIDI_out_port); // SY-1000 connected via USBHost_t36 library will only supoort sysex messages via cable 1 (default 0)
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 15, USBMIDI_PORT); // Forward message to BTS
 }
 
-void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
+FLASHMEM void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2) { // For sending two data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2); // Calculate the Roland checksum
   uint8_t sysexmessage[16] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x69, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 16, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 16, MIDI_out_port);
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 16, USBMIDI_PORT); // Forward message to BTS
 }
 
-void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4) { // For sending four data bytes
+FLASHMEM void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4) { // For sending four data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2 + value3 + value4); // Calculate the Roland checksum
   uint8_t sysexmessage[18] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x69, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, value3, value4, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 18, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 18, MIDI_out_port);
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 18, USBMIDI_PORT); // Forward message to BTS
 }
 
-void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4, uint8_t value5, uint8_t value6, uint8_t value7, uint8_t value8) { // For sending eight data bytes
+FLASHMEM void MD_SY1000_class::write_sysex(uint32_t address, uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4, uint8_t value5, uint8_t value6, uint8_t value7, uint8_t value8) { // For sending eight data bytes
 
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] + value1 + value2 + value3 + value4 + value5 + value6 + value7 + value8); // Calculate the Roland checksum
   uint8_t sysexmessage[22] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x69, 0x12, ad[3], ad[2], ad[1], ad[0], value1, value2, value3, value4, value5, value6, value7, value8, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 22, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 22, MIDI_out_port);
+  if (editor_connected) MIDI_send_sysex(sysexmessage, 22, USBMIDI_PORT); // Forward message to BTS
 }
 
-void MD_SY1000_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
+FLASHMEM void MD_SY1000_class::request_sysex(uint32_t address, uint8_t no_of_bytes) {
   uint8_t *ad = (uint8_t*)&address; //Split the 32-bit address into four bytes: ad[3], ad[2], ad[1] and ad[0]
   uint8_t no1 = no_of_bytes >> 7;
   uint8_t no2 = no_of_bytes & 0x7F;
   uint8_t checksum = calc_Roland_checksum(ad[3] + ad[2] + ad[1] + ad[0] +  no1 + no2); // Calculate the Roland checksum
   uint8_t sysexmessage[18] = {0xF0, 0x41, MIDI_device_id, 0x00, 0x00, 0x00, 0x69, 0x11, ad[3], ad[2], ad[1], ad[0], 0x00, 0x00, no1, no2, checksum, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 18, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 18, MIDI_out_port);
 }
 
-void MD_SY1000_class::control_edit_mode() {
+FLASHMEM void MD_SY1000_class::control_edit_mode() {
   set_editor_mode(true);
   //if (!edit_mode_always_on) {
-  if ((!edit_mode_always_on) && ((MIDI_port & 0xF0) != USBHMIDI_PORT)) {
+  if ((!edit_mode_always_on) && ((MIDI_in_port & 0xF0) != USBHMIDI_PORT)) {
     edit_mode_return_timer = SY1000_EDIT_MODE_RETURN_TIME + millis();
     edit_return_timer_running = true;
   }
@@ -520,14 +581,15 @@ void MD_SY1000_class::check_edit_mode_return_timer() {
   }
 }
 
-void MD_SY1000_class::set_editor_mode(bool state) {
+FLASHMEM void MD_SY1000_class::set_editor_mode(bool state) {
   if (state == edit_mode) return;
+  if (((MIDI_in_port & 0xF0) == USBHMIDI_PORT) && (state == false)) return; // Do not switch off editor mode when connected to USB_MIDI
   if (state) write_sysex(SY1000_EDITOR_MODE_ON);
   else write_sysex(SY1000_EDITOR_MODE_OFF);
   edit_mode = state;
 }
 
-void MD_SY1000_class::set_bpm() {
+FLASHMEM void MD_SY1000_class::set_bpm() {
   if (connected) {
     uint32_t address;
     uint16_t t = Setting.Bpm * 10;
@@ -538,7 +600,7 @@ void MD_SY1000_class::set_bpm() {
   }
 }
 
-void MD_SY1000_class::start_tuner() {
+FLASHMEM void MD_SY1000_class::start_tuner() {
   if (connected) {
     control_edit_mode();
     write_sysex(SY1000_TUNER_ON); // Start tuner on SY-1000
@@ -546,7 +608,7 @@ void MD_SY1000_class::start_tuner() {
   }
 }
 
-void MD_SY1000_class::stop_tuner() {
+FLASHMEM void MD_SY1000_class::stop_tuner() {
   if (connected) {
     control_edit_mode();
     write_sysex(SY1000_TUNER_OFF); // Stop tuner on SY-1000
@@ -561,32 +623,29 @@ void MD_SY1000_class::check_send_tempo_timer() {
     else request_sysex(SY1000_BM_TEMPO, 4);
     send_tempo_timer = 0;
   }
-
 }
 
 // ********************************* Section 4: SY1000 program change ********************************************
 
-void MD_SY1000_class::select_patch(uint16_t new_patch) {
+FLASHMEM void MD_SY1000_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
-  if ((MIDI_port & 0xF0) != USBHMIDI_PORT) {
-    MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_port);
-    MIDI_send_PC(new_patch % 100, MIDI_channel, MIDI_port);
-    DEBUGMSG("out(SY1000) PC" + String(new_patch)); //Debug
+  if ((MIDI_out_port & 0xF0) != USBHMIDI_PORT) {
+    MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_out_port);
+    MIDI_send_PC(new_patch % 100, MIDI_channel, MIDI_out_port);
+    DEBUGMSG("out(SY1000) CC/PC" + String(new_patch)); //Debug
   }
   else { // Via host port normal CC/PC no longer works.
     control_edit_mode();
     write_sysex(SY1000_PATCH_SELECT, (new_patch & 0x7F80) >> 7, new_patch & 0x7F);
     DEBUGMSG("out(SY1000) PC through sysex" + String(new_patch)); //Debug
   }
-  set_patch_gap_timer();
-  //delay(200); // During the patch change the SY1000 is not responding to MIDI commands
-  //do_after_patch_selection();
+  set_patch_gap_timer(); // Delay the running of MD_SY1000_class::do_after_patch_selection()
 }
 
-void MD_SY1000_class::set_patch_gap_timer() {
+FLASHMEM void MD_SY1000_class::set_patch_gap_timer() {
   patch_gap_timer = millis() + PATCH_GAP_TIME;
   patch_gap_timer_running = true;
 }
@@ -599,7 +658,8 @@ void MD_SY1000_class::check_patch_gap_timer() {
   }
 }
 
-void MD_SY1000_class::do_after_patch_selection() {
+FLASHMEM void MD_SY1000_class::do_after_patch_selection() {
+  edit_mode = false; // So edit mode will be switched on again when data is sent
   is_on = connected;
   Current_patch_number = patch_number;
   update_LEDS = true;
@@ -607,7 +667,7 @@ void MD_SY1000_class::do_after_patch_selection() {
   reset_special_functions();
 
   if (Setting.Send_global_tempo_after_patch_change == true) {
-    delay(5); // SY1000 misses send bpm command...
+    delay(5);
     set_bpm();
   }
   load_patch(patch_number);
@@ -615,11 +675,11 @@ void MD_SY1000_class::do_after_patch_selection() {
   update_leds_on_SY1000();
   data_item = 4;
   request_next_data_item();
-  //MD_base_class::do_after_patch_selection();
+  MD_base_class::do_after_patch_selection();
   update_page = RELOAD_PAGE; // So Scene names are also updated when they are on the page.
 }
 
-bool MD_SY1000_class::request_patch_name(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_SY1000_class::request_patch_name(uint8_t sw, uint16_t number) {
   if (number > patch_max) return true;
   uint32_t Address;
   Address = 0x52000000 + (((number * 0x10) / 0x80) * 0x100) + ((number * 0x10) % 0x80); //Calculate the address where the patchname is stored on the SY-1000
@@ -632,17 +692,17 @@ bool MD_SY1000_class::request_patch_name(uint8_t sw, uint16_t number) {
   return false;
 }
 
-void MD_SY1000_class::request_current_patch_name() {
+FLASHMEM void MD_SY1000_class::request_current_patch_name() {
   if (!bass_mode) request_sysex(SY1000_GM_CURRENT_PATCH_NAME, 16);
   else request_sysex(SY1000_BM_CURRENT_PATCH_NAME, 16);
 }
 
-void MD_SY1000_class::request_current_patch_number() {
+FLASHMEM void MD_SY1000_class::request_current_patch_number() {
   if (!bass_mode) request_sysex(SY1000_GM_CURRENT_PATCH_NUMBER, 4);
   else request_sysex(SY1000_BM_CURRENT_PATCH_NUMBER, 4);
 }
 
-bool MD_SY1000_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
+FLASHMEM bool MD_SY1000_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will flash the LEDs in banks of three when coming from direct select mode.
   if (!bank_selection_active()) return false;
 
   if (flash_bank_of_four == 255) return true; // We are not coming from direct select, so all LEDs should flash
@@ -655,7 +715,7 @@ bool MD_SY1000_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Will fla
   return false;
 }
 
-void MD_SY1000_class::number_format(uint16_t number, String &Output) {
+FLASHMEM void MD_SY1000_class::number_format(uint16_t number, String &Output) {
   if (number < 200) Output += 'U';
   else Output += 'P';
   uint8_t bank_no = ((number % 200) / 4) + 1;
@@ -664,7 +724,7 @@ void MD_SY1000_class::number_format(uint16_t number, String &Output) {
   Output += String((number % 4) + 1);
 }
 
-void MD_SY1000_class::direct_select_format(uint16_t number, String &Output) {
+FLASHMEM void MD_SY1000_class::direct_select_format(uint16_t number, String &Output) {
 
   if (direct_select_state == 0) {
     if (number <= 5) Output += 'U' + String(number) + "_-_";
@@ -683,7 +743,7 @@ void MD_SY1000_class::direct_select_format(uint16_t number, String &Output) {
   }
 }
 
-bool MD_SY1000_class::valid_direct_select_switch(uint8_t number) {
+FLASHMEM bool MD_SY1000_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
   if (direct_select_state == 0) { // Show all switches on first digit
     result = ((number * 40) <= (patch_max - patch_min + 1));
@@ -695,7 +755,7 @@ bool MD_SY1000_class::valid_direct_select_switch(uint8_t number) {
   return result;
 }
 
-void MD_SY1000_class::direct_select_start() {
+FLASHMEM void MD_SY1000_class::direct_select_start() {
   Previous_bank_size = bank_size; // Remember the bank size
   device_in_bank_selection = my_device_number + 1;
   bank_size = 400;
@@ -703,7 +763,7 @@ void MD_SY1000_class::direct_select_start() {
   direct_select_state = 0;
 }
 
-uint16_t MD_SY1000_class::direct_select_patch_number_to_request(uint8_t number) {
+FLASHMEM uint16_t MD_SY1000_class::direct_select_patch_number_to_request(uint8_t number) {
   uint16_t new_patch_number;
   if (direct_select_state == 0) new_patch_number = (number * 40);
   else new_patch_number = (bank_select_number * 40) + (number * 4);
@@ -711,7 +771,7 @@ uint16_t MD_SY1000_class::direct_select_patch_number_to_request(uint8_t number) 
   return new_patch_number - 4;
 }
 
-void MD_SY1000_class::direct_select_press(uint8_t number) {
+FLASHMEM void MD_SY1000_class::direct_select_press(uint8_t number) {
   if (!valid_direct_select_switch(number)) return;
   if (direct_select_state == 0) {
     // First digit pressed
@@ -727,7 +787,7 @@ void MD_SY1000_class::direct_select_press(uint8_t number) {
     bank_size = Previous_bank_size;
     bank_select_number = (base_patch / bank_size);
     Current_page = Previous_page; // SCO_select_page will overwrite Previous_page with Current_page, now it will know the way back
-    SCO_select_page(SY1000_DEFAULT_PAGE1); // Which should give PAGE_SY1000_PATCH_BANK
+    SCO_select_page(my_device_page1); // Which should give PAGE_SY1000_PATCH_BANK
     device_in_bank_selection = my_device_number + 1; // Go into bank mode
   }
 }
@@ -736,7 +796,7 @@ void MD_SY1000_class::direct_select_press(uint8_t number) {
 // Selecting and muting the SY1000 is done by storing the settings of COSM guitar switch and Normal PU switch
 // and switching both off when guitar is muted and back to original state when the SY1000 is selected
 
-void MD_SY1000_class::request_guitar_switch_states() {
+FLASHMEM void MD_SY1000_class::request_guitar_switch_states() {
   if (!bass_mode) {
     request_sysex(SY1000_GM_INST1_SW, 2);
     request_sysex(SY1000_GM_INST2_SW, 2);
@@ -752,24 +812,24 @@ void MD_SY1000_class::request_guitar_switch_states() {
   request_onoff = true;
 }
 
-void MD_SY1000_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_SY1000_class::check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength) {
   if (request_onoff == true) {
     uint8_t data3 = sxdata[3];
     uint32_t address = (sxdata[sx_index(data3, 8)] << 24) + (sxdata[sx_index(data3, 9)] << 16) + (sxdata[sx_index(data3, 10)] << 8) + sxdata[sx_index(data3, 11)]; // Make the address 32 bit
     if ((address == SY1000_GM_INST1_SW) || (address == SY1000_BM_INST1_SW)) {
       INST_onoff[0] = sxdata[sx_index(data3, 12)];
       INST_type[0] = sxdata[sx_index(data3, 13)];
-      Serial.println("INST_type[0]:" + String(INST_type[0]));
+      DEBUGMSG("INST_type[0]:" + String(INST_type[0]));
     }
     if ((address == SY1000_GM_INST2_SW) || (address == SY1000_BM_INST2_SW)) {
       INST_onoff[1] = sxdata[sx_index(data3, 12)];
       INST_type[1] = sxdata[sx_index(data3, 13)];
-      Serial.println("INST_type[1]:" + String(INST_type[1]));
+      DEBUGMSG("INST_type[1]:" + String(INST_type[1]));
     }
     if ((address == SY1000_GM_INST3_SW) || (address == SY1000_BM_INST3_SW)) {
       INST_onoff[2] = sxdata[sx_index(data3, 12)];
       INST_type[2] = sxdata[sx_index(data3, 13)];
-      Serial.println("INST_type[2]:" + String(INST_type[2]));
+      DEBUGMSG("INST_type[2]:" + String(INST_type[2]));
     }
     if ((address == SY1000_GM_NORMAL_PU_SW) || (address == SY1000_BM_NORMAL_PU_SW)) {
       nrml_pu_onoff = sxdata[sx_index(data3, 12)];  // Store the value
@@ -779,7 +839,7 @@ void MD_SY1000_class::check_inst_switch_states(const unsigned char* sxdata, shor
   }
 }
 
-void MD_SY1000_class::unmute() {
+FLASHMEM void MD_SY1000_class::unmute() {
   is_on = connected;
   control_edit_mode();
   if (!bass_mode) {
@@ -796,25 +856,29 @@ void MD_SY1000_class::unmute() {
   }
 }
 
-void MD_SY1000_class::mute() {
+FLASHMEM void MD_SY1000_class::mute() {
   if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
     is_on = false;
     control_edit_mode();
     request_guitar_switch_states();
     delay(20);
 
-    if (!bass_mode) {
-      write_sysex(SY1000_GM_INST1_SW, 0x00); // Switch INST1 guitar off
-      write_sysex(SY1000_GM_INST2_SW, 0x00); // Switch INST2 guitar off
-      write_sysex(SY1000_GM_INST3_SW, 0x00); // Switch INST3 guitar off
-      write_sysex(SY1000_GM_NORMAL_PU_SW, 0x00); // Switch normal pu off
-    }
-    else {
-      write_sysex(SY1000_BM_INST1_SW, 0x00); // Switch INST1 guitar off
-      write_sysex(SY1000_BM_INST2_SW, 0x00); // Switch INST2 guitar off
-      write_sysex(SY1000_BM_INST3_SW, 0x00); // Switch INST3 guitar off
-      write_sysex(SY1000_BM_NORMAL_PU_SW, 0x00); // Switch normal pu off
-    }
+    mute_now();
+  }
+}
+
+FLASHMEM void MD_SY1000_class::mute_now() {
+  if (!bass_mode) {
+    write_sysex(SY1000_GM_INST1_SW, 0x00); // Switch INST1 guitar off
+    write_sysex(SY1000_GM_INST2_SW, 0x00); // Switch INST2 guitar off
+    write_sysex(SY1000_GM_INST3_SW, 0x00); // Switch INST3 guitar off
+    write_sysex(SY1000_GM_NORMAL_PU_SW, 0x00); // Switch normal pu off
+  }
+  else {
+    write_sysex(SY1000_BM_INST1_SW, 0x00); // Switch INST1 guitar off
+    write_sysex(SY1000_BM_INST2_SW, 0x00); // Switch INST2 guitar off
+    write_sysex(SY1000_BM_INST3_SW, 0x00); // Switch INST3 guitar off
+    write_sysex(SY1000_BM_NORMAL_PU_SW, 0x00); // Switch normal pu off
   }
 }
 
@@ -1090,12 +1154,12 @@ const uint8_t SY1000_FX_colours[] = { // Table with the LED colours for the diff
   FX_WAH_TYPE, // Colour for "WAH"
 };
 
-void MD_SY1000_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
+FLASHMEM void MD_SY1000_class::read_parameter_name(uint16_t number, String &Output) { // Called from menu
   if (number < number_of_parameters())  Output = SY1000_parameters[number].Name;
   else Output = "?";
 }
 
-void MD_SY1000_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
+FLASHMEM void MD_SY1000_class::read_parameter_value_name(uint16_t number, uint16_t value, String &Output) {
   if (number < SY1000_NUMBER_OF_PARAMETERS)  {
     uint16_t my_sublist = SY1000_parameters[number].Sublist;
     if ((my_sublist > 0) && !(my_sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -1127,7 +1191,7 @@ void MD_SY1000_class::read_parameter_value_name(uint16_t number, uint16_t value,
   else Output += "?";
 }
 
-uint32_t MD_SY1000_class::read_parameter_address(uint16_t number) {
+FLASHMEM uint32_t MD_SY1000_class::read_parameter_address(uint16_t number) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return 0;
 
   uint32_t address;
@@ -1165,7 +1229,7 @@ uint32_t MD_SY1000_class::read_parameter_address(uint16_t number) {
 }
 
 // Toggle SY1000 stompbox parameter
-void MD_SY1000_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_SY1000_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return;
 
   // Send sysex MIDI command to SY-1000
@@ -1182,7 +1246,7 @@ void MD_SY1000_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t numb
           else target = SY1000_parameters[number].Target_BM;
           set_assign_settings(15, target, SP[Sw].Latch, SY1000_SOURCE_CC95);
           delay(20);
-          MIDI_send_CC(95, 127, MIDI_channel, MIDI_port);
+          MIDI_send_CC(95, 127, MIDI_channel, MIDI_out_port);
           assign_return_target_timer = millis() + SY1000_ASSIGN_RETURN_TIME;
         }
         else {
@@ -1214,13 +1278,13 @@ void MD_SY1000_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_t numb
   }
 }
 
-void MD_SY1000_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
+FLASHMEM void MD_SY1000_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t number) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return;
 
   // Work out state of pedal
   switch (SY1000_parameters[number].Address_GM) {
     case VIA_ASSIGN:
-      MIDI_send_CC(95, 0, MIDI_channel, MIDI_port);
+      MIDI_send_CC(95, 0, MIDI_channel, MIDI_out_port);
       delay(20);
       restore_assign_settings(15);
       break;
@@ -1241,7 +1305,7 @@ void MD_SY1000_class::parameter_release(uint8_t Sw, Cmd_struct *cmd, uint16_t nu
 
 }
 
-void MD_SY1000_class::write_parameter_value(uint16_t number, uint8_t value) {
+FLASHMEM void MD_SY1000_class::write_parameter_value(uint16_t number, uint8_t value) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return;
   control_edit_mode();
   if (SY1000_parameters[number].Address_GM != VIA_ASSIGN) {
@@ -1268,12 +1332,12 @@ void MD_SY1000_class::write_parameter_value(uint16_t number, uint8_t value) {
   }
 }
 
-void MD_SY1000_class::read_parameter_title(uint16_t number, String &Output) {
+FLASHMEM void MD_SY1000_class::read_parameter_title(uint16_t number, String &Output) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return;
   Output += SY1000_parameters[number].Name;
 }
 
-bool MD_SY1000_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_SY1000_class::request_parameter(uint8_t sw, uint16_t number) {
   if (number >= SY1000_NUMBER_OF_PARAMETERS) return true;
   if (can_request_sysex_data()) {
     switch (SY1000_parameters[number].Address_GM)  {
@@ -1299,7 +1363,7 @@ bool MD_SY1000_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 }
 
-void MD_SY1000_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current SY1000 parameter
+FLASHMEM void MD_SY1000_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) { //Read the current SY1000 parameter
   SP[sw].Target_byte1 = byte1;
   SP[sw].Target_byte2 = byte2;
 
@@ -1338,7 +1402,7 @@ void MD_SY1000_class::read_parameter(uint8_t sw, uint8_t byte1, uint8_t byte2) {
   update_lcd = sw;
 }
 
-void MD_SY1000_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
+FLASHMEM void MD_SY1000_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates the label for extended sublists
   uint16_t index = SP[Sw].PP_number; // Read the parameter number (index to SY1000-parameter array)
   if ((index != NOT_FOUND) && (index <  SY1000_NUMBER_OF_PARAMETERS)) {
     if ((SY1000_parameters[index].Sublist > 0) && !(SY1000_parameters[index].Sublist & SUBLIST_FROM_BYTE2)) { // Check if state needs to be read
@@ -1356,18 +1420,18 @@ void MD_SY1000_class::check_update_label(uint8_t Sw, uint8_t value) { // Updates
   }
 }
 
-uint16_t MD_SY1000_class::number_of_parameters() {
+FLASHMEM uint16_t MD_SY1000_class::number_of_parameters() {
   return SY1000_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_SY1000_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_SY1000_class::number_of_values(uint16_t parameter) {
   if (parameter < SY1000_NUMBER_OF_PARAMETERS) return SY1000_parameters[parameter].NumVals;
   else return 0;
 }
 
 // ** Switch mode
 
-void MD_SY1000_class::set_switch_mode(uint8_t mode) {
+FLASHMEM void MD_SY1000_class::set_switch_mode(uint8_t mode) {
   DEBUGMAIN("** Set switch mode to " + String(mode));
   prev_switch_mode = switch_mode;
   //if (mode == switch_mode) return;
@@ -1447,7 +1511,7 @@ void MD_SY1000_class::set_switch_mode(uint8_t mode) {
   update_leds_on_SY1000();
 }
 
-void MD_SY1000_class::request_switch_mode() {
+FLASHMEM void MD_SY1000_class::request_switch_mode() {
   request_sysex(ADDR_MANUAL, 1);
   if (!bass_mode) {
     request_sysex(0x00012012, 8);
@@ -1458,7 +1522,7 @@ void MD_SY1000_class::request_switch_mode() {
   request_LED_state = true;
 }
 
-void MD_SY1000_class::check_switch_mode(uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_SY1000_class::check_switch_mode(uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   if (address == ADDR_MANUAL) {
     manual_mode = (sxdata[sx_index(sxdata[3], 12)] == 0x01 ? true : false);
   }
@@ -1497,7 +1561,7 @@ void MD_SY1000_class::check_switch_mode(uint32_t address, const unsigned char* s
   }
 }
 
-void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value) {
+FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value) {
   bool no_scene_switch = false;
   switch (switch_mode) {
     case MODE_NUM:
@@ -1515,7 +1579,7 @@ void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value) {
 
   if (no_scene_switch) {
     // Whenever a switch is pressed twice, request the tempo when edit mode is not active - this is the best way to keep the tempo on the VC-mini in sync with the SY1000
-    if ((prev_switch_mode_cc == sw + 1) && (!edit_mode)) {
+    if ((prev_switch_mode_cc == sw + 1) && (!edit_mode) && (millis() > check_ample_time_between_pc_messages_timer)) {
       send_tempo_timer = millis() + CHECK_SEND_TEMPO_TIME; // We need to send the message delayed though, as tempo is wrong right after a patch change, which the SY1000 switches often initiate.
     }
     prev_switch_mode_cc = sw + 1;
@@ -1581,7 +1645,7 @@ void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value) {
   }
 }
 
-void MD_SY1000_class::auto_return_switch_mode() {
+FLASHMEM void MD_SY1000_class::auto_return_switch_mode() {
   if (switch_mode != MODE_PATCH) {
     //update_leds_on_SY1000();
     return;
@@ -1592,7 +1656,7 @@ void MD_SY1000_class::auto_return_switch_mode() {
   update_page = REFRESH_FX_ONLY;
 }
 
-void MD_SY1000_class::update_leds_on_SY1000() {
+FLASHMEM void MD_SY1000_class::update_leds_on_SY1000() {
   switch (switch_mode) {
     case MODE_SCENE:
     case MODE_SCENE_TOP_ROW:
@@ -1605,7 +1669,7 @@ void MD_SY1000_class::update_leds_on_SY1000() {
   }
 }
 
-void MD_SY1000_class::set_LED_colour(uint8_t sw, uint8_t colour) {
+FLASHMEM void MD_SY1000_class::set_LED_colour(uint8_t sw, uint8_t colour) {
   if (!connected) return;
   if ((switch_mode != MODE_SCENE) && (switch_mode != MODE_SCENE_ASSIGN) && (switch_mode != MODE_SCENE_TOP_ROW) && (switch_mode != MODE_SCENE_BOTTOM_ROW)) return;
   if (sw > 7) return;
@@ -1636,7 +1700,7 @@ void MD_SY1000_class::set_LED_colour(uint8_t sw, uint8_t colour) {
   DEBUGMSG("SY1000 SW " + String(sw) + " set to colour " + String(colour));
 }
 
-void MD_SY1000_class::set_all_LED_colours(uint8_t * colour) {
+FLASHMEM void MD_SY1000_class::set_all_LED_colours(uint8_t * colour) {
   if (!connected) return;
   if ((switch_mode != MODE_SCENE) && (switch_mode != MODE_SCENE_ASSIGN)) return;
 
@@ -1648,7 +1712,7 @@ void MD_SY1000_class::set_all_LED_colours(uint8_t * colour) {
   write_sysex(address + 8, colour[4], colour[4], colour[5], colour[5], colour[6], colour[6], colour[7], colour[7]);
 }
 
-void MD_SY1000_class::update_switches_on_page(uint32_t address, uint8_t data) {
+FLASHMEM void MD_SY1000_class::update_switches_on_page(uint32_t address, uint8_t data) {
   for (uint8_t s = 1; s < TOTAL_NUMBER_OF_SWITCHES + 1; s++) {
     uint8_t Dev = SP[s].Device;
     if (Dev == CURRENT) Dev = Current_device;
@@ -1702,15 +1766,15 @@ const PROGMEM SY1000_assign_struct SY1000_assigns[] = {
   {"MANUAL2", "MNL2", 0x33, 127, SY1000_MAN_TYPE },
   {"MANUAL3", "MNL3", 0x35, 127, SY1000_MAN_TYPE },
   {"MANUAL4", "MNL4", 0x37, 127, SY1000_MAN_TYPE },
-  {"GK SW1", "GKS1", 0x2D, 15, SY1000_CTL_TYPE },
-  {"GK SW2", "GKS2", 0x2F, 16, SY1000_CTL_TYPE },
+  //{"GK SW1", "GKS1", 0x2D, 15, SY1000_CTL_TYPE },
+  //{"GK SW2", "GKS2", 0x2F, 16, SY1000_CTL_TYPE },
 };
 
 const uint8_t SY1000_NUMBER_OF_CTL_FUNCTIONS = sizeof(SY1000_assigns) / sizeof(SY1000_assigns[0]);
 #define SY1000_NUMBER_OF_SCENE_ASSIGNS 8
 #define SY1000_TOTAL_NUMBER_OF_ASSIGNS SY1000_NUMBER_OF_CTL_FUNCTIONS + SY1000_NUMBER_OF_SCENE_ASSIGNS
 
-uint32_t MD_SY1000_class::calculate_assign_address(uint8_t number) {
+FLASHMEM uint32_t MD_SY1000_class::calculate_assign_address(uint8_t number) {
   if (number >= SY1000_TOTAL_NUMBER_OF_ASSIGNS) return 0;
   if (number < SY1000_NUMBER_OF_CTL_FUNCTIONS) {
     if (!bass_mode) return 0x10000000 + SY1000_assigns[number].Address;
@@ -1722,16 +1786,16 @@ uint32_t MD_SY1000_class::calculate_assign_address(uint8_t number) {
   }
 }
 
-void MD_SY1000_class::read_assign_name(uint8_t number, String & Output) {
+FLASHMEM void MD_SY1000_class::read_assign_name(uint8_t number, String & Output) {
   if (number < SY1000_NUMBER_OF_CTL_FUNCTIONS)  Output += SY1000_assigns[number].Title;
   else {
     number -= SY1000_NUMBER_OF_CTL_FUNCTIONS;
-    if (number < SY1000_NUMBER_OF_SCENE_ASSIGNS)  Output += "SCENE ASSIGN " + String(number + 1);
+    if (number < SY1000_NUMBER_OF_SCENE_ASSIGNS)  Output += "SCENE ASGN " + String(number + 1);
     else Output += "--";
   }
 }
 
-void MD_SY1000_class::read_assign_short_name(uint8_t number, String & Output) {
+FLASHMEM void MD_SY1000_class::read_assign_short_name(uint8_t number, String & Output) {
   if (number < SY1000_NUMBER_OF_CTL_FUNCTIONS)  Output += SY1000_assigns[number].Title_short;
   else {
     number -= SY1000_NUMBER_OF_CTL_FUNCTIONS;
@@ -1740,22 +1804,22 @@ void MD_SY1000_class::read_assign_short_name(uint8_t number, String & Output) {
   }
 }
 
-void MD_SY1000_class::read_assign_trigger(uint8_t number, String & Output) {
+FLASHMEM void MD_SY1000_class::read_assign_trigger(uint8_t number, String & Output) {
   if (number < SY1000_NUMBER_OF_CTL_FUNCTIONS) Output = SY1000_assigns[number].Title;
   else if (number < 96) Output = "CC#" + String(number);
   else Output = "-";
 }
 
-uint8_t MD_SY1000_class::get_number_of_assigns() {
+FLASHMEM uint8_t MD_SY1000_class::get_number_of_assigns() {
   return SY1000_TOTAL_NUMBER_OF_ASSIGNS;
 }
 
-uint8_t MD_SY1000_class::trigger_follow_assign(uint8_t number) {
+FLASHMEM uint8_t MD_SY1000_class::trigger_follow_assign(uint8_t number) {
   if (number < SY1000_NUMBER_OF_CTL_FUNCTIONS) return number;
   else return number + SY1000_FIRST_SCENE_ASSIGN_SOURCE_CC - SY1000_NUMBER_OF_CTL_FUNCTIONS; // Scene assign cc numbers are 21 and up
 }
 
-void MD_SY1000_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to SY1000_ASSIGN is pressed
+FLASHMEM void MD_SY1000_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to SY1000_ASSIGN is pressed
   uint8_t asgn = SP[Sw].Assign_number;
   uint16_t target;
   if (asgn < SY1000_NUMBER_OF_CTL_FUNCTIONS) {
@@ -1786,7 +1850,7 @@ void MD_SY1000_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to
     }
     change_active_assign_sources(SY1000_assigns[asgn].Assign_target_number, SY1000_SOURCE_CC95);
     delay(20);
-    MIDI_send_CC(95, 127, MIDI_channel, MIDI_port);
+    MIDI_send_CC(95, 127, MIDI_channel, MIDI_out_port);
     assign_return_target_timer = millis() + SY1000_ASSIGN_RETURN_TIME;
   }
   else {
@@ -1804,11 +1868,11 @@ void MD_SY1000_class::assign_press(uint8_t Sw, uint8_t value) { // Switch set to
   if (SP[Sw].Assign_on) update_page = REFRESH_PAGE; // To update the other switch states, we re-load the current page
 }
 
-void MD_SY1000_class::assign_release(uint8_t Sw) { // Switch set to SY1000_ASSIGN is released
+FLASHMEM void MD_SY1000_class::assign_release(uint8_t Sw) { // Switch set to SY1000_ASSIGN is released
   uint8_t asgn = SP[Sw].Assign_number;
   if (asgn < SY1000_NUMBER_OF_CTL_FUNCTIONS) {
     // Execute assigns
-    MIDI_send_CC(95, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(95, 0, MIDI_channel, MIDI_out_port);
     delay(20);
 
     if (SP[Sw].Assign_on) {
@@ -1849,12 +1913,12 @@ void MD_SY1000_class::check_delayed_release_assignments() {
   }
 }
 
-void MD_SY1000_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to SY1000_ASSIGN is loaded in SP array
+FLASHMEM void MD_SY1000_class::assign_load(uint8_t sw, uint8_t assign_number, uint8_t cc_number) { // Switch set to SY1000_ASSIGN is loaded in SP array
   SP[sw].Trigger = cc_number; //Save the cc_number in the Trigger variable
   SP[sw].Assign_number = assign_number;
 }
 
-void MD_SY1000_class::request_current_assign(uint8_t sw) {
+FLASHMEM void MD_SY1000_class::request_current_assign(uint8_t sw) {
   uint8_t index = SP[sw].Assign_number;
   if (index < SY1000_NUMBER_OF_CTL_FUNCTIONS) {
     DEBUGMSG("Request assign " + String(index + 1));
@@ -1871,18 +1935,21 @@ void MD_SY1000_class::request_current_assign(uint8_t sw) {
     SP[sw].Assign_max = 1;
     SP[sw].Assign_min = 0;
     SP[sw].PP_number = NOT_FOUND;
-    SP[sw].Colour = my_LED_colour;
+    SP[sw].Colour = 2; // Red
     if (scene_assign_state[index]) SP[sw].State = 1;
-    else SP[sw].State = 2;
+    else SP[sw].State = 0;
     String msg = "CC #" + String(index + SY1000_FIRST_SCENE_ASSIGN_SOURCE_CC);
     uint8_t asgn = check_for_scene_assign_source(index + SY1000_FIRST_SCENE_ASSIGN_SOURCE_CC);
-    if (asgn > 0) msg += " (ASGN " + String(asgn) + ')';
+    if (asgn > 0) {
+      msg += " (ASGN " + String(asgn) + ')';
+      if (SP[sw].State == 0) SP[sw].State = 2;
+    }
     LCD_set_SP_label(sw, msg);
     PAGE_request_next_switch(); // Wrong assign number given in Config - skip it
   }
 }
 
-void MD_SY1000_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_SY1000_class::read_current_assign(uint8_t sw, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   bool found;
   String msg;
   uint8_t ctl_function_number;
@@ -1946,7 +2013,7 @@ void MD_SY1000_class::read_current_assign(uint8_t sw, uint32_t address, const un
   }
 }
 
-bool MD_SY1000_class::ctl_target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the SY1000_parameters table
+FLASHMEM bool MD_SY1000_class::ctl_target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the SY1000_parameters table
 
   // Lookup in SY1000_parameter array
   bool found = false;
@@ -1960,7 +2027,7 @@ bool MD_SY1000_class::ctl_target_lookup(uint8_t sw, uint16_t target) { // Finds 
   return found;
 }
 
-bool MD_SY1000_class::target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the SY1000_parameters table
+FLASHMEM bool MD_SY1000_class::target_lookup(uint8_t sw, uint16_t target) { // Finds the target and its address in the SY1000_parameters table
 
   // Lookup in SY1000_parameter array
   bool found = false;
@@ -1985,7 +2052,7 @@ bool MD_SY1000_class::target_lookup(uint8_t sw, uint16_t target) { // Finds the 
   return found;
 }
 
-void MD_SY1000_class::request_full_assign(uint8_t number) {
+FLASHMEM void MD_SY1000_class::request_full_assign(uint8_t number) {
   if (number >= SY1000_NUMBER_OF_ASSIGNS) return;
   DEBUGMSG("Requesting assign " + String(number));
   uint32_t my_address = calculate_full_assign_address(number);
@@ -1993,7 +2060,7 @@ void MD_SY1000_class::request_full_assign(uint8_t number) {
   request_sysex(my_address, 43);
 }
 
-void MD_SY1000_class::read_full_assign(uint8_t number, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
+FLASHMEM void MD_SY1000_class::read_full_assign(uint8_t number, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
   if (number >= SY1000_NUMBER_OF_ASSIGNS) return;
   DEBUGMSG("Reading assign " + String(number));
   for (uint8_t i = 0; i < sizeof(assign_area[0]); i++) {
@@ -2004,7 +2071,7 @@ void MD_SY1000_class::read_full_assign(uint8_t number, uint32_t address, const u
   if (number == 2) auto_return_switch_mode();
 }
 
-void MD_SY1000_class::change_active_assign_sources(uint8_t from_value, uint8_t to_value) {
+FLASHMEM void MD_SY1000_class::change_active_assign_sources(uint8_t from_value, uint8_t to_value) {
   for (uint8_t number = 0; number < SY1000_NUMBER_OF_ASSIGNS; number++) {
     DEBUGMSG("Checking assign " + String(number) + ", byte[0]:" + String(assign_area[number][0]) + ", byte[13]:" + String(assign_area[number][13]));
     if ((assign_area[number][0] == 1) && (assign_area[number][13] == from_value)) {
@@ -2021,12 +2088,12 @@ void MD_SY1000_class::change_active_assign_sources(uint8_t from_value, uint8_t t
       sysexmessage[55] = calc_Roland_checksum(sum);
       sysexmessage[56] = 0xF7;
       check_sysex_delay();
-      MIDI_send_sysex(sysexmessage, 57, MIDI_port);
+      MIDI_send_sysex(sysexmessage, 57, MIDI_out_port);
     }
   }
 }
 
-void MD_SY1000_class::set_assign_settings(uint8_t assign, uint16_t target, uint8_t mode, uint8_t trigger) {
+FLASHMEM void MD_SY1000_class::set_assign_settings(uint8_t assign, uint16_t target, uint8_t mode, uint8_t trigger) {
   DEBUGMSG("Set assign " + String(assign) + "to target " + String(target));
   control_edit_mode();
   uint32_t my_address = calculate_full_assign_address(assign);
@@ -2044,10 +2111,10 @@ void MD_SY1000_class::set_assign_settings(uint8_t assign, uint16_t target, uint8
   for (uint8_t i = 8; i < 55; i++) sum += sysexmessage[i];
   sysexmessage[55] = calc_Roland_checksum(sum);
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 57, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 57, MIDI_out_port);
 }
 
-void MD_SY1000_class::restore_assign_settings(uint8_t assign) {
+FLASHMEM void MD_SY1000_class::restore_assign_settings(uint8_t assign) {
   DEBUGMSG("Restore assign " + String(assign));
   control_edit_mode();
   uint32_t my_address = calculate_full_assign_address(assign);
@@ -2061,7 +2128,7 @@ void MD_SY1000_class::restore_assign_settings(uint8_t assign) {
   sysexmessage[55] = calc_Roland_checksum(sum);
   sysexmessage[56] = 0xF7;
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 57, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 57, MIDI_out_port);
 }
 
 // f0 41 10 00 00 00 69 12 10 00 05 00 01 00 02 0a 03 08 00 05 00 08 00 00 00 29 01 00 02 08 00 00 03 00 00 0a 0a 14 01 00 01 00 00 00 00 03 0f 0f 0f 00 00 00 00 00 00 35 f7
@@ -2071,14 +2138,14 @@ void MD_SY1000_class::restore_assign_settings(uint8_t assign) {
 // f0 41 10 00 00 00 69 12 10 00 07 00 01 00 02 0a 07 08 00 06 04 08 00 00 00 29 01 00 00 08 00 00 01 00 00 00 00 14 01 00 01 00 00 00 00 03 0f 0f 0f 00 00 00 00 00 00 42 f7
 
 const PROGMEM uint8_t bass_mode_assigns[5][43] = {
- { 0x01, 0x00, 0x02, 0x0a, 0x03, 0x08, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x02, 0x08, 0x00, 0x00, 0x03, 0x00, 0x00, 0x0a, 0x0a, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
- { 0x01, 0x00, 0x02, 0x0a, 0x04, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
- { 0x01, 0x00, 0x02, 0x0a, 0x05, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x01, 0x08, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
- { 0x01, 0x00, 0x02, 0x0a, 0x06, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
- { 0x01, 0x00, 0x02, 0x0a, 0x07, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+  { 0x01, 0x00, 0x02, 0x0a, 0x03, 0x08, 0x00, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x02, 0x08, 0x00, 0x00, 0x03, 0x00, 0x00, 0x0a, 0x0a, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+  { 0x01, 0x00, 0x02, 0x0a, 0x04, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+  { 0x01, 0x00, 0x02, 0x0a, 0x05, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x01, 0x08, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+  { 0x01, 0x00, 0x02, 0x0a, 0x06, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+  { 0x01, 0x00, 0x02, 0x0a, 0x07, 0x08, 0x00, 0x06, 0x04, 0x08, 0x00, 0x00, 0x00, 0x29, 0x01, 0x00, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x14, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x03, 0x0f, 0x0f, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
 };
 
-void MD_SY1000_class::add_bass_string_assigns() {
+FLASHMEM void MD_SY1000_class::add_bass_string_assigns() {
   uint8_t item = 0;
   for (uint8_t a = 0; a < 16; a++) {
     if (assign_area[a][0] == 0) { // Assign off
@@ -2092,7 +2159,7 @@ void MD_SY1000_class::add_bass_string_assigns() {
   }
 }
 
-uint8_t MD_SY1000_class::check_for_scene_assign_source(uint8_t cc) {
+FLASHMEM uint8_t MD_SY1000_class::check_for_scene_assign_source(uint8_t cc) {
   uint8_t my_source = 255;
   if ((cc >= 1) && (cc <= 31)) my_source = cc + 26; // Trigger is cc01 - cc31 (source for CC#01 is 27)
   else if ((cc >= 64) && (cc <= 95)) my_source = cc - 6; // Trigger is cc64 - cc95 (source for CC#64 is 58)
@@ -2102,7 +2169,7 @@ uint8_t MD_SY1000_class::check_for_scene_assign_source(uint8_t cc) {
   return 0;
 }
 
-uint32_t MD_SY1000_class::calculate_full_assign_address(uint8_t number) {
+FLASHMEM uint32_t MD_SY1000_class::calculate_full_assign_address(uint8_t number) {
   uint32_t addr = 0x10000400 + ((number / 2) * 0x100) + ((number % 2) * 0x40);
   if (bass_mode) addr += 0x20000;
   return addr;
@@ -2110,17 +2177,17 @@ uint32_t MD_SY1000_class::calculate_full_assign_address(uint8_t number) {
 
 // Scene assigns - assigns used in scenes
 
-void MD_SY1000_class::initialize_scene_assigns() {
+FLASHMEM void MD_SY1000_class::initialize_scene_assigns() {
   for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) scene_assign_state[sa] = false;
 }
 
-void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
+FLASHMEM void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
   if (number >= NUMBER_OF_SCENE_ASSIGNS) return;
   uint8_t cc = number + SY1000_FIRST_SCENE_ASSIGN_SOURCE_CC;
   scene_assign_state[number] ^= 1; // Toggle state
 
-  if (scene_assign_state[number]) MIDI_send_CC(cc, 127, MIDI_channel, MIDI_port);
-  else MIDI_send_CC(cc, 0, MIDI_channel, MIDI_port);
+  if (scene_assign_state[number]) MIDI_send_CC(cc, 127, MIDI_channel, MIDI_out_port);
+  else MIDI_send_CC(cc, 0, MIDI_channel, MIDI_out_port);
 
   show_scene_assign_LEDs();
   String msg = "CC #" + String(cc);
@@ -2129,13 +2196,13 @@ void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
   LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 }
 
-void MD_SY1000_class::set_scene_assign_states(uint8_t my_byte) {
+FLASHMEM void MD_SY1000_class::set_scene_assign_states(uint8_t my_byte) {
   for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
     scene_assign_state[sa] = bitRead(my_byte, sa);
   }
 }
 
-uint8_t MD_SY1000_class::read_scene_assign_state() {
+FLASHMEM uint8_t MD_SY1000_class::read_scene_assign_state() {
   uint8_t my_byte = 0;
   for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
     bitWrite(my_byte, sa, scene_assign_state[sa]);
@@ -2143,14 +2210,14 @@ uint8_t MD_SY1000_class::read_scene_assign_state() {
   return my_byte;
 }
 
-void MD_SY1000_class::check_scene_assigns_with_new_state(uint8_t new_byte) {
+FLASHMEM void MD_SY1000_class::check_scene_assigns_with_new_state(uint8_t new_byte) {
   for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
     bool new_state = bitRead(new_byte, sa);
     if (scene_assign_state[sa] != new_state) toggle_scene_assign(sa);
   }
 }
 
-void MD_SY1000_class::show_scene_assign_LEDs() {
+FLASHMEM void MD_SY1000_class::show_scene_assign_LEDs() {
   if (switch_mode != MODE_SCENE_ASSIGN) return;
   for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
     if (scene_assign_state[sa] == 1) set_LED_colour(sa, SY1000_SCENE_ASSIGN_COLOUR);
@@ -2183,6 +2250,7 @@ void MD_SY1000_class::show_scene_assign_LEDs() {
 #define SY1000_PATCH_NUMBER_LSB 2
 #define SY1000_CURRENT_SCENE_BYTE 5
 #define SY1000_SCENE_ACTIVE_BYTE 6
+#define SY1000_MUTE_DURING_SCENE_CHANGE_BYTE 7
 
 // Structure of scene data
 // Scene byte 0 - 7: Store common data
@@ -2207,8 +2275,6 @@ struct SY1000_scene_parameter_struct { // Combines all the data we need for cont
 };
 
 const PROGMEM SY1000_scene_parameter_struct SY1000_scene_parameters[] {
-  { 0x3800, 0x3500, 0x34, B00000001 }, // Amp - moved first to allow silent changing amp with the one in the instrument block
-  { 0x3700, 0x3400, 0x32, B00000001 }, // DIST SW
   { 0x1500, 0x1500, 0x00, B00000001 }, // INST1 sw
   { 0x1501, 0x1501, 0x01, B00000111 }, // INST1 type
   { 0x1503, 0x1503, 0x04, B00000001 }, // INST1 normal pu
@@ -2229,7 +2295,9 @@ const PROGMEM SY1000_scene_parameter_struct SY1000_scene_parameters[] {
   { 0x3528, 0x3228, 0x27, B00000001 }, // INST3 bend
   { 0x1201, 0x1201, 0x30, B00000001 }, // Normal PU
   { 0x3600, 0x3300, 0x31, B00000001 }, // Comp SW
+  { 0x3700, 0x3400, 0x32, B00000001 }, // DIST SW
   { 0x3707, 0x3407, 0x33, B00000001 }, // DS SOLO
+  { 0x3800, 0x3500, 0x34, B00000001 }, // Amp
   { 0x380C, 0x350C, 0x35, B00000001 }, // Amp SOLO
   { 0x380B, 0x350B, 0x36, B00000011 }, // Amp GAIN SW
   { 0x380A, 0x350A, 0x40, B00000011 }, // Amp BRIGHT SW
@@ -2251,12 +2319,12 @@ const PROGMEM SY1000_scene_parameter_struct SY1000_scene_parameters[] {
   { 0xB200, 0xAF00, 0x77, B00000001 }, // Reverb
 };
 
-#define INST1_SW_ITEM 2
-#define INST1_TYPE_ITEM 3
-#define INST2_SW_ITEM 8
-#define INST2_TYPE_ITEM 9
-#define INST3_SW_ITEM 14
-#define INST3_TYPE_ITEM 15
+#define INST1_SW_ITEM 0
+#define INST1_TYPE_ITEM 1
+#define INST2_SW_ITEM 6
+#define INST2_TYPE_ITEM 7
+#define INST3_SW_ITEM 12
+#define INST3_TYPE_ITEM 13
 
 
 const uint16_t SY1000_NUMBER_OF_SCENE_PARAMETERS = sizeof(SY1000_scene_parameters) / sizeof(SY1000_scene_parameters[0]);
@@ -2309,12 +2377,12 @@ const PROGMEM SY1000_scene_inst_parameter_struct SY1000_scene_inst_parameters[][
   { // E.GTR (3)
     { 0x0500, 0x00, B00001111 }, // E.GTR Type
     { 0x0501, 0x04, B00000111 }, // E.GTR PU select
+    { 0x050A, 0x07, B00000001 }, // E.GTR amp sw
     { 0x0515, 0x10, B00000011 }, // E.GTR gain sw
     { 0x0516, 0x12, B00000001 }, // E.GTR solo
     { 0x0514, 0x13, B00000001 }, // E.GTR bright
     { 0x051E, 0x14, B00000001 }, // E.GTR ns
     { 0x0521, 0x15, B00000001 }, // E.GTR eq
-    { 0x050A, 0x07, B00000001 }, // E.GTR amp sw
     { 0x0000, 0x00, 0,        },
     { 0x0000, 0x00, 0,        },
 
@@ -2334,12 +2402,12 @@ const PROGMEM SY1000_scene_inst_parameter_struct SY1000_scene_inst_parameters[][
   { // E Bass (5)
     { 0x0700, 0x00, B00000011 }, // GM E.Bass Type
     { 0x0703, 0x02, B00000011 }, // GM E.Bass Tone type
+    { 0x070B, 0x04, B00000001 }, // GM E.Bass amp sw
     { 0x0716, 0x05, B00000011 }, // GM E.Bass gain sw
     { 0x0717, 0x07, B00000001 }, // GM E.Bass solo
     { 0x0715, 0x10, B00000001 }, // GM E.Bass bright sw
     { 0x071F, 0x11, B00000001 }, // GM E.Bass ns
     { 0x0722, 0x12, B00000001 }, // GM E.Bass eq
-    { 0x070B, 0x04, B00000001 }, // GM E.Bass amp sw
     { 0x0000, 0x00, 0,        },
     { 0x0000, 0x00, 0,        },
   },
@@ -2374,18 +2442,18 @@ const PROGMEM SY1000_scene_inst_parameter_struct SY1000_scene_inst_parameters[][
     { 0x050C, 0x07, B00000001 }, // BM E.Bass Bass on
     { 0x050D, 0x10, B00000001 }, // BM E.Bass Rhyth/solo
     { 0x050E, 0x11, B00000011 }, // BM E.Bass Tone type
+    { 0x0516, 0x13, B00000001 }, // BM E.Bass amp sw
     { 0x0521, 0x14, B00000011 }, // BM E.Bass gain sw
     { 0x0522, 0x16, B00000001 }, // BM E.Bass solo
     { 0x052D, 0x17, B00000001 }, // BM E.Bass eq
-    { 0x0516, 0x13, B00000001 }, // BM E.Bass amp sw
   },
   { // Bass mode: Ac-Bass  (9 - real value 4)
+    { 0x060B, 0x00, B00000001 }, // BM Ac.Bass amp sw
     { 0x0613, 0x01, B00000011 }, // BM Ac.Bass gain sw
     { 0x0614, 0x03, B00000001 }, // BM Ac.Bass solo
     { 0x0612, 0x04, B00000001 }, // BM Ac.Bass bright sw
     { 0x061C, 0x05, B00000001 }, // BM Ac.Bass ns
     { 0x061F, 0x06, B00000001 }, // BM Ac.Bass eq
-    { 0x060B, 0x00, B00000001 }, // BM Ac.Bass amp sw
     { 0x0000, 0x00, 0,        },
     { 0x0000, 0x00, 0,        },
     { 0x0000, 0x00, 0,        },
@@ -2394,12 +2462,12 @@ const PROGMEM SY1000_scene_inst_parameter_struct SY1000_scene_inst_parameters[][
   { // Bass mode: E.GTR  (10 - real value 5)
     { 0x0700, 0x00, B00000011 }, // BM E.GTR Type
     { 0x0701, 0x04, B00000111 }, // BM E.GTR PU select
+    { 0x070A, 0x07, B00000001 }, // BM E.GTR amp sw
     { 0x0715, 0x10, B00000011 }, // BM E.GTR gain sw
     { 0x0716, 0x12, B00000001 }, // BM E.GTR solo
     { 0x0714, 0x13, B00000001 }, // BM E.GTR bright
     { 0x071E, 0x14, B00000001 }, // BM E.GTR ns
     { 0x0721, 0x15, B00000001 }, // BM E.GTR eq
-    { 0x070A, 0x07, B00000001 }, // BM E.GTR amp sw
     { 0x0000, 0x00, 0,        },
     { 0x0000, 0x00, 0,        },
   },
@@ -2423,7 +2491,7 @@ const PROGMEM SY1000_scene_inst_parameter_struct SY1000_scene_inst_parameters[][
 const uint32_t GM_inst_start_address[] = { 0x10001500, 0x10002000, 0x10002B00 };
 const uint32_t BM_inst_start_address[] = { 0x10021500, 0x10021F00, 0x10022900 };
 
-uint32_t MD_SY1000_class::get_scene_inst_parameter_address(uint16_t number) {
+FLASHMEM uint32_t MD_SY1000_class::get_scene_inst_parameter_address(uint16_t number) {
   if (number >= SY1000_NUMBER_OF_SCENE_INST_PARAMETERS) return 0;
   uint8_t inst = number / SY1000_NUMBER_OF_INST_PARAMETERS;
   uint8_t par = number % SY1000_NUMBER_OF_INST_PARAMETERS;
@@ -2438,7 +2506,7 @@ uint32_t MD_SY1000_class::get_scene_inst_parameter_address(uint16_t number) {
   }
 }
 
-uint32_t MD_SY1000_class::get_scene_parameter_address(uint16_t number) {
+FLASHMEM uint32_t MD_SY1000_class::get_scene_parameter_address(uint16_t number) {
   uint32_t address;
   if (number >= SY1000_NUMBER_OF_SCENE_PARAMETERS) return 0;
   if (!bass_mode) { // Guitar mode
@@ -2455,33 +2523,65 @@ uint32_t MD_SY1000_class::get_scene_parameter_address(uint16_t number) {
 }
 
 
-void MD_SY1000_class::get_snapscene_title(uint8_t number, String & Output) {
+FLASHMEM void MD_SY1000_class::get_snapscene_title(uint8_t number, String & Output) {
   Output += "SCENE " + String(number);
 }
 
-void MD_SY1000_class::get_snapscene_label(uint8_t number, String & Output) {
+FLASHMEM void MD_SY1000_class::get_snapscene_label(uint8_t number, String & Output) {
   read_scene_name_from_buffer(number);
   Output += scene_label_buffer;
 }
 
-bool MD_SY1000_class::request_snapscene_name(uint8_t sw, uint8_t number) {
-  read_scene_name_from_buffer(SP[sw].PP_number);
-  LCD_set_SP_label(sw, scene_label_buffer);
+FLASHMEM bool MD_SY1000_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3) {
+  String lbl = "";
+  if ((sw2 == 0) && (sw3 == 0)) { // One scene under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 16);
+  }
+  if ((sw2 > 0) && (sw3 == 0)) { // Two scenes under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 8);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw2);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 7);
+  }
+  if ((sw2 > 0) && (sw3 > 0)) { // Three scenes under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 5);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw2);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 5);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw3);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 4);
+  }
+  LCD_set_SP_label(sw, lbl);
   return true;
 }
 
-void MD_SY1000_class::set_snapscene(uint8_t sw, uint8_t number) {
+FLASHMEM void MD_SY1000_class::set_snapscene(uint8_t sw, uint8_t number) {
   if (!is_on) unmute();
+  if ((number < 1) || (number > 8)) return;
   bool loaded = load_scene(last_loaded_scene, number);
   set_snapscene_number_and_LED(number);
   if ((loaded) && (sw > 0)) {
-    String msg = "Scene " + String(number) + ':' + SP[sw].Label;
+    read_scene_name_from_buffer(number);
+    String msg = "Scene " + String(number) + ':' + scene_label_buffer;
     LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
   }
+  MIDI_send_current_snapscene(my_device_number, current_snapscene);
   update_main_lcd = true;
 }
 
-void MD_SY1000_class::set_snapscene_number_and_LED(uint8_t number) {
+FLASHMEM void MD_SY1000_class::show_snapscene(uint8_t  number) {
+  if ((number < 1) || (number > 8)) return;
+  if (number == current_snapscene) return;
+  set_snapscene_number_and_LED(number);
+  update_main_lcd = true;
+  DEBUGMSG("SY1000 snapscene change to scene " + String(number));
+}
+
+FLASHMEM void MD_SY1000_class::set_snapscene_number_and_LED(uint8_t number) {
   current_snapscene = number;
   uint8_t last_led = 8;
   uint8_t first_switch = 0;
@@ -2511,7 +2611,7 @@ void MD_SY1000_class::set_snapscene_number_and_LED(uint8_t number) {
   }
 }
 
-bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
+FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
   uint8_t my_byte, my_shift, my_mask;
   MIDI_debug_sysex(SY1000_patch_buffer, VC_PATCH_SIZE, 255, true);
   bool load_all_data = false;
@@ -2538,9 +2638,13 @@ bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
   uint8_t index_new = get_scene_index(new_scene);
   uint8_t index_prev = get_scene_index(prev_scene);
 
+  // Mute instruments
+  mute_during_scene_change = check_mute_during_scene_change(new_scene);
+  if (mute_during_scene_change) mute_now();
+
   uint8_t addr_index = 0;
   for (uint8_t inst = 0; inst < 3; inst ++) {
-    DEBUGMAIN("Checking INST" + String(inst + 1));
+    DEBUGMAIN("Checking INST to turn down of off" + String(inst + 1));
     uint8_t inst_type_index = INST_type[inst];
     if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
     bool inst_changed = (INST_type[inst] != prev_inst_type[inst]);
@@ -2552,7 +2656,7 @@ bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
       if (my_mask != 0) {
         uint8_t new_data = SY1000_patch_buffer[index_new + my_byte] & my_mask;
         uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
-        if ((new_data != old_data) || (inst_changed) || (load_all_data)) {
+        if ((new_data < old_data) && (!inst_changed) && (!load_all_data)) {
           uint32_t address = get_scene_inst_parameter_address(addr_index);
           uint8_t data = new_data >> my_shift;
           write_sysex(address, data);
@@ -2562,20 +2666,22 @@ bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
     }
   }
 
-  DEBUGMAIN("Checking common parameters");
+  DEBUGMAIN("Checking common parameters to turn down or off");
   for (uint8_t i = 0; i < SY1000_NUMBER_OF_SCENE_PARAMETERS; i++) {
+    bool is_inst_sw = (i == INST1_SW_ITEM) || (i == INST2_SW_ITEM) || (i == INST3_SW_ITEM);
+    if ((!mute_during_scene_change) || (!is_inst_sw)) {
+      my_byte = SY1000_scene_parameters[i].Bit_address >> 4;
+      my_shift = SY1000_scene_parameters[i].Bit_address & 0x0F;
+      my_mask = SY1000_scene_parameters[i].Bit_mask << my_shift;
 
-    my_byte = SY1000_scene_parameters[i].Bit_address >> 4;
-    my_shift = SY1000_scene_parameters[i].Bit_address & 0x0F;
-    my_mask = SY1000_scene_parameters[i].Bit_mask << my_shift;
-
-    if (my_mask != 0) {
-      uint8_t new_data = SY1000_patch_buffer[index_new + my_byte] & my_mask;
-      uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
-      if ((new_data != old_data) || (load_all_data)) {
-        uint32_t address = get_scene_parameter_address(i);
-        uint8_t data = new_data >> my_shift;
-        write_sysex(address, data);
+      if (my_mask != 0) {
+        uint8_t new_data = SY1000_patch_buffer[index_new + my_byte] & my_mask;
+        uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
+        if ((new_data < old_data)  && (!load_all_data)) {
+          uint32_t address = get_scene_parameter_address(i);
+          uint8_t data = new_data >> my_shift;
+          write_sysex(address, data);
+        }
       }
     }
     addr_index++;
@@ -2584,16 +2690,65 @@ bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
   DEBUGMAIN("Check scene assigns");
   check_scene_assigns_with_new_state(SY1000_patch_buffer[index_new + SCENE_ASSIGN_BYTE_OFFSET]);
   last_loaded_scene = new_scene;
+
+  addr_index = 0;
+  for (uint8_t inst = 0; inst < 3; inst ++) {
+    DEBUGMAIN("Checking INST to turn up or on" + String(inst + 1));
+    uint8_t inst_type_index = INST_type[inst];
+    if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
+    bool inst_changed = (INST_type[inst] != prev_inst_type[inst]);
+    for (uint8_t par = 0; par < SY1000_NUMBER_OF_INST_PARAMETERS; par++) {
+      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + INST_DATA_OFFSET;
+      my_shift = SY1000_scene_inst_parameters[inst_type_index][par].Bit_address & 0x0F;
+      my_mask = SY1000_scene_inst_parameters[inst_type_index][par].Bit_mask << my_shift;
+
+      if (my_mask != 0) {
+        uint8_t new_data = SY1000_patch_buffer[index_new + my_byte] & my_mask;
+        uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
+        if ((new_data > old_data) || (inst_changed) || (load_all_data)) {
+          uint32_t address = get_scene_inst_parameter_address(addr_index);
+          uint8_t data = new_data >> my_shift;
+          write_sysex(address, data);
+        }
+      }
+      addr_index++;
+    }
+  }
+
+  DEBUGMAIN("Checking common parameters to turn up or on");
+  for (uint8_t i = 0; i < SY1000_NUMBER_OF_SCENE_PARAMETERS; i++) {
+    bool is_inst_sw = (i == INST1_SW_ITEM) || (i == INST2_SW_ITEM) || (i == INST3_SW_ITEM);
+    if ((!mute_during_scene_change) || (!is_inst_sw)) {
+      my_byte = SY1000_scene_parameters[i].Bit_address >> 4;
+      my_shift = SY1000_scene_parameters[i].Bit_address & 0x0F;
+      my_mask = SY1000_scene_parameters[i].Bit_mask << my_shift;
+
+      if (my_mask != 0) {
+        uint8_t new_data = SY1000_patch_buffer[index_new + my_byte] & my_mask;
+        uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
+        if ((new_data > old_data) || (load_all_data)) {
+          uint32_t address = get_scene_parameter_address(i);
+          uint8_t data = new_data >> my_shift;
+          write_sysex(address, data);
+        }
+      }
+    }
+    addr_index++;
+  }
+
+  // Unmute instruments
+  if (mute_during_scene_change) unmute();
+
   DEBUGMAIN("Done!");
   return true;
 }
 
-uint8_t MD_SY1000_class::get_scene_index(uint8_t scene) {
+FLASHMEM uint8_t MD_SY1000_class::get_scene_index(uint8_t scene) {
   if (scene > 0) scene--;
   return (scene * SY1000_SCENE_SIZE) + SY1000_COMMON_DATA_SIZE;
 }
 
-uint8_t MD_SY1000_class::read_scene_data(uint8_t scene, uint8_t parameter) {
+FLASHMEM uint8_t MD_SY1000_class::read_scene_data(uint8_t scene, uint8_t parameter) {
   uint8_t index = get_scene_index(scene);
   uint8_t my_byte = SY1000_scene_parameters[parameter].Bit_address >> 4;
   uint8_t my_shift = SY1000_scene_parameters[parameter].Bit_address & 0x0F;
@@ -2601,14 +2756,14 @@ uint8_t MD_SY1000_class::read_scene_data(uint8_t scene, uint8_t parameter) {
   return (SY1000_patch_buffer[index + my_byte] >> my_shift) & my_mask;
 }
 
-uint8_t MD_SY1000_class::read_temp_scene_data(uint8_t parameter) {
+FLASHMEM uint8_t MD_SY1000_class::read_temp_scene_data(uint8_t parameter) {
   uint8_t my_byte = SY1000_scene_parameters[parameter].Bit_address >> 4;
   uint8_t my_shift = SY1000_scene_parameters[parameter].Bit_address & 0x0F;
   uint8_t my_mask = SY1000_scene_parameters[parameter].Bit_mask;
   return (scene_data_buffer[my_byte] >> my_shift) & my_mask;
 }
 
-void MD_SY1000_class::save_scene() {
+FLASHMEM void MD_SY1000_class::save_scene() {
   save_scene_number = current_snapscene;
   if (save_scene_number == 0) save_scene_number = 1;
   read_scene_name_from_buffer(save_scene_number);
@@ -2621,7 +2776,7 @@ void MD_SY1000_class::save_scene() {
   open_menu_for_SY1000_scene_save = false;
 }
 
-void MD_SY1000_class::store_scene() { // Returning from menu
+FLASHMEM void MD_SY1000_class::store_scene() { // Returning from menu
   // Request the data from the SY1000
   store_scene_name_to_buffer(save_scene_number);
   set_snapscene_number_and_LED(save_scene_number);
@@ -2632,18 +2787,18 @@ void MD_SY1000_class::store_scene() { // Returning from menu
   update_page = 0;
 }
 
-void MD_SY1000_class::update_change_on_all_scenes() {
+FLASHMEM void MD_SY1000_class::update_change_on_all_scenes() {
   // Here we do the following steps:
   // 1) Read scene data to scene_data_buffer
-  // 2) Compare the bytes of the scene_data_buffer to the last_loaded_scene
-  // 3) Write this difference to all scenes
+  // 2) Compare the bytes of the scene_data_buffer to the last_loaded_scene - in check_delta_and_update_scenes()
+  // 3) Write this difference to all scenes - in check_delta_and_update_scenes()
   save_scene_number = 9;
   memset(scene_data_buffer, 0, SY1000_SCENE_DATA_BUFFER_SIZE);
   request_scene_message(1);
   update_page = 0;
 }
 
-void MD_SY1000_class::check_delta_and_update_scenes() {
+FLASHMEM void MD_SY1000_class::check_delta_and_update_scenes() {
   uint8_t my_byte, my_shift, my_mask;
   if (!check_snapscene_active(last_loaded_scene)) return;
 
@@ -2676,7 +2831,7 @@ void MD_SY1000_class::check_delta_and_update_scenes() {
         uint8_t new_data = scene_data_buffer[my_byte] & my_mask;
         uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
         if (((new_data != old_data) && (new_inst_type[inst] == prev_inst_type[inst])) || (inst_changed)) {
-          for (uint8_t s = 1; s <= 8; s++) {
+          for (uint8_t s = 1; s <= 8; s++) { // Write to all active scenes
             if (check_snapscene_active(s)) {
               uint8_t index = get_scene_index(s);
               uint8_t data = SY1000_patch_buffer[index + my_byte] & ~my_mask;
@@ -2700,7 +2855,7 @@ void MD_SY1000_class::check_delta_and_update_scenes() {
       uint8_t new_data = scene_data_buffer[my_byte] & my_mask;
       uint8_t old_data = SY1000_patch_buffer[index_prev + my_byte] & my_mask;
       if (new_data != old_data) {
-        for (uint8_t s = 1; s <= 8; s++) {
+        for (uint8_t s = 1; s <= 8; s++) { // Write to all active scenes
           if (check_snapscene_active(s)) {
             uint8_t index = get_scene_index(s);
             uint8_t data = SY1000_patch_buffer[index + my_byte] & ~my_mask;
@@ -2718,7 +2873,7 @@ void MD_SY1000_class::check_delta_and_update_scenes() {
     DEBUGMAIN("Done!");*/
 }
 
-void MD_SY1000_class::request_scene_message(uint8_t number) {
+FLASHMEM void MD_SY1000_class::request_scene_message(uint8_t number) {
   if (number == 0) return;
   if (number == 2) LCD_show_popup_label("Reading scene...", MESSAGE_TIMER_LENGTH);
   read_scene_parameter_number = number;
@@ -2738,7 +2893,7 @@ void MD_SY1000_class::check_read_scene_midi_timer() {
   }
 }
 
-void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) {
+FLASHMEM void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) {
   uint8_t my_byte, my_shift, my_mask;
   if (number == 0) return;
   number--;
@@ -2765,7 +2920,7 @@ void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) {
   if (number < SY1000_TOTAL_NUMBER_OF_SCENE_PARAMETERS - 1) {
     request_scene_message(read_scene_parameter_number + 1); // Request next message
   }
-  else {
+  else { // Done reading messages for scene
     read_scene_parameter_number = 0;
     read_scene_midi_timer = 0;
     MIDI_enable_device_check();
@@ -2780,6 +2935,7 @@ void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) {
       for (uint8_t i = 0; i < SY1000_SCENE_DATA_BUFFER_SIZE; i++) {
         SY1000_patch_buffer[b++] = scene_data_buffer[i];
       }
+      set_mute_during_scene_change(save_scene_number, mute_during_scene_change);
       set_scene_active(save_scene_number);
       update_page = RELOAD_PAGE;
 
@@ -2796,10 +2952,10 @@ void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) {
       load_scene(0, last_loaded_scene);
     }
   }
-  LCD_show_bar(0, map(number, 0, SY1000_TOTAL_NUMBER_OF_SCENE_PARAMETERS, 0, 127));
+  LCD_show_bar(0, map(number, 0, SY1000_TOTAL_NUMBER_OF_SCENE_PARAMETERS, 0, 127), 0);
 }
 
-void MD_SY1000_class::exchange_scene(uint8_t new_scene, uint8_t prev_scene) {
+FLASHMEM void MD_SY1000_class::exchange_scene(uint8_t new_scene, uint8_t prev_scene) {
   if (new_scene == prev_scene) return;
   bool new_scene_active = check_snapscene_active(new_scene);
   bool prev_scene_active = check_snapscene_active(prev_scene);
@@ -2825,7 +2981,7 @@ void MD_SY1000_class::exchange_scene(uint8_t new_scene, uint8_t prev_scene) {
 }
 
 
-void MD_SY1000_class::initialize_scene(uint8_t scene) {
+FLASHMEM void MD_SY1000_class::initialize_scene(uint8_t scene) {
   DEBUGMAIN("Initializing scene " + String(scene));
   uint8_t index = get_scene_index(scene);
   for (uint8_t i = 0; i < SY1000_SCENE_DATA_BUFFER_SIZE + 8; i++) SY1000_patch_buffer[index++] = 0;
@@ -2841,38 +2997,51 @@ void MD_SY1000_class::initialize_scene(uint8_t scene) {
   last_loaded_scene = 0;
 }
 
-bool MD_SY1000_class::check_snapscene_active(uint8_t scene) {
+FLASHMEM bool MD_SY1000_class::check_snapscene_active(uint8_t scene) {
   if ((scene == 0) || (scene > 8)) return false;
   scene--;
   return ((SY1000_patch_buffer[SY1000_SCENE_ACTIVE_BYTE] & (1 << scene)) != 0);
 }
 
-void MD_SY1000_class::set_scene_active(uint8_t scene) {
+FLASHMEM void MD_SY1000_class::set_scene_active(uint8_t scene) {
   if ((scene == 0) || (scene > 8)) return;
   scene--;
   bitSet(SY1000_patch_buffer[SY1000_SCENE_ACTIVE_BYTE], scene);
 }
 
-void MD_SY1000_class::clear_scene_active(uint8_t scene) {
+FLASHMEM void MD_SY1000_class::clear_scene_active(uint8_t scene) {
   if ((scene == 0) || (scene > 8)) return;
   scene--;
   bitClear(SY1000_patch_buffer[SY1000_SCENE_ACTIVE_BYTE], scene);
 }
 
-void MD_SY1000_class::read_scene_name_from_buffer(uint8_t scene) {
+FLASHMEM bool MD_SY1000_class::check_mute_during_scene_change(uint8_t scene) {
+  if ((scene == 0) || (scene > 8)) return false;
+  scene--;
+  return ((SY1000_patch_buffer[SY1000_MUTE_DURING_SCENE_CHANGE_BYTE] & (1 << scene)) != 0);
+}
+
+FLASHMEM void MD_SY1000_class::set_mute_during_scene_change(uint8_t scene, bool value) {
+  if ((scene == 0) || (scene > 8)) return;
+  scene--;
+  if (value) bitSet(SY1000_patch_buffer[SY1000_MUTE_DURING_SCENE_CHANGE_BYTE], scene);
+  else bitClear(SY1000_patch_buffer[SY1000_MUTE_DURING_SCENE_CHANGE_BYTE], scene);
+}
+
+FLASHMEM void MD_SY1000_class::read_scene_name_from_buffer(uint8_t scene) {
   uint8_t b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
   for (uint8_t c = 0; c < 8; c++) {
     scene_label_buffer[c] = SY1000_patch_buffer[b++];
   }
 }
 
-void MD_SY1000_class::store_scene_name_to_buffer(uint8_t scene) {
+FLASHMEM void MD_SY1000_class::store_scene_name_to_buffer(uint8_t scene) {
   uint8_t b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
   for (uint8_t c = 0; c < 8; c++) SY1000_patch_buffer[b++] = scene_label_buffer[c];
   //SY1000_label_buffer[c] = '\n';
 }
 
-void MD_SY1000_class::load_patch(uint16_t number) {
+FLASHMEM void MD_SY1000_class::load_patch(uint16_t number) {
 
   // Read from EEPROM
   if (bass_mode) number += SY1000_BASS_MODE_NUMBER_OFFSET;
@@ -2888,10 +3057,11 @@ void MD_SY1000_class::load_patch(uint16_t number) {
   current_snapscene = last_loaded_scene;
   uint8_t index = get_scene_index(current_snapscene) + SCENE_ASSIGN_BYTE_OFFSET;
   set_scene_assign_states(SY1000_patch_buffer[index]);
+  DEBUGMSG("SY1000 patch loaded from EEPROM");
   //MIDI_debug_sysex(SY1000_patch_buffer, VC_PATCH_SIZE, 255, true); // Show contents of patch buffer
 }
 
-bool MD_SY1000_class::store_patch(uint16_t number) {
+FLASHMEM bool MD_SY1000_class::store_patch(uint16_t number) {
 
   if (bass_mode) number |= SY1000_BASS_MODE_NUMBER_OFFSET;
 
@@ -2912,7 +3082,7 @@ bool MD_SY1000_class::store_patch(uint16_t number) {
   return EEPROM_save_device_patch(my_device_number + 1, number, SY1000_patch_buffer, VC_PATCH_SIZE);
 }
 
-bool MD_SY1000_class::exchange_patches(uint16_t number) {
+FLASHMEM bool MD_SY1000_class::exchange_patches(uint16_t number) {
   uint16_t pn = patch_number;
   if (bass_mode) {
     number |= SY1000_BASS_MODE_NUMBER_OFFSET;
@@ -2923,7 +3093,7 @@ bool MD_SY1000_class::exchange_patches(uint16_t number) {
   return true; // Swap succesfull
 }
 
-bool MD_SY1000_class::insert_patch(uint16_t number) {
+FLASHMEM bool MD_SY1000_class::insert_patch(uint16_t number) {
   if (bass_mode) number |= SY1000_BASS_MODE_NUMBER_OFFSET;
 
   // First clear the last user patch
@@ -2941,13 +3111,13 @@ bool MD_SY1000_class::insert_patch(uint16_t number) {
   return store_patch(number);
 }
 
-bool MD_SY1000_class::initialize_patch(uint16_t number) {
+FLASHMEM bool MD_SY1000_class::initialize_patch(uint16_t number) {
   if (bass_mode) number += SY1000_BASS_MODE_NUMBER_OFFSET;
   EEPROM_initialize_device_patch(my_device_number + 1, number);
   return true;
 }
 
-void MD_SY1000_class::initialize_patch_space() {
+FLASHMEM void MD_SY1000_class::initialize_patch_space() {
   memset(SY1000_patch_buffer, 0, VC_PATCH_SIZE);
   scene_label_buffer[0] = '-';
   scene_label_buffer[1] = '-';
@@ -3036,10 +3206,10 @@ SY1000_exp_pedal_target_struct SY1000_exp_pedal_target[] = {
 const uint8_t SY1000_NUMBER_OF_EXP_PEDAL_TARGETS = sizeof(SY1000_exp_pedal_target) / sizeof(SY1000_exp_pedal_target[0]);
 
 
-void MD_SY1000_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_SY1000_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   uint16_t val = value;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
-  LCD_show_bar(0, value); // Show it on the main display
+  LCD_show_bar(0, value, 0); // Show it on the main display
 
   if ((exp_pedal == 1) && (exp1_type < SY1000_NUMBER_OF_EXP_PEDAL_TARGETS)) {
     val = send_expression_value(exp_pedal, exp1_type, value);
@@ -3056,7 +3226,7 @@ void MD_SY1000_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t e
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page*/
 }
 
-uint16_t MD_SY1000_class::send_expression_value(uint8_t exp_pedal, uint8_t exp_type, uint8_t value) {
+FLASHMEM uint16_t MD_SY1000_class::send_expression_value(uint8_t exp_pedal, uint8_t exp_type, uint8_t value) {
   uint32_t address;
   uint16_t val = value;
   if (!bass_mode) {
@@ -3153,18 +3323,18 @@ uint16_t MD_SY1000_class::send_expression_value(uint8_t exp_pedal, uint8_t exp_t
     assign_return_target = assign_target_exp;
   }
 
-  MIDI_send_CC(94, value, MIDI_channel, MIDI_port);
+  MIDI_send_CC(94, value, MIDI_channel, MIDI_out_port);
   return val;
 }
 
-void MD_SY1000_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_SY1000_class::toggle_expression_pedal(uint8_t sw) {
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 2) current_exp_pedal = 1;
   update_page = REFRESH_FX_ONLY;
 }
 
-bool MD_SY1000_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
+FLASHMEM bool MD_SY1000_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used for both Master_exp_pedal and toggle_exp_pedal
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   if (exp_pedal <= 2) {
     last_requested_sysex_type = REQUEST_PEDAL_ASSIGN;
@@ -3176,7 +3346,7 @@ bool MD_SY1000_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) { // Used
   return false;
 }
 
-void MD_SY1000_class::update_exp_label(uint8_t sw) {
+FLASHMEM void MD_SY1000_class::update_exp_label(uint8_t sw) {
   if (current_exp_pedal == 1) {
     SP[sw].PP_number = SY1000_EXP1;
     read_parameter(sw, exp1_type, 0);
@@ -3187,7 +3357,7 @@ void MD_SY1000_class::update_exp_label(uint8_t sw) {
   }
 }
 
-void MD_SY1000_class::check_patch_midi(uint8_t cc, uint8_t value) {
+FLASHMEM void MD_SY1000_class::check_patch_midi(uint8_t cc, uint8_t value) {
   if (cc == 0) return;
   DEBUGMSG("Patch MIDI CC#" + String(cc - 1) + " value " + String(value));
   switch (cc - 1) {
@@ -3200,7 +3370,7 @@ void MD_SY1000_class::check_patch_midi(uint8_t cc, uint8_t value) {
   }
 }
 
-void MD_SY1000_class::reset_special_functions() {
+FLASHMEM void MD_SY1000_class::reset_special_functions() {
   DEBUGMSG("!!! Resetting special functions");
   for (uint8_t i = 0; i < 3; i++) {
     inst_harmony_type[i] = 0;
@@ -3210,7 +3380,7 @@ void MD_SY1000_class::reset_special_functions() {
 }
 
 
-void MD_SY1000_class::set_harmony_interval(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
+FLASHMEM void MD_SY1000_class::set_harmony_interval(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
   // Update user tuning with favourite tuning
   const uint32_t user_tuning_gm[3] = {0x10001F02, 0x10002A02, 0x10003502};
   const uint32_t user_tuning_bm[3] = {0x10021E02, 0x10022802, 0x10023202};
@@ -3263,7 +3433,7 @@ const uint8_t negative_interval[7][12] = {
 
 const uint8_t sixeights_intervals[12] = {7, 7, 10, 9, 8, 7, 8, 7, 7, 7, 7, 8};
 
-uint8_t MD_SY1000_class::calculate_interval(uint8_t my_type, uint8_t my_interval, uint8_t my_note) {
+FLASHMEM uint8_t MD_SY1000_class::calculate_interval(uint8_t my_type, uint8_t my_interval, uint8_t my_note) {
   if (my_type == 1) {
     if (my_interval > 28) return 0;
     if (my_interval < 7) return 20 - negative_interval[6 - my_interval][my_note]; // More than octave down
@@ -3303,7 +3473,7 @@ uint8_t MD_SY1000_class::calculate_interval(uint8_t my_type, uint8_t my_interval
   return 0;
 }
 
-/*void MD_SY1000_class::control_slow_gear(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
+/*FLASHMEM void MD_SY1000_class::control_slow_gear(uint8_t note, uint8_t velocity, uint8_t channel, uint8_t port) {
   uint8_t my_string = channel - 1;
   if (velocity > 0) {
     // Start swell for string
@@ -3316,7 +3486,7 @@ uint8_t MD_SY1000_class::calculate_interval(uint8_t my_type, uint8_t my_interval
   }
   }
 
-  void MD_SY1000_class::update_slow_gear() {
+  FLASHMEM void MD_SY1000_class::update_slow_gear() {
   if (millis() > slow_gear_timer) {
     slow_gear_timer = millis() + 10;
     for (uint8_t s = 0; s < 6; s++) {
@@ -3336,7 +3506,7 @@ uint8_t MD_SY1000_class::calculate_interval(uint8_t my_type, uint8_t my_interval
   }
   }
 
-  void MD_SY1000_class::update_string_level(uint8_t string, uint8_t level) {
+  FLASHMEM void MD_SY1000_class::update_string_level(uint8_t string, uint8_t level) {
   control_edit_mode();
   uint32_t address = 0x10001506;
   address += string;

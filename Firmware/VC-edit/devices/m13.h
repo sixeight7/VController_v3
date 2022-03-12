@@ -5,6 +5,7 @@
 #include <QApplication>
 
 // Line6 M13 settings:
+#define M13_MIDI_PORT MIDI1_PORT
 #define M13_MIDI_CHANNEL 1
 #define M13_PATCH_MIN 0
 #define M13_PATCH_MAX 11

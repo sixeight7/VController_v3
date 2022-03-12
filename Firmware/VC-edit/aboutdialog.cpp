@@ -1,9 +1,5 @@
 #include "aboutdialog.h"
-#ifdef IS_VCMINI
-#include "ui_aboutdialog_VC-mini.h"
-#else
 #include "ui_aboutdialog_VC-full.h"
-#endif
 
 AboutDialog::AboutDialog(QWidget *parent, QString version) :
     QDialog(parent),

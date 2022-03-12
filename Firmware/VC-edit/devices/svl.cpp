@@ -1,6 +1,7 @@
 #include "svl.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 void SVL_class::init()
 {
@@ -10,13 +11,28 @@ void SVL_class::init()
     patch_max = SVL_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 7; // Default value: yellow
+    MIDI_port_manual = MIDI_port_number(SVL_MIDI_PORT);
     MIDI_channel = SVL_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = SVL_DEFAULT_PAGE1; // Default value
-    my_device_page2 = SVL_DEFAULT_PAGE2; // Default value
-    my_device_page3 = SVL_DEFAULT_PAGE3; // Default value
-    my_device_page4 = SVL_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = SVL_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = SVL_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = SVL_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = SVL_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = SVL_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = SVL_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = SVL_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = SVL_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = SVL_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = SVL_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = SVL_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = SVL_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
 }
 
 bool SVL_class::check_command_enabled(uint8_t cmd)

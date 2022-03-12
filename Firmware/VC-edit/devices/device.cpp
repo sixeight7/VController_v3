@@ -1,6 +1,7 @@
 #include "device.h"
 #include "VController/config.h"
 #include "VController/globals.h"
+#include "VController/hardware.h"
 #include <QStringList>
 
 void Device_class::init()
@@ -191,5 +192,51 @@ QString Device_class::numConv(int number) const
     if (number < 10) num.append("0");
     num.append(QString::number(number));
     return num;
+}
+
+uint16_t Device_class::patch_min_as_stored_on_VC()
+{
+    return 0;
+}
+
+uint8_t Device_class::MIDI_port_number(uint8_t port)
+{
+   if (VC_type == VCONTROLLER) {
+      if (port == VC_PORT1_TYPE) return 0;
+      if (port == VC_PORT2_TYPE) return 1;
+      if (port == VC_PORT3_TYPE) return 2;
+      if (port == VC_PORT4_TYPE) return 3;
+      if (port == VC_PORT5_TYPE) return 4;
+      if (port == VC_PORT6_TYPE) return 5;
+      if (port == VC_PORT7_TYPE) return 6;
+      if (port == VC_PORT8_TYPE) return 7;
+      if (port == VC_PORT9_TYPE) return 8;
+   }
+
+   if (VC_type == VCMINI) {
+      if (port == VCMINI_PORT1_TYPE) return 0;
+      if (port == VCMINI_PORT2_TYPE) return 1;
+      if (port == VCMINI_PORT3_TYPE) return 2;
+      if (port == VCMINI_PORT4_TYPE) return 3;
+      if (port == VCMINI_PORT5_TYPE) return 4;
+      if (port == VCMINI_PORT6_TYPE) return 5;
+      if (port == VCMINI_PORT7_TYPE) return 6;
+      if (port == VCMINI_PORT8_TYPE) return 7;
+      if (port == VCMINI_PORT9_TYPE) return 8;
+   }
+
+   if (VC_type == VCTOUCH) {
+      if (port == VCTOUCH_PORT1_TYPE) return 0;
+      if (port == VCTOUCH_PORT2_TYPE) return 1;
+      if (port == VCTOUCH_PORT3_TYPE) return 2;
+      if (port == VCTOUCH_PORT4_TYPE) return 3;
+      if (port == VCTOUCH_PORT5_TYPE) return 4;
+      if (port == VCTOUCH_PORT6_TYPE) return 5;
+      if (port == VCTOUCH_PORT7_TYPE) return 6;
+      if (port == VCTOUCH_PORT8_TYPE) return 7;
+      if (port == VCTOUCH_PORT9_TYPE) return 8;
+   }
+
+   return 0;
 }
 

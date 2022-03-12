@@ -46,6 +46,74 @@ Programming commands:
 
 VCcommands::VCcommands(QObject *parent) : QObject(parent)
 {
+
+}
+
+void VCcommands::setup_VC_config()
+{
+    if (VC_type == VCONTROLLER) {
+        Fixed_commands = VC_fixed_commands;
+        number_of_cmds = VC_fixed_commands.size();
+        first_fixed_cmd_page = FIRST_FIXED_CMD_PAGE_VC;
+        last_fixed_cmd_page = LAST_FIXED_CMD_PAGE_VC;
+        Commands = VC_commands;
+        page_default = PAGE_VC_DEFAULT;
+        number_of_midi_ports = VC_NUMBER_OF_MIDI_PORTS;
+        midi_port_names.clear();
+        midi_port_names.append(VC_PORT1_NAME);
+        midi_port_names.append(VC_PORT2_NAME);
+        midi_port_names.append(VC_PORT3_NAME);
+        midi_port_names.append(VC_PORT4_NAME);
+        midi_port_names.append(VC_PORT5_NAME);
+        midi_port_names.append(VC_PORT6_NAME);
+        midi_port_names.append(VC_PORT7_NAME);
+        midi_port_names.append(VC_PORT8_NAME);
+        midi_port_names.append(VC_PORT9_NAME);
+        switchnames = VC_switch_names;
+        VCmidi_model_number = 0x01;
+    }
+    if (VC_type == VCMINI) {
+        Fixed_commands = VCmini_fixed_commands;
+        number_of_cmds = VCmini_fixed_commands.size();
+        first_fixed_cmd_page = FIRST_FIXED_CMD_PAGE_VCMINI;
+        last_fixed_cmd_page = LAST_FIXED_CMD_PAGE_VCMINI;
+        Commands = VCmini_commands;
+        page_default = PAGE_VCMINI_DEFAULT;
+        number_of_midi_ports = VCMINI_NUMBER_OF_MIDI_PORTS;
+        midi_port_names.clear();
+        midi_port_names.append(VCMINI_PORT1_NAME);
+        midi_port_names.append(VCMINI_PORT2_NAME);
+        midi_port_names.append(VCMINI_PORT3_NAME);
+        midi_port_names.append(VCMINI_PORT4_NAME);
+        midi_port_names.append(VCMINI_PORT5_NAME);
+        midi_port_names.append(VCMINI_PORT6_NAME);
+        midi_port_names.append(VCMINI_PORT7_NAME);
+        midi_port_names.append(VCMINI_PORT8_NAME);
+        midi_port_names.append(VCMINI_PORT9_NAME);
+        switchnames = VCmini_switch_names;
+        VCmidi_model_number = 0x02;
+    }
+    if (VC_type == VCTOUCH) {
+        Fixed_commands = VCtouch_fixed_commands;
+        number_of_cmds = VCtouch_fixed_commands.size();
+        first_fixed_cmd_page = FIRST_FIXED_CMD_PAGE_VCTOUCH;
+        last_fixed_cmd_page = LAST_FIXED_CMD_PAGE_VCTOUCH;
+        page_default = PAGE_VCTOUCH_DEFAULT;
+        Commands = VCtouch_commands;
+        number_of_midi_ports = VCTOUCH_NUMBER_OF_MIDI_PORTS;
+        midi_port_names.clear();
+        midi_port_names.append(VCTOUCH_PORT1_NAME);
+        midi_port_names.append(VCTOUCH_PORT2_NAME);
+        midi_port_names.append(VCTOUCH_PORT3_NAME);
+        midi_port_names.append(VCTOUCH_PORT4_NAME);
+        midi_port_names.append(VCTOUCH_PORT5_NAME);
+        midi_port_names.append(VCTOUCH_PORT6_NAME);
+        midi_port_names.append(VCTOUCH_PORT7_NAME);
+        midi_port_names.append(VCTOUCH_PORT8_NAME);
+        midi_port_names.append(VCTOUCH_PORT9_NAME);
+        switchnames = VCtouch_switch_names;
+        VCmidi_model_number = 0x03;
+    }
 }
 
 void VCcommands::recreate_indexes()
@@ -225,7 +293,7 @@ void VCcommands::fillPageComboBox(QComboBox *cbox)
 
 void VCcommands::fillFixedPageComboBox(QComboBox *cbox)
 {
-    for (uint8_t p = FIRST_FIXED_CMD_PAGE; p <= LAST_FIXED_CMD_PAGE; p++) {
+    for (uint8_t p = first_fixed_cmd_page; p <= last_fixed_cmd_page; p++) {
         cbox->addItem(read_title(p, 0).trimmed());
         cbox->setItemData(cbox->count() - 1, QColor( Qt::gray ), Qt::BackgroundRole); // Change colour of last added item
     }
@@ -235,7 +303,7 @@ void VCcommands::fillSwitchComboBox(QComboBox *cbox)
 {
     if (!isIndexed) create_indexes();
     for (uint8_t s = 0; s < (NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1); s++) {
-        cbox->addItem(cmd_sublist.at(s + 57));
+        cbox->addItem(switchnames.at(s));
     }
 }
 
@@ -343,7 +411,10 @@ void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t
     for (uint8_t i = 0; i < NUMBER_OF_CMD_BYTES; i++) {
         uint8_t cmd_type = cmdbyte[i].Type;
         cmdbyte[i].Min = cmdtype[cmd_type].Min;
-        cmdbyte[i].Max = cmdtype[cmd_type].Max;
+        uint8_t max = cmdtype[cmd_type].Max;
+        if (cmdtype[cmd_type].Sublist == SUBLIST_PAGE) max = last_fixed_cmd_page;
+        if (cmdtype[cmd_type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports;
+        cmdbyte[i].Max = max;
     }
 
     qDebug() << "Command" << cmd_no << "loaded";
@@ -443,7 +514,7 @@ int VCcommands::deleteCommand(uint8_t pg, uint8_t sw, uint8_t item)
     int cmd_no = get_cmd_number(pg, sw, item);
     delete_cmd(cmd_no);
 
-    if ((pg == PAGE_DEFAULT) && (count_cmds(pg, sw) == 0)) createNewCommand(pg, sw); // default page can never be empty!
+    if ((pg == page_default) && (count_cmds(pg, sw) == 0)) createNewCommand(pg, sw); // default page can never be empty!
 
     command_edited = false;
     if ((item > 0) && (item >= count_cmds(pg, sw))) item--;
@@ -471,10 +542,10 @@ int VCcommands::valueFromIndex(uint8_t type, uint16_t index) // Recreate the gap
     switch (type) {
     case TYPE_PAGE:
         if (index < Number_of_pages) return index;
-        else return (index - Number_of_pages + FIRST_FIXED_CMD_PAGE);
+        else return (index - Number_of_pages + first_fixed_cmd_page);
         break;
     case TYPE_MIDI_PORT:
-        if (index == NUMBER_OF_MIDI_PORTS) return 15;
+        if (index == number_of_midi_ports) return 15;
         else return index;
         break;
     default:
@@ -487,11 +558,11 @@ int VCcommands::indexFromValue(uint8_t type, uint16_t value) // Remove the gap i
     switch (type) {
     case TYPE_PAGE:
         if (value < Number_of_pages) return value;
-        else return (value - FIRST_FIXED_CMD_PAGE + Number_of_pages);
+        else return (value - first_fixed_cmd_page + Number_of_pages);
         break;
     case TYPE_MIDI_PORT:
-        if (value < NUMBER_OF_MIDI_PORTS) return value;
-        else return NUMBER_OF_MIDI_PORTS; // The index to all ports
+        if (value < number_of_midi_ports) return value;
+        else return number_of_midi_ports; // The index to all ports
         break;
     default:
         return value;
@@ -577,6 +648,13 @@ void VCcommands::cmdByteDataChanged(int cmd_byte_no, int cmd_type, int index)
     else cmdbyte[cmd_byte_no].Value = index;
     build_command_structure(cmd_byte_no, cmd_type, true);
     updateCommandsTableWidget();
+}
+
+void VCcommands::copy_command_structure(QVector<Cmd_struct> *source, QVector<Cmd_struct> *dest, uint16_t size)
+{
+    for(uint16_t c = 0; c < size; c++) {
+        dest->append(source[c]);
+    }
 }
 
 void VCcommands::swapSwitches(int pg1, int sw1, int pg2, int sw2)
@@ -792,9 +870,8 @@ QString VCcommands::getPageName(int pg)
 
 QString VCcommands::getSwitchName(int sw) const
 {
-    return cmd_sublist[sw + SWITCH_NAME_NUMBER];
+    return switchnames[sw];
 }
-
 
 
 bool VCcommands::switchHasLabel(int pg, int sw)
@@ -843,7 +920,7 @@ void VCcommands::create_indexes()
     }
 
     // Fill the indexes with internal commands
-    for (uint16_t c = NUMBER_OF_INTERNAL_COMMANDS; c-- > 0; ) { //Run backwards through the EEPROM command array
+    for (uint16_t c = Fixed_commands.size(); c-- > 0; ) { //Run backwards through the EEPROM command array
         uint8_t pg = Fixed_commands[c].Page;
         uint8_t sw = Fixed_commands[c].Switch;
 
@@ -852,14 +929,14 @@ void VCcommands::create_indexes()
             if (first_title != 0) {// Title array is already filled!!!
                 Next_internal_cmd_index[c] = first_title; // Move first title to the Next_internal_cmd_index
             }
-            if (pg >= FIRST_FIXED_CMD_PAGE) Title_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Add to the Title index
+            if (pg >= first_fixed_cmd_page) Title_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Add to the Title index
         }
         else { // It is a command
             uint16_t first_cmd = First_cmd_index[pg][sw & SWITCH_MASK];
             if (first_cmd != 0) {// First command array is already filled!!!
                 Next_internal_cmd_index[c] = first_cmd; // Move first command to the Next_internal_cmd_index
             }
-            if (pg >= FIRST_FIXED_CMD_PAGE) First_cmd_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Store the first command
+            if (pg >= first_fixed_cmd_page) First_cmd_index[pg][sw & SWITCH_MASK] = c | INTERNAL_CMD; // Store the first command
         }
     }
 
@@ -966,7 +1043,7 @@ uint16_t VCcommands::get_cmd_number_check_default(uint8_t pg, uint8_t sw, uint8_
 uint16_t VCcommands::count_cmds(uint8_t pg, uint8_t sw)
 {
     sw &= SWITCH_MASK;
-    if ((pg >= Number_of_pages) && (pg < FIRST_FIXED_CMD_PAGE)) return 0; // Just in case we are creating a new page
+    if ((pg >= Number_of_pages) && (pg < first_fixed_cmd_page)) return 0; // Just in case we are creating a new page
 
     uint16_t i = First_cmd_index[pg][sw];
 
@@ -1017,7 +1094,7 @@ QString VCcommands::read_title(uint8_t pg, uint8_t sw)
 
 void VCcommands::write_title(uint8_t pg, uint8_t sw, QString title)
 {
-    if (pg >= FIRST_FIXED_CMD_PAGE) return;
+    if (pg >= first_fixed_cmd_page) return;
 
     Cmd_struct cmd;
     cmd.Page = pg;
@@ -1060,7 +1137,11 @@ void VCcommands::set_type_and_value(uint8_t number, uint8_t type, uint8_t index,
 {
     cmdbyte[number].Type = type;
     cmdbyte[number].Title = cmdtype[type].Title;
-    cmdbyte[number].Max = cmdtype[type].Max;
+
+    uint8_t max = cmdtype[type].Max;
+    if (cmdtype[type].Sublist == SUBLIST_PAGE) max = last_fixed_cmd_page;
+    if (cmdtype[type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports;
+    cmdbyte[number].Max = max;
     cmdbyte[number].Min = cmdtype[type].Min;
     if (in_edit_mode) {
         cmdbyte[number].Value = index;
@@ -1425,8 +1506,8 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
       // * BYTE4+: Page byte updated             *
       // *****************************************
       if (cmd_type == TYPE_PAGE) {
-        if (cmdbyte[cmd_byte_no].Value == Number_of_pages) cmdbyte[cmd_byte_no].Value = FIRST_FIXED_CMD_PAGE; // Jump over the gap between the external and internal pages
-        if (cmdbyte[cmd_byte_no].Value == FIRST_FIXED_CMD_PAGE - 1) cmdbyte[cmd_byte_no].Value = Number_of_pages - 1;
+        if (cmdbyte[cmd_byte_no].Value == Number_of_pages) cmdbyte[cmd_byte_no].Value = first_fixed_cmd_page; // Jump over the gap between the external and internal pages
+        if (cmdbyte[cmd_byte_no].Value == first_fixed_cmd_page - 1) cmdbyte[cmd_byte_no].Value = Number_of_pages - 1;
       }
 
       // *****************************************
@@ -1657,7 +1738,7 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
         else if (page_index < Number_of_pages) {
             msg = QString::number(page_index) + ": " + read_title(value, 0); // Read page name
         }
-        else if ((page_index >= Number_of_pages) && (page_index < (Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_FIXED_CMD_PAGE + 1))) {
+        else if ((page_index >= Number_of_pages) && (page_index < (Number_of_pages + last_fixed_cmd_page - first_fixed_cmd_page + 1))) {
             msg = "F" + QString::number(page_index) + ": " + read_title(value, 0);
         }
         else msg = QString::number(page_index) + ": New page";
@@ -1668,6 +1749,12 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
         else if (dev == NUMBER_OF_DEVICES) msg = "Current Device";
         else if (dev == NUMBER_OF_DEVICES + 1) msg = "Common Functions";
         else msg = "Unknown device";
+        break;
+    case SUBLIST_SWITCH:
+        msg = getSwitchName(value);
+        break;
+    case SUBLIST_MIDI_PORT:
+        msg = midi_port_names.at(value);
         break;
     default: // Static sublist - read it from the cmd_sublist array
         index = indexFromValue(cmd_type, value) + cmdtype[cmd_type].Sublist;

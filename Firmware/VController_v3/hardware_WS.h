@@ -6,9 +6,12 @@
 // This file contains all the hardware settings for the VController Production Model version 1.
 // Make sure you include this file when updating to new firmware
 
+#define VC_NAME "V-Controller"
+
 // Choose which configuration for the switches is chosen in Config.ino
 //#define CONFIG_VCONTROLLER
 //#define CONFIG_VCMINI
+//#define CONFIG_VCTOUCH
 #define CONFIG_CUSTOM
 //#define MENU_ON_INDIVIDUAL_DISPLAYS
 
@@ -85,6 +88,8 @@
 
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
 
+#define MENU_KEY_COMBINATION 0x09 // Switches 1 and 4
+
 // *** Neopixel LEDs
 #define NUMBER_OF_LEDS     6 // Number of neopixel LEDs connected
 #define LED_ORDER          0, 1, 2, 3, 4, 5 // The order in which the LEDs are connected
@@ -144,6 +149,7 @@
 #define LINE_SELECT_CC_NUMBER 119
 #define VCONTROLLER_MIDI_CHANNEL 16
 
+#define NUMBER_OF_MIDI_PORTS 5
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 //#define MIDI3_BAUD_RATE 115200
 //#define MIDI3_BAUD_RATE 38400

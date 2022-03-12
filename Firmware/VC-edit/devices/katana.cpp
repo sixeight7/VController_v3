@@ -2,6 +2,7 @@
 #include "VController/config.h"
 #include "VController/leds.h"
 #include "VController/globals.h"
+#include "VController/globals.h"
 
 #include <QJsonObject>
 #include <QJsonArray>
@@ -13,19 +14,39 @@ void KTN_class::init()
 {
     device_name = "KATANA";
     full_device_name = "Boss KATANA";
-    patch_min = KTN_PATCH_MIN;
+    patch_min = ktn_patch_min;
     patch_max = KTN_PATCH_MAX;
-    patch_min_as_stored_on_VC = 9;
     patch_max_as_stored_on_VC = KTN_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 2; // Default value: red
+    MIDI_port_manual = MIDI_port_number(KTN_MIDI_PORT);
     MIDI_channel = KTN_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = KTN_DEFAULT_PAGE1; // Default value
-    my_device_page2 = KTN_DEFAULT_PAGE2; // Default value
-    my_device_page3 = KTN_DEFAULT_PAGE3; // Default value
-    my_device_page4 = KTN_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = KTN_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = KTN_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = KTN_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = KTN_DEFAULT_VC_PAGE4; // Default value
+      ktn_patch_min = 1;
+      ktn_bank_size = 8;
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = KTN_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = KTN_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = KTN_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = KTN_DEFAULT_VCMINI_PAGE4; // Default value
+      ktn_patch_min = 0;
+      ktn_bank_size = 3;
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = KTN_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = KTN_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = KTN_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = KTN_DEFAULT_VCTOUCH_PAGE4; // Default value
+      ktn_patch_min = 1;
+      ktn_bank_size = 8;
+    }
 
     //InitializePatchArea();
 }
@@ -50,9 +71,16 @@ bool KTN_class::check_command_enabled(uint8_t cmd)
 
 QString KTN_class::number_format(uint16_t patch_no)
 {
+    uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
     if (patch_no == 0) return "PANEL";
+    else if (patch_no <= number_of_channels) return "CH" + QString::number(patch_no);
+    else if ((!Setting.Is_katana50) || (ktn_bank_size == 8)) return "VC" + QString::number((patch_no - number_of_channels - 1) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 1) % ktn_bank_size + 1);
+    else if (patch_no == 5) return "VC0.0";
+    else return "VC" + QString::number((patch_no - number_of_channels - 2) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 2) % ktn_bank_size + 1);
+
+    /*if (patch_no == 0) return "PANEL";
     else if (patch_no < 9) return "CH" + QString::number(patch_no);
-    else return "VC" + QString::number((patch_no - 9) / KTN_BANK_SIZE) + "." + QString::number((patch_no - 9) % KTN_BANK_SIZE + 1);
+    else return "VC" + QString::number((patch_no - 9) / ktn_bank_size) + "." + QString::number((patch_no - 9) % ktn_bank_size + 1);*/
 }
 
 // Parameter categories
@@ -380,6 +408,9 @@ QStringList KTN_sublists = {
 
 const uint16_t KTN_SIZE_OF_SUBLIST = KTN_sublists.size();
 
+#define SY1000_FX_SUBLIST 23
+#define SY1000_AMP_SUBLIST 63
+
 QString KTN_class::read_parameter_name(uint16_t par_no)
 {
     if (par_no < number_of_parameters())  return KTN_parameters[par_no].Name;
@@ -544,13 +575,13 @@ QString KTN_class::get_patch_info(uint16_t number)
     }
     line.append("   \t( Amp: ");
     int amp_type = Device_patches[number][KTN_AMP_INDEX];
-    line.append(KTN_sublists[59 + amp_type]);
+    line.append(KTN_sublists[SY1000_AMP_SUBLIST + amp_type - 1]);
     line.append(",  Mod:");
     int mod_type = Device_patches[number][KTN_MOD_BASE_INDEX + 1];
-    line.append(KTN_sublists[22 + mod_type]);
+    line.append(KTN_sublists[SY1000_FX_SUBLIST + mod_type - 1]);
     line.append(",  FX:");
     int fx_type = Device_patches[number][KTN_FX_BASE_INDEX + 1];
-    line.append(KTN_sublists[22 + fx_type]);
+    line.append(KTN_sublists[SY1000_FX_SUBLIST + fx_type - 1]);
     line.append(" )");
 
     return line;
@@ -629,4 +660,10 @@ QString KTN_class::DefaultPatchFileName(int index)
     name.append('_');
     name.append(ReadPatchName(index));
     return name;
+}
+
+uint16_t KTN_class::patch_min_as_stored_on_VC()
+{
+    if (Setting.Is_katana50) return 5;
+    else return 9;
 }

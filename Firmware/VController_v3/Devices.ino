@@ -10,6 +10,55 @@
 // Here are variables from various parts of the code that have been moved here, because they are used early on.
 // As the code develops and is improved, these variables should disappear from here.
 
+#if defined (CONFIG_CUSTOM)
+#define DEFAULT_PAGE DEFAULT_CUSTOM_PAGE
+#define PAGE_CURRENT_PATCH_BANK PAGE_CUSTOM_CURRENT_PATCH_BANK
+#define PAGE_MENU PAGE_CUSTOM_MENU
+#define PAGE_CURRENT_DIRECT_SELECT PAGE_CUSTOM_CURRENT_DIRECT_SELECT
+#define PAGE_DEFAULT PAGE_CUSTOM_DEFAULT
+#define PAGE_SELECT PAGE_CUSTOM_SELECT
+#define PAGE_CURRENT_PARAMETER PAGE_CUSTOM_CURRENT_PARAMETER
+#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_CUSTOM
+#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_CUSTOM
+#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_CUSTOM
+
+#elif defined (CONFIG_VCTOUCH)
+#define DEFAULT_PAGE DEFAULT_VCTOUCH_PAGE
+#define PAGE_CURRENT_PATCH_BANK PAGE_VCTOUCH_CURRENT_PATCH_BANK
+#define PAGE_MENU PAGE_VCTOUCH_MENU
+#define PAGE_CURRENT_DIRECT_SELECT PAGE_VCTOUCH_CURRENT_DIRECT_SELECT
+#define PAGE_DEFAULT PAGE_VCTOUCH_DEFAULT
+#define PAGE_SELECT PAGE_VCTOUCH_SELECT
+#define PAGE_CURRENT_PARAMETER PAGE_VCTOUCH_EDIT_PARAMETER
+#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VCTOUCH
+#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VCTOUCH
+#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_VCTOUCH
+
+#elif defined (CONFIG_VCMINI)
+#define DEFAULT_PAGE DEFAULT_VCMINI_PAGE
+#define PAGE_CURRENT_PATCH_BANK PAGE_VCMINI_CURRENT_PATCH_BANK
+#define PAGE_MENU PAGE_VCMINI_MENU
+#define PAGE_CURRENT_DIRECT_SELECT PAGE_VCMINI_CURRENT_DIRECT_SELECT
+#define PAGE_DEFAULT PAGE_VCMINI_DEFAULT
+#define PAGE_SELECT PAGE_VCMINI_SELECT
+#define PAGE_CURRENT_PARAMETER PAGE_VCMINI_CURRENT_PARAMETER
+#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VCMINI
+#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VCMINI
+#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_VCMINI
+
+#else
+#define DEFAULT_PAGE DEFAULT_VC_PAGE
+#define PAGE_CURRENT_PATCH_BANK PAGE_VC_CURRENT_PATCH_BANK 
+#define PAGE_MENU PAGE_VC_MENU
+#define PAGE_CURRENT_DIRECT_SELECT PAGE_VC_CURRENT_DIRECT_SELECT
+#define PAGE_DEFAULT PAGE_VC_DEFAULT
+#define PAGE_SELECT PAGE_VC_SELECT
+#define PAGE_CURRENT_PARAMETER PAGE_VC_CURRENT_PARAMETER
+#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VC
+#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VC
+#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_VC
+#endif
+
 bool global_tuner_active = false;
 
 // States and variable for updating page
@@ -28,6 +77,7 @@ uint8_t Previous_page = DEFAULT_PAGE;
 uint8_t Previous_device = 0;
 uint8_t Previous_bank_size = 0; // Used for direct select
 
+uint8_t Current_MIDI_switch = 1; // The selected MIDI switch in the menu
 uint8_t calibrate_exp_pedal = 0; // The selected expression pedal in the menu
 
 bool update_main_lcd = false; // True if main display needs updating
@@ -36,6 +86,9 @@ uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
 #define ACTION_TIMER_LENGTH 600 // for messages that are shown on press of buttons
 #define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 
+String Text_entry; // The string we use for entering a text in the menu
+uint8_t Text_entry_length = 16;
+bool on_screen_keyboard_active = false;
 bool open_menu_for_Katana_patch_save = false;
 bool open_menu_for_SY1000_scene_save = false;
 bool do_not_forward_after_Helix_PC_message = false;
@@ -49,7 +102,11 @@ bool do_not_forward_after_Helix_PC_message = false;
 #define DEVICE_ON 1
 #define DEVICE_DETECT 2
 
-bool menu_active = false;
+// For H_Switch.ino
+#define SKIP_RELEASE 1
+#define SKIP_LONG_PRESS 2
+#define SKIP_HOLD 4
+
 bool on_looper_page = false;
 
 // ********************************* Section 2: Common device settings ********************************************
@@ -108,7 +165,7 @@ IntervalTimer Sequencer_timer;
 void device_sequencer_start() {
   long timer_interval = 60000000 / (24 * 120);
   Sequencer_timer.begin(device_sequencer_timer_expired, timer_interval);
-  Serial.println("device sequencer started at " + String(timer_interval));
+  DEBUGMAIN("device sequencer started at " + String(timer_interval));
 }
 
 void device_sequencer_update(uint8_t steps, uint8_t divider) {
@@ -116,7 +173,7 @@ void device_sequencer_update(uint8_t steps, uint8_t divider) {
   if (divider == 0) return;
   long timer_interval = 60000000 * divider / (steps * Setting.Bpm);
   Sequencer_timer.update(timer_interval);
-  Serial.println("Sequence timer update: " + String(timer_interval));
+  DEBUGMSG("Sequence timer update: " + String(timer_interval));
 }
 
 void device_sequencer_timer_expired() {

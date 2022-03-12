@@ -1,6 +1,7 @@
 #include "zms70.h"
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 void ZMS70_class::init()
 {
@@ -10,13 +11,28 @@ void ZMS70_class::init()
     patch_max = ZMS70_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 1; // Default value: green
+    MIDI_port_manual = MIDI_port_number(ZMS70_MIDI_PORT);
     MIDI_channel = ZMS70_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = ZMS70_DEFAULT_PAGE1; // Default value
-    my_device_page2 = ZMS70_DEFAULT_PAGE2; // Default value
-    my_device_page3 = ZMS70_DEFAULT_PAGE3; // Default value
-    my_device_page4 = ZMS70_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = ZMS70_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = ZMS70_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = ZMS70_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = ZMS70_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = ZMS70_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = ZMS70_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = ZMS70_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = ZMS70_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = ZMS70_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = ZMS70_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = ZMS70_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = ZMS70_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
 }
 
 bool ZMS70_class::check_command_enabled(uint8_t cmd)

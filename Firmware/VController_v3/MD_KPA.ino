@@ -12,7 +12,7 @@
 
 // Kemper settings:
 #define KPA_MIDI_CHANNEL 1
-#define KPA_MIDI_PORT 1 // Default port is MIDI1
+#define KPA_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define KPA_PERFORMANCE_PATCH_MIN 0
 #define KPA_PERFORMANCE_PATCH_MAX 624 // 125 performances of 5 rigs
 #define KPA_BROWSE_PATCH_MIN 0
@@ -73,7 +73,7 @@ uint8_t beaconFlags = 0; //KPA_BEACON_FLAG_SYSEX; // Decided not to use the beac
 #define KPA_PARAM_RIG_NAME_ADDRESS 0x0001
 
 
-void MD_KPA_class::init() { // Default values for variables
+FLASHMEM void MD_KPA_class::init() { // Default values for variables
   MD_base_class::init();
 
   // Line6 KPA variables:
@@ -86,33 +86,49 @@ void MD_KPA_class::init() { // Default values for variables
   sysex_delay_length = 0; // time between sysex messages (in msec).
   my_LED_colour = 10; // Default value: soft green
   MIDI_channel = KPA_MIDI_CHANNEL; // Default value
-  MIDI_port = KPA_MIDI_PORT; // Default value
-  my_device_page1 = KPA_DEFAULT_PAGE1; // Default value
-  my_device_page2 = KPA_DEFAULT_PAGE2; // Default value
-  my_device_page3 = KPA_DEFAULT_PAGE3; // Default value
-  my_device_page4 = KPA_DEFAULT_PAGE4; // Default value
+  MIDI_port_manual = MIDI_port_number(KPA_MIDI_PORT); // Default value
+#if defined(IS_VCTOUCH)
+  my_device_page1 = KPA_DEFAULT_VCTOUCH_PAGE1; // Default value
+  my_device_page2 = KPA_DEFAULT_VCTOUCH_PAGE2; // Default value
+  my_device_page3 = KPA_DEFAULT_VCTOUCH_PAGE3; // Default value
+  my_device_page4 = KPA_DEFAULT_VCTOUCH_PAGE4; // Default value
+#elif defined(IS_VCMINI)
+  my_device_page1 = KPA_DEFAULT_VCMINI_PAGE1; // Default value
+  my_device_page2 = KPA_DEFAULT_VCMINI_PAGE2; // Default value
+  my_device_page3 = KPA_DEFAULT_VCMINI_PAGE3; // Default value
+  my_device_page4 = KPA_DEFAULT_VCMINI_PAGE4; // Default value
+#else
+  my_device_page1 = KPA_DEFAULT_VC_PAGE1; // Default value
+  my_device_page2 = KPA_DEFAULT_VC_PAGE2; // Default value
+  my_device_page3 = KPA_DEFAULT_VC_PAGE3; // Default value
+  my_device_page4 = KPA_DEFAULT_VC_PAGE4; // Default value
+#endif
   tuner_active = false;
   current_mode = KPA_PERFORMANCE_MODE;
   max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
+
+#ifdef IS_VCTOUCH
+  device_pic = img_KPA;
+#endif
 }
 
-void MD_KPA_class::update() {
+FLASHMEM void MD_KPA_class::update() {
   if (!connected) return;
   looper_timer_check();
 }
 
 // ********************************* Section 2: KPA common MIDI in functions ********************************************
-void MD_KPA_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
+FLASHMEM void MD_KPA_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
 
   // Check if it is a message from an KPA
-  if ((sxdata[1] == 0x00) && (sxdata[2] == 0x20) && (sxdata[3] == 0x33) && (port == MIDI_port)) {
+  if ((sxdata[1] == 0x00) && (sxdata[2] == 0x20) && (sxdata[3] == 0x33) && (port == MIDI_in_port)) {
 
     if (sxdata[6] == KPA_FUNCTION_SINGLE_PARAMETER_CHANGE) {
       uint16_t address = (sxdata[8] << 8) + sxdata[9];
 
       if (address == KPA_MODE_ADDRESS) {
         if (!connected) {
-          connect(0x7F, port); // Will connect to the device
+          connect(0x7F, port, Current_MIDI_out_port); // Will connect to the device
         }
         if (current_mode != sxdata[11]) { // Check for mode change
           switch_mode(sxdata[11]);
@@ -182,10 +198,10 @@ void MD_KPA_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
   }
 }
 
-void MD_KPA_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
+FLASHMEM void MD_KPA_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {  // Check incoming PC messages from  Called from MIDI:OnProgramChange
 
   // Check the source by checking the channel
-  if ((port == MIDI_port) && (channel == MIDI_channel)) { // KPA sends a program change
+  if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // KPA sends a program change
     if (patch_number != program) {
       prev_patch_number = patch_number;
       patch_number = program;
@@ -200,100 +216,100 @@ void MD_KPA_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
 // KPA sends out active sense messages. The VController will receive these and then request the owner name from the KPA to confirm we are connected to a KPA and not some other device that supports Active Sense
 // The active sense messages are also used to check the connection of the KPA to the VController
 
-void MD_KPA_class::check_active_sense_in(uint8_t port) {
+FLASHMEM void MD_KPA_class::check_active_sense_in(uint8_t port) {
   no_response_counter = 0; // KPA is still live...
   if ((enabled == DEVICE_DETECT) && (!connected)) { // Try to connect...
     start_KPA_detection = true;
-    MIDI_port = port;
+    MIDI_in_port = port;
     //DEBUGMSG("Active sense received");
   }
 }
 
-void MD_KPA_class::send_alternative_identity_request(uint8_t check_device_no) {
+FLASHMEM void MD_KPA_class::send_alternative_identity_request(uint8_t check_device_no) {
   if ((start_KPA_detection) && (check_device_no == 0)) {
     //request_owner_name();
     request_single_parameter(KPA_MODE_ADDRESS); // We keep requesting the mode, so a mode change on the KPA is also detected
   }
 }
 
-void MD_KPA_class::do_after_connect() {
+FLASHMEM void MD_KPA_class::do_after_connect() {
   current_looper_state = LOOPER_STATE_ERASED;
   current_exp_pedal = 3; // Select volume by default
   current_performance = 255;
-  char floorboard_name[] = "V-Controller";
+  char floorboard_name[] = VC_NAME;
   write_sysex_string(KPA_PARAM_FLOORBOARD_NAME_ADDRESS, floorboard_name);
   send_beacon(0, 0, 127); // We are not using the beacon messages of the KPA, as it interferes with the info requests of the VController
   //send_beacon(2, beaconFlags, 127); // So changes on the KPA will be communicated through sysex messages.
 }
 
 // ********************************* Section 3: KPA common MIDI out functions ********************************************
-void MD_KPA_class::write_sysex(uint16_t address, uint16_t value) { // For single parameter change
+FLASHMEM void MD_KPA_class::write_sysex(uint16_t address, uint16_t value) { // For single parameter change
 
   uint8_t sysexmessage[13] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, KPA_FUNCTION_SINGLE_PARAMETER_CHANGE, 0x00, (uint8_t) (address >> 8), (uint8_t) (address & 0x7F), (uint8_t) (value >> 7), (uint8_t) (value & 0x7F), 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 13, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 13, MIDI_out_port);
 }
 
-void MD_KPA_class::write_sysex_string(uint16_t address, char *str) {
+FLASHMEM void MD_KPA_class::write_sysex_string(uint16_t address, char *str) {
   uint8_t str_length = strlen(str);
   uint8_t sysexmessage[12 + str_length] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, KPA_FUNCTION_STRING_PARAMETER_CHANGE, 0x00, (uint8_t) (address >> 8), (uint8_t) (address & 0x7F)};
   memcpy(&sysexmessage[10], str, str_length); // Copy the string
   sysexmessage[10 + str_length] = 0x00;
   sysexmessage[11 + str_length] = 0xF7;
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 12 + str_length, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 12 + str_length, MIDI_out_port);
 }
 
-void MD_KPA_class::send_beacon(uint8_t setNum, uint8_t flags, uint8_t timeLease)
+FLASHMEM void MD_KPA_class::send_beacon(uint8_t setNum, uint8_t flags, uint8_t timeLease)
 {
   uint8_t sysexmessage[13] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, KPA_FUNCTION_SYS_COMMUNICATION, 0x00, 0x40, setNum, flags, timeLease, 0xF7};
   check_sysex_delay();
   DEBUGMSG("Send beacon");
-  MIDI_send_sysex(sysexmessage, 13, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 13, MIDI_out_port);
 }
 
-void MD_KPA_class::request_single_parameter(uint16_t address) {
+FLASHMEM void MD_KPA_class::request_single_parameter(uint16_t address) {
   uint8_t sysexmessage[11] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, KPA_FUNCTION_REQUEST_SINGLE_PARAMETER_VALUE, 0x00, (uint8_t) (address >> 8), (uint8_t) (address & 0x7F), 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 11, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 11, MIDI_out_port);
 }
 
-void MD_KPA_class::request_current_rig_name() {
+FLASHMEM void MD_KPA_class::request_current_rig_name() {
   uint8_t sysexmessage[11] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, KPA_FUNCTION_REQUEST_STRING_PARAMETER, 0x00, 0x00, 0x01, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 11, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 11, MIDI_out_port);
 }
 
-void MD_KPA_class::request_performance_name(uint8_t number) {
+FLASHMEM void MD_KPA_class::request_performance_name(uint8_t number) {
   uint8_t sysexmessage[14] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x00, KPA_FUNCTION_REQUEST_EXTENDED_STRING_PARAMETER, 0x00, 0x00, 0x00, 0x01, 0x00, number, 0xF7};
   check_sysex_delay();
-  MIDI_send_sysex(sysexmessage, 14, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 14, MIDI_out_port);
 }
 
-void MD_KPA_class::request_owner_name() {
+FLASHMEM void MD_KPA_class::request_owner_name() {
   uint8_t sysexmessage[19] = {0xF0, 0x00, 0x20, 0x33, 0x02, 0x7F, 0x06, 0x00, 0x00, 0x00, 0x06, 0x15, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF7};
   check_sysex_delay();
   DEBUGMSG("Requesting owner name");
-  MIDI_send_sysex(sysexmessage, 19, MIDI_port);
+  MIDI_send_sysex(sysexmessage, 19, MIDI_out_port);
 }
 
 
-void MD_KPA_class::set_bpm() {
+FLASHMEM void MD_KPA_class::set_bpm() {
   if (connected) {
     write_sysex(KPA_RIG_TEMPO_ADDRESS, Setting.Bpm);
   }
 }
 
-void MD_KPA_class::start_tuner() {
+FLASHMEM void MD_KPA_class::start_tuner() {
   if (connected) {
-    MIDI_send_CC(31, 1, MIDI_channel, MIDI_port);
+    MIDI_send_CC(31, 1, MIDI_channel, MIDI_out_port);
     tuner_active = true;
   }
 }
 
-void MD_KPA_class::stop_tuner() {
+FLASHMEM void MD_KPA_class::stop_tuner() {
   if (connected) {
-    MIDI_send_CC(31, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(31, 0, MIDI_channel, MIDI_out_port);
     tuner_active = false;
   }
 }
@@ -310,7 +326,7 @@ void MD_KPA_class::stop_tuner() {
 // 2) In browse mode, the first five patches will send CC #50 -54, so you can select the first five rigs that are currently selected in browse mode. Going bank up will select rigs. To get
 //    this to work, you need to assign PC numbers to these rigs.
 
-void MD_KPA_class::switch_mode(uint8_t mode) {
+FLASHMEM void MD_KPA_class::switch_mode(uint8_t mode) {
   current_mode = mode;
   if (current_mode == KPA_BROWSE_MODE) {
     patch_number = browse_rig_number;
@@ -326,24 +342,24 @@ void MD_KPA_class::switch_mode(uint8_t mode) {
   update_bank_number(patch_number);
 }
 
-void MD_KPA_class::select_patch(uint16_t new_patch) {
+FLASHMEM void MD_KPA_class::select_patch(uint16_t new_patch) {
   prev_patch_number = patch_number;
   patch_number = new_patch;
   if (current_mode == KPA_BROWSE_MODE) {
     browse_rig_number = new_patch;
     if (new_patch < 5) { // Browse this number)
       uint8_t cc = 50 + new_patch;
-      MIDI_send_CC(cc, 1, MIDI_channel, MIDI_port); // send CC #50 - #54 for rig select
+      MIDI_send_CC(cc, 1, MIDI_channel, MIDI_out_port); // send CC #50 - #54 for rig select
     }
     else { // Select it as patch
-      MIDI_send_CC(32, (new_patch - 5) >> 7, MIDI_channel, MIDI_port);
-      MIDI_send_PC((new_patch - 5) & 0x7F, MIDI_channel, MIDI_port);
+      MIDI_send_CC(32, (new_patch - 5) >> 7, MIDI_channel, MIDI_out_port);
+      MIDI_send_PC((new_patch - 5) & 0x7F, MIDI_channel, MIDI_out_port);
     }
   }
   else {
     performance_rig_number = new_patch;
-    MIDI_send_CC(32, new_patch >> 7, MIDI_channel, MIDI_port);
-    MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_port);
+    MIDI_send_CC(32, new_patch >> 7, MIDI_channel, MIDI_out_port);
+    MIDI_send_PC(new_patch & 0x7F, MIDI_channel, MIDI_out_port);
 
     DEBUGMSG("out(KPA) PC" + String(new_patch)); //Debug
   }
@@ -353,7 +369,7 @@ void MD_KPA_class::select_patch(uint16_t new_patch) {
   update_page = REFRESH_PAGE;
 }
 
-void MD_KPA_class::number_format(uint16_t number, String & Output) {
+FLASHMEM void MD_KPA_class::number_format(uint16_t number, String & Output) {
   if (current_mode == KPA_BROWSE_MODE) {
     //uint16_t number_plus_one = number + 1;
     //Output +=  "B" + String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
@@ -369,7 +385,7 @@ void MD_KPA_class::number_format(uint16_t number, String & Output) {
   }
 }
 
-void MD_KPA_class::direct_select_format(uint16_t number, String & Output) {
+FLASHMEM void MD_KPA_class::direct_select_format(uint16_t number, String & Output) {
   if (current_mode == KPA_BROWSE_MODE) {
     if (direct_select_state == 0) {
       uint8_t bank_no = (bank_select_number * 10) + number;
@@ -390,7 +406,7 @@ void MD_KPA_class::direct_select_format(uint16_t number, String & Output) {
   }
 }
 
-bool MD_KPA_class::valid_direct_select_switch(uint8_t number) {
+FLASHMEM bool MD_KPA_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
   if (current_mode == KPA_BROWSE_MODE) {
     result = true;
@@ -407,7 +423,7 @@ bool MD_KPA_class::valid_direct_select_switch(uint8_t number) {
   return result;
 }
 
-void MD_KPA_class::direct_select_start() {
+FLASHMEM void MD_KPA_class::direct_select_start() {
   Previous_bank_size = bank_size; // Remember the bank size
   device_in_bank_selection = my_device_number + 1;
   if (current_mode == KPA_BROWSE_MODE) bank_size = 100;
@@ -416,7 +432,7 @@ void MD_KPA_class::direct_select_start() {
   direct_select_state = 0;
 }
 
-void MD_KPA_class::direct_select_press(uint8_t number) {
+FLASHMEM void MD_KPA_class::direct_select_press(uint8_t number) {
   if (!valid_direct_select_switch(number)) return;
   if (current_mode == KPA_BROWSE_MODE) {
     if (direct_select_state == 0) {
@@ -452,13 +468,13 @@ void MD_KPA_class::direct_select_press(uint8_t number) {
       bank_select_number = (base_patch / Previous_bank_size);
       bank_size = Previous_bank_size;
       //DEBUGMSG("PREVIOUS BANK_SIZE: " + String(Previous_bank_size));
-      SCO_select_page(KPA_DEFAULT_PAGE1); // Which should give PAGE_KPA_RIG_SELECT
+      SCO_select_page(my_device_page1); // Which should give PAGE_KPA_RIG_SELECT
       device_in_bank_selection = my_device_number + 1; // Go into bank mode
     }
   }
 }
 
-void MD_KPA_class::do_after_patch_selection() {
+FLASHMEM void MD_KPA_class::do_after_patch_selection() {
   is_on = connected;
   if (Setting.Send_global_tempo_after_patch_change == true) {
     set_bpm();
@@ -469,7 +485,7 @@ void MD_KPA_class::do_after_patch_selection() {
   MD_base_class::do_after_patch_selection();
 }
 
-void MD_KPA_class::request_current_patch_name() {
+FLASHMEM void MD_KPA_class::request_current_patch_name() {
   if (current_mode == KPA_BROWSE_MODE) request_current_rig_name();
   if (current_mode == KPA_PERFORMANCE_MODE) {
     //preselect_performance(patch_number);
@@ -480,7 +496,7 @@ void MD_KPA_class::request_current_patch_name() {
 
 const PROGMEM char KPA_number[5][4] = { "1st", "2nd", "3rd", "4th", "5th" };
 
-bool MD_KPA_class::request_patch_name(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_KPA_class::request_patch_name(uint8_t sw, uint16_t number) {
   if ((current_mode == KPA_PERFORMANCE_MODE) && (Current_page != PAGE_CURRENT_DIRECT_SELECT)) {
     if (can_request_sysex_data()) {
       last_requested_sysex_type = REQUEST_PATCH_NAME;
@@ -509,11 +525,11 @@ bool MD_KPA_class::request_patch_name(uint8_t sw, uint16_t number) {
   }
 }
 
-void MD_KPA_class::request_bank_name(signed int delta, uint16_t number) {
+FLASHMEM void MD_KPA_class::request_bank_name(signed int delta, uint16_t number) {
   if (current_mode == KPA_PERFORMANCE_MODE) {
     //preselect_performance(number);
-    if (delta < 0) MIDI_send_CC(49, 0, MIDI_channel, MIDI_port);
-    else MIDI_send_CC(48, 0, MIDI_channel, MIDI_port);
+    if (delta < 0) MIDI_send_CC(49, 0, MIDI_channel, MIDI_out_port);
+    else MIDI_send_CC(48, 0, MIDI_channel, MIDI_out_port);
     request_performance_name(0); // Request performance name
   }
 }
@@ -679,15 +695,15 @@ const PROGMEM char KPA_parameter_names[][9] = {
   "PERFORM"
 };
 
-void MD_KPA_class::clear_FX_states() {
+FLASHMEM void MD_KPA_class::clear_FX_states() {
   memset(effect_state, 0, KPA_NUMBER_OF_FX);
 }
 
-void MD_KPA_class::set_FX_state(uint8_t index, bool state) {
+FLASHMEM void MD_KPA_class::set_FX_state(uint8_t index, bool state) {
   effect_state[index] = (state == 0) ? 2 : 1; // Set state to 2 if state is zero and to 1 if state is not zero
 }
 
-void MD_KPA_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+FLASHMEM void MD_KPA_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
   // Send cc command to Line6 KPA
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   if (number == KPA_MODE) {
@@ -698,7 +714,7 @@ void MD_KPA_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
 
   // Send the sysex or CC message
   if (KPA_CC_types[number].Address != 0x0000) write_sysex(KPA_CC_types[number].Address, value);
-  else MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+  else MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   set_FX_state(number, value);
   check_update_label(Sw, value);
   LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
@@ -708,20 +724,20 @@ void MD_KPA_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_KPA_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
+FLASHMEM void MD_KPA_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {
   if (SP[Sw].Latch == MOMENTARY) {
     SP[Sw].State = 2; // Switch state off
     effect_state[number] = 2;
     if (KPA_CC_types[number].Address != 0x0000) write_sysex(KPA_CC_types[number].Address, cmd->Value2);
-    else MIDI_send_CC(KPA_CC_types[number].CC, cmd->Value2, MIDI_channel, MIDI_port);
+    else MIDI_send_CC(KPA_CC_types[number].CC, cmd->Value2, MIDI_channel, MIDI_out_port);
   }
 }
 
-void MD_KPA_class::read_parameter_title(uint16_t number, String & Output) {
+FLASHMEM void MD_KPA_class::read_parameter_title(uint16_t number, String & Output) {
   Output += KPA_CC_types[number].Name;
 }
 
-bool MD_KPA_class::request_parameter(uint8_t sw, uint16_t number) {
+FLASHMEM bool MD_KPA_class::request_parameter(uint8_t sw, uint16_t number) {
   if ((can_request_sysex_data()) && (number < KPA_NUMBER_OF_FX_SLOTS)) {
     last_requested_sysex_address = KPA_CC_types[number].Address;
     last_requested_sysex_switch = sw;
@@ -748,7 +764,7 @@ bool MD_KPA_class::request_parameter(uint8_t sw, uint16_t number) {
   }
 }
 
-void MD_KPA_class::read_FX_type(uint8_t sw, uint8_t type) {
+FLASHMEM void MD_KPA_class::read_FX_type(uint8_t sw, uint8_t type) {
   if (type == 0) { // No effect in slot
     String msg = "--";
     LCD_set_SP_label(sw, msg);
@@ -778,7 +794,7 @@ void MD_KPA_class::read_FX_type(uint8_t sw, uint8_t type) {
   LCD_set_SP_label(sw, msg);
 }
 
-void MD_KPA_class::check_update_label(uint8_t Sw, uint8_t value) {
+FLASHMEM void MD_KPA_class::check_update_label(uint8_t Sw, uint8_t value) {
   String msg;
   uint16_t index = SP[Sw].PP_number;
   msg = KPA_CC_types[index].Name;
@@ -797,27 +813,27 @@ void MD_KPA_class::check_update_label(uint8_t Sw, uint8_t value) {
 }
 
 // Menu options for FX states
-void MD_KPA_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
+FLASHMEM void MD_KPA_class::read_parameter_name(uint16_t number, String & Output) { // Called from menu
   if (number < number_of_parameters())  Output = KPA_CC_types[number].Name;
   else Output = "?";
 }
 
-uint16_t MD_KPA_class::number_of_parameters() {
+FLASHMEM uint16_t MD_KPA_class::number_of_parameters() {
   return KPA_NUMBER_OF_PARAMETERS;
 }
 
-uint8_t MD_KPA_class::number_of_values(uint16_t parameter) {
+FLASHMEM uint8_t MD_KPA_class::number_of_values(uint16_t parameter) {
   if ((parameter == KPA_WAH_PEDAL) || (parameter == KPA_PITCH_PEDAL) || (parameter == KPA_VOL_PEDAL) || (parameter == KPA_MORPH_PEDAL)) return 128; // Return 128 for the expression pedals
   if (parameter < number_of_parameters()) return 2;
   else return 0;
 }
 
-void MD_KPA_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) {
+FLASHMEM void MD_KPA_class::read_parameter_value_name(uint16_t number, uint16_t value, String & Output) {
   if (number < number_of_parameters()) Output += String(value);
   else Output += " ? "; // Unknown parameter
 }
 
-void MD_KPA_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
+FLASHMEM void MD_KPA_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_pedal) {
   uint8_t number;
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   switch (exp_pedal) {
@@ -826,8 +842,8 @@ void MD_KPA_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
     case 3: number = KPA_VOL_PEDAL; break;
     default: return;
   }
-  LCD_show_bar(0, value); // Show it on the main display
-  MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_port);
+  LCD_show_bar(0, value, 0); // Show it on the main display
+  MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   check_update_label(sw, value);
   String msg = KPA_CC_types[number].Name;
   msg += ':';
@@ -836,14 +852,14 @@ void MD_KPA_class::move_expression_pedal(uint8_t sw, uint8_t value, uint8_t exp_
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
-void MD_KPA_class::toggle_expression_pedal(uint8_t sw) {
+FLASHMEM void MD_KPA_class::toggle_expression_pedal(uint8_t sw) {
   if (current_exp_pedal == 0) return;
   current_exp_pedal++;
   if (current_exp_pedal > 3) current_exp_pedal = 1;
   update_page = REFRESH_FX_ONLY;
 }
 
-void MD_KPA_class::set_expr_title(uint8_t sw) {
+FLASHMEM void MD_KPA_class::set_expr_title(uint8_t sw) {
   const char KPA_Exp0[] = " WAH  MRPH  VOL ";
   const char KPA_Exp1[] = "[WAH] MRPH  VOL ";
   const char KPA_Exp2[] = " WAH [MRPH] VOL ";
@@ -854,7 +870,7 @@ void MD_KPA_class::set_expr_title(uint8_t sw) {
   else LCD_set_SP_title(sw, KPA_Exp0);
 }
 
-bool MD_KPA_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
+FLASHMEM bool MD_KPA_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   if (exp_pedal == 0) exp_pedal = current_exp_pedal;
   uint8_t number = 0;
   if (exp_pedal == 1) number = KPA_WAH_PEDAL;
@@ -865,7 +881,7 @@ bool MD_KPA_class::request_exp_pedal(uint8_t sw, uint8_t exp_pedal) {
   return true;
 }
 
-bool MD_KPA_class::looper_active() {
+FLASHMEM bool MD_KPA_class::looper_active() {
   return true;
 }
 
@@ -889,25 +905,25 @@ const PROGMEM uint8_t KPA_looper_cc2_val[] = { // Table with the cc messages
 
 const uint8_t KPA_LOOPER_NUMBER_OF_CCS = sizeof(KPA_looper_cc2_val);
 
-void MD_KPA_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM void MD_KPA_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < KPA_LOOPER_NUMBER_OF_CCS) {
     if (KPA_looper_cc2_val[cmd] > 0) {
-      MIDI_send_CC(99, 125, MIDI_channel, MIDI_port);
-      MIDI_send_CC(98, KPA_looper_cc2_val[cmd], MIDI_channel, MIDI_port);
-      MIDI_send_CC(6, 0, MIDI_channel, MIDI_port);
-      MIDI_send_CC(38, 1, MIDI_channel, MIDI_port);
+      MIDI_send_CC(99, 125, MIDI_channel, MIDI_out_port);
+      MIDI_send_CC(98, KPA_looper_cc2_val[cmd], MIDI_channel, MIDI_out_port);
+      MIDI_send_CC(6, 0, MIDI_channel, MIDI_out_port);
+      MIDI_send_CC(38, 1, MIDI_channel, MIDI_out_port);
       //write_sysex(0x7D00 | KPA_looper_cc2_val[cmd], 1);
       last_looper_cmd = cmd;
     }
   }
 }
 
-void MD_KPA_class::looper_release() {
+FLASHMEM void MD_KPA_class::looper_release() {
   if (KPA_looper_cc2_val[last_looper_cmd] > 0) {
-    MIDI_send_CC(99, 125, MIDI_channel, MIDI_port);
-    MIDI_send_CC(98, KPA_looper_cc2_val[last_looper_cmd], MIDI_channel, MIDI_port);
-    MIDI_send_CC(6, 0, MIDI_channel, MIDI_port);
-    MIDI_send_CC(38, 0, MIDI_channel, MIDI_port);
+    MIDI_send_CC(99, 125, MIDI_channel, MIDI_out_port);
+    MIDI_send_CC(98, KPA_looper_cc2_val[last_looper_cmd], MIDI_channel, MIDI_out_port);
+    MIDI_send_CC(6, 0, MIDI_channel, MIDI_out_port);
+    MIDI_send_CC(38, 0, MIDI_channel, MIDI_out_port);
     //write_sysex(0x7D00 | KPA_looper_cc2_val[last_looper_cmd], 0);
   }
 }

@@ -1,3 +1,5 @@
+// Please read VController_v3.ino for information about the license and authors
+
 // To give your project a unique name, this code must be
 // placed into a .c file (its own tab).  It can not be in
 // a .cpp file or your main sketch (the .ino file).

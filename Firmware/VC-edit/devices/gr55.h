@@ -5,6 +5,7 @@
 #include <QApplication>
 
 // Roland GR-55 settings:
+#define GR55_MIDI_PORT MIDI1_PORT
 #define GR55_MIDI_CHANNEL 8
 #define GR55_PATCH_MIN 0
 #define GR55_PATCH_MAX 656 // Assuming we are in guitar mode!!!

@@ -22,46 +22,46 @@ uint8_t SwitchPadStatusColumnChanged = 0;
 
 // And it needs a global function for the interrupts
 void SwitchPadColumn1InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 1;
+  SwitchPadStatusColumnChanged |= 1;
   //DEBUGMSG("Interrupt 1...");
 }
 
 void SwitchPadColumn2InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 2;
+  SwitchPadStatusColumnChanged |= 2;
   //DEBUGMSG("Interrupt 2...");
 }
 
 void SwitchPadColumn3InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 3;
+  SwitchPadStatusColumnChanged |= 4;
   //DEBUGMSG("Interrupt 3...");
 }
 
 void SwitchPadColumn4InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 4;
+  SwitchPadStatusColumnChanged |= 8;
   //DEBUGMSG("Interrupt 4...");
 }
 
 void SwitchPadColumn5InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 5;
+  SwitchPadStatusColumnChanged |= 16;
 }
 
 void SwitchPadColumn6InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 6;
+  SwitchPadStatusColumnChanged |= 32;
 }
 
 void SwitchPadColumn7InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 7;
+  SwitchPadStatusColumnChanged |= 64;
 }
 
 void SwitchPadColumn8InterruptRoutine() {
-  SwitchPadStatusColumnChanged = 8;
+  SwitchPadStatusColumnChanged |= 128;
 }
 
 
 class Switchpad
 {
   public:
-    Switchpad(uint8_t *row, uint8_t *col, uint8_t numRows, uint8_t numCols, uint32_t debounceTime);
+    Switchpad(uint8_t *rowPins, uint8_t *colPins, uint8_t numRows, uint8_t numCols, uint32_t debounceTime);
 
     void init();
     bool update();
@@ -70,27 +70,31 @@ class Switchpad
     uint8_t released();
 
   private:
+    void attachInterrupts();
     void idleState();
+    uint8_t findFirstTriggeredColumn();
     uint8_t numRows;
     uint8_t numCols;
     uint8_t *rowPins;
     uint8_t *columnPins;
-    uint8_t newState;
-    uint8_t State;
-    uint8_t releasedState;
+    bool switchState[32]; // Support for max 32 switches
+    uint8_t switchPressed;
+    uint8_t switchReleased;
     uint32_t bounceDelay;
     uint32_t debounceTime;
 };
 
-Switchpad::Switchpad(uint8_t *row, uint8_t *col, uint8_t numRows, uint8_t numCols,  uint32_t debounceTime) {
-  rowPins = row;
-  columnPins = col;
+Switchpad::Switchpad(uint8_t *rowPins, uint8_t *colPins, uint8_t numRows, uint8_t numCols,  uint32_t debounceTime) {
+  this->rowPins = rowPins;
+  this->columnPins = colPins;
   this->numRows = numRows;
   this->numCols = numCols;
-  newState = 0;
-  State = 0;
-  releasedState = 0;
   this->debounceTime = debounceTime;
+  
+  for(uint8_t s = 0; s < numRows * numCols; s++) switchState[s] = HIGH;
+  switchPressed = 0;
+  switchReleased = 0;
+  
 }
 
 void Switchpad::init() {
@@ -102,6 +106,12 @@ void Switchpad::init() {
   }
   idleState(); // Will enable all rows, to wait for an interrupt
   
+  attachInterrupts();
+  SwitchPadStatusColumnChanged = 0;
+  bounceDelay = millis();
+}
+
+void Switchpad::attachInterrupts() {
   if (numCols >= 1) attachInterrupt(digitalPinToInterrupt(columnPins[0]), SwitchPadColumn1InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
   if (numCols >= 2) attachInterrupt(digitalPinToInterrupt(columnPins[1]), SwitchPadColumn2InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
   if (numCols >= 3) attachInterrupt(digitalPinToInterrupt(columnPins[2]), SwitchPadColumn3InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
@@ -110,9 +120,7 @@ void Switchpad::init() {
   if (numCols >= 6) attachInterrupt(digitalPinToInterrupt(columnPins[5]), SwitchPadColumn6InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
   if (numCols >= 7) attachInterrupt(digitalPinToInterrupt(columnPins[6]), SwitchPadColumn7InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
   if (numCols >= 8) attachInterrupt(digitalPinToInterrupt(columnPins[7]), SwitchPadColumn8InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-  delay(1); // Wait for the interrupt pin states to settle...
-  SwitchPadStatusColumnChanged = 0;
-  bounceDelay = millis();
+  //delay(1); // Wait for the interrupt pin states to settle...
 }
 
 void Switchpad::idleState() { // Will set all switchrows LOW (active), so any switch state change will trigger an interrupt
@@ -125,9 +133,21 @@ void Switchpad::idleState() { // Will set all switchrows LOW (active), so any sw
   //SwitchPadStatusColumnChanged = 0;
 }
 
+uint8_t Switchpad::findFirstTriggeredColumn() {
+  uint8_t bitMask = 1;
+  for (uint8_t c = 0; c < 8; c++) {
+    if ((SwitchPadStatusColumnChanged & bitMask) > 0) return c;
+    bitMask *= 2;
+  }
+  return 0;
+}
+
 bool Switchpad::update() {
   if ((SwitchPadStatusColumnChanged > 0) && (millis() > bounceDelay + debounceTime)) {
 
+    uint8_t c = findFirstTriggeredColumn();
+    uint8_t switchStateChanged; 
+    
     //Make all rows input
     for (uint8_t r = 0; r < numRows; r++) {
       digitalWrite(rowPins[r], HIGH);
@@ -135,10 +155,9 @@ bool Switchpad::update() {
       //DEBUGMSG("Row " + String(r) + "is input");
     }
 
-    // Now enable the row where we received the interrupt
-    uint8_t c = SwitchPadStatusColumnChanged - 1;
-    //Make this column active by making it an output and turning it low
-    newState = 0;
+    // Now enable the column where we received the interrupt
+    // Make this column active by making it an output and turning it low
+    switchStateChanged = 0;
     pinMode(columnPins[c], OUTPUT);
     digitalWrite(columnPins[c], LOW);
     //DEBUGMSG("Column " + String(c) + "is output and low");
@@ -146,12 +165,16 @@ bool Switchpad::update() {
 
     // Now read the row pins for this column
     for (uint8_t r = 0; r < numRows; r++) {
-      if (digitalRead(rowPins[r]) == LOW) {
-        newState = (r * numCols) + c + 1;
+      uint8_t switchIndex = (r * numCols) + c;
+      bool newState = digitalRead(rowPins[r]);
+      //DEBUGMSG("Row " + String(r) + " of column " + String(c) + " has state " + String(newState) + " and was " + String(switchState[switchIndex]));
+      if (newState != switchState[switchIndex]) {
+        switchStateChanged = switchIndex + 1;
+        switchState[switchIndex] = newState;
       }
     }
 
-    // Turn off the column by making at an input
+    // Turn off the column by making it an input
     digitalWrite(columnPins[c], HIGH);
     pinMode(columnPins[c], INPUT_PULLUP);
     //DEBUGMSG("Column " + String(c) + "is input");
@@ -160,37 +183,36 @@ bool Switchpad::update() {
     idleState(); // Will enable all columns, to wait for an interrupt
 
     // Reattach the interrupts for the port that has been an output
-    if (c == 0) attachInterrupt(digitalPinToInterrupt(columnPins[0]), SwitchPadColumn1InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 1) attachInterrupt(digitalPinToInterrupt(columnPins[1]), SwitchPadColumn2InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 2) attachInterrupt(digitalPinToInterrupt(columnPins[2]), SwitchPadColumn3InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 3) attachInterrupt(digitalPinToInterrupt(columnPins[3]), SwitchPadColumn4InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 4) attachInterrupt(digitalPinToInterrupt(columnPins[4]), SwitchPadColumn5InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 5) attachInterrupt(digitalPinToInterrupt(columnPins[5]), SwitchPadColumn6InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 6) attachInterrupt(digitalPinToInterrupt(columnPins[6]), SwitchPadColumn7InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
-    if (c == 7) attachInterrupt(digitalPinToInterrupt(columnPins[7]), SwitchPadColumn8InterruptRoutine, CHANGE); // Interrupt will trigger on state change.
+    attachInterrupts();
 
     // Reset bounce delay timer
     bounceDelay = millis();
-    SwitchPadStatusColumnChanged = 0;
-
-    if (newState != State) {
-      //DEBUGMSG("Pressed switch " + String(newState));
-      if (newState == 0) releasedState = State; //Remember the last state when we go back to zero
-      else releasedState = 0;
-      State = newState;
+    bitClear(SwitchPadStatusColumnChanged, c);
+    
+    if (switchStateChanged > 0) {
+      if (switchState[switchStateChanged - 1] == LOW) {
+        switchPressed = switchStateChanged; //Remember the last state when we go back to zero
+        switchReleased = 0;
+        DEBUGMSG("Switchpad swith PRESSED " + String(switchStateChanged));
+      }
+      else {
+        switchReleased = switchStateChanged;
+        switchPressed = 0;
+        DEBUGMSG("Switchpad swith RELEASED " + String(switchStateChanged));
+      }
       return true;
     }
   }
 
-  return false; // No key pressed, so return false
+  return false; // No key pressed or released, so return false
 }
 
 uint8_t Switchpad::pressed() {
-  return State;
+  return switchPressed;
 }
 
 uint8_t Switchpad::released() {
-  return releasedState;
+  return switchReleased;
 }
 
 #endif

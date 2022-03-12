@@ -6,7 +6,7 @@
 
 // Fractal AxeFX settings:
 #define AXEFX_MIDI_CHANNEL 1
-#define AXEFX_MIDI_PORT 1 // Default port is MIDI1
+#define FAS_MIDI_PORT MIDI1_PORT
 #define AXEFX_PATCH_MIN 0
 #define AXEFX_PATCH_MAX 383
 

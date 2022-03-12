@@ -5,6 +5,7 @@
 #include <QApplication>
 
 // Roland VG-99 settings:
+#define VG99_MIDI_PORT MIDI1_PORT
 #define VG99_MIDI_CHANNEL 9
 #define VG99_PATCH_MIN 0
 #define VG99_PATCH_MAX 399

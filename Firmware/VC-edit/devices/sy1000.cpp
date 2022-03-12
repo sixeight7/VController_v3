@@ -3,6 +3,8 @@
 #include "VController/config.h"
 #include "VController/leds.h"
 #include "VController/globals.h"
+#include "VController/globals.h"
+
 #include <QDebug>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -13,17 +15,31 @@ void SY1000_class::init()
     full_device_name = "Boss SY-1000";
     patch_min = SY1000_PATCH_MIN;
     patch_max = SY1000_PATCH_MAX;
-    patch_min_as_stored_on_VC = SY1000_PATCH_MIN;
     patch_max_as_stored_on_VC = 199;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 11; // Default value: light blue
+    MIDI_port_manual = MIDI_port_number(SY1000_MIDI_PORT);
     MIDI_channel = SY1000_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = SY1000_DEFAULT_PAGE1; // Default value
-    my_device_page2 = SY1000_DEFAULT_PAGE2; // Default value
-    my_device_page3 = SY1000_DEFAULT_PAGE3; // Default value
-    my_device_page4 = SY1000_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = SY1000_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = SY1000_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = SY1000_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = SY1000_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = SY1000_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = SY1000_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = SY1000_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = SY1000_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = SY1000_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = SY1000_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = SY1000_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = SY1000_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
 }
 
 bool SY1000_class::check_command_enabled(uint8_t cmd)
@@ -370,17 +386,23 @@ QString SY1000_class::get_patch_info(uint16_t number)
 }
 
 QString SY1000_class::read_scene_name_from_buffer(int number, uint8_t scene) const {
-  QString lbl = "";
-  int b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
-  uint8_t last_char = 0;
-  for (uint8_t c = 0; c < 8; c++) {
+  //if (check_snapscene_active(number, scene)) {
+    QString lbl = "";
+    int b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
+    uint8_t last_char = 0;
+    for (uint8_t c = 0; c < 8; c++) {
       if (Device_patches[number][b++] > 32) last_char = c;
-  }
-  b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
-  for (uint8_t c = 0; c <= last_char; c++) {
-    lbl.append(static_cast<char>(Device_patches[number][b++]));
-  }
-  return lbl;
+    }
+    b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
+    for (uint8_t c = 0; c <= last_char; c++) {
+      if (Device_patches[number][b] < 128) lbl.append(static_cast<char>(Device_patches[number][b++]));
+      else lbl.append(' ');
+    }
+    return lbl;
+  //}
+  //else {
+  //  return "__";
+  //}
 }
 
 void SY1000_class::store_scene_name_to_buffer(int number, uint8_t scene, QString lbl) {
@@ -394,6 +416,12 @@ void SY1000_class::store_scene_name_to_buffer(int number, uint8_t scene, QString
 int SY1000_class::get_scene_index(uint8_t scene) const {
   //if (scene > 0) scene--;
     return (scene * SY1000_SCENE_SIZE) + SY1000_COMMON_DATA_SIZE;
+}
+
+bool SY1000_class::check_snapscene_active(const int number, const uint8_t scene) const {
+  if (scene > 7) return false;
+  int b = get_scene_index(scene) + SY1000_SCENE_NAME_BYTE;
+  return ((Device_patches[number][b + SY1000_SCENE_ACTIVE_BYTE] & (1 << scene)) != 0);
 }
 
 uint8_t SY1000_class::supportPatchSaving()

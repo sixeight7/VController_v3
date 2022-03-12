@@ -44,7 +44,18 @@ struct colour {
 #define FX_SHOW_TAP_TEMPO 228
 
 //Lets make some colours (R,G,B)
-
+#define LED_OFF 0
+#define LED_GREEN 1
+#define LED_RED 2
+#define LED_BLUE 3
+#define LED_ORANGE 4
+#define LED_CYAN 5
+#define LED_WHITE 6
+#define LED_YELLOW 7
+#define LED_PURPLE 8
+#define LED_PINK 9
+#define LED_SOFT_GREEN 10
+#define LED_LIGHT_BLUE 11
 
 #define NUMBER_OF_COLOURS 32
 #define NUMBER_OF_SELECTABLE_COLOURS 12
@@ -119,6 +130,41 @@ colour Backlight_colours_Buydisplay[NUMBER_OF_COLOURS] = {
   {0, 0, 0} ,   // Colour 13 is spare
   {0, 0, 0} ,   // Colour 14 is spare
   {0, 0, 0} ,   // Colour 15 is spare
+};
+
+uint16_t TFT_colours[NUMBER_OF_COLOURS] = {
+  0x0000 ,   // Colour 0 is LED OFF
+  0x0627 ,  // Colour 1 is Green
+  0xF000 ,  //  Colour 2 is Red
+  0x001B ,  // Colour 3 is Blue
+  0xFD00 ,  // Colour 4 is Orange
+  0x0FFF ,  // Colour 5 is Cyan
+  0xE73C ,  // Colour 6 is White
+  0xE700 ,   // Colour 7 is Yellow
+  0x881F ,   // Colour 8 is Purple
+  0xFB15 ,   // Colour 9 is Pink
+  0x7FA2 ,   // Colour 10 is Soft Green
+  0x0519 ,   // Colour 11 is Light Blue
+  0x0000 ,   // Colour 12 is spare
+  0x0000 ,   // Colour 13 is spare
+  0x0000 ,   // Colour 14 is spare
+  0x0000 ,   // Colour 15 is spare
+  0x0000 ,   // Colour 16 is LED OFF dimmed
+  0x0323 ,  // Colour 17 is Green dimmed
+  0x7800 ,  //  Colour 18 is Red dimmed
+  0x0010 ,  // Colour 19 is Blue dimmed
+  0xC240 ,  // Colour 20 is Orange dimmed
+  0x04D3 ,  // Colour 21 is Cyan dimmed
+  0x94B2 ,  // Colour 22 is White dimmed
+  0xF5E0 ,   // Colour 23 is Yellow dimmed
+  0x400E ,   // Colour 24 is Purple dimmed
+  0x994B ,   // Colour 25 is Pink dimmed
+  0x4C81 ,   // Colour 26 is Soft green dimmed
+  0x030F ,   // Colour 27 is Light Blue dimmed
+  0x0000 ,   // Colour 28 is spare dimmed
+  0x0000 ,   // Colour 29 is spare dimmed
+  0x0000 ,   // Colour 30 is spare dimmed
+  0x0000 ,   // Colour 31 is spare dimmed
 };
 
 #define LEDFLASH_TIMER_LENGTH 500 // Sets the speed with which the LEDs flash (500 means 500 ms on, 500 msec off)
@@ -245,7 +291,7 @@ void LED_update() {
                 if (Device[Dev]->is_on) LED_show_colour(s, SP[sw].Colour);
                 else LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show dimmed colour for devices that are not connected
               }
-              else LED_show_colour(s, 0);
+              else LED_show_colour(s, LED_OFF);
             }
           }
           else {
@@ -271,8 +317,8 @@ void LED_update() {
             Backlight_show_colour(s, SP[sw].Colour);
           }
           else {
-            LED_show_colour(s, 0);
-            Backlight_show_colour(s, 0);
+            LED_show_colour(s, LED_OFF);
+            Backlight_show_colour(s, LED_OFF);
           }
           break;
         case PARAMETER:
@@ -281,7 +327,7 @@ void LED_update() {
             //DEBUGMSG("State pedal " + String(s) + ": " + String(SP[sw].State));
             if (SP[sw].State == 1) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));  // LED on
             if (SP[sw].State == 2) LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour)); // LED dimmed
-            if (SP[sw].State == 0) LED_show_colour(s, 0); // LED off
+            if (SP[sw].State == 0) LED_show_colour(s, LED_OFF); // LED off
           }
           else { // For the TRI/FOUR/STEP/RANGE/UPDOWN only light up when pressed.
             if (SP[sw].Pressed) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
@@ -296,7 +342,7 @@ void LED_update() {
               //DEBUGMSG("State pedal " + String(s) + ": " + String(SP[sw].State));
               if (SP[sw].State == 1) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));  // LED on
               if (SP[sw].State == 2) LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour)); // LED dimmed
-              if (SP[sw].State == 0) LED_show_colour(s, 0); // LED off
+              if (SP[sw].State == 0) LED_show_colour(s, LED_OFF); // LED off
             }
             else { // For the TRI/FOUR/STEP/RANGE/UPDOWN only light up when pressed.
               if (SP[sw].Pressed) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
@@ -316,20 +362,25 @@ void LED_update() {
         case OPEN_NEXT_PAGE_OF_DEVICE:
           //if ((SP[sw].Pressed) || ((SP[sw].PP_number == prev_page_shown) && (SP[sw].Device == Current_device))) LED_show_colour(s, Setting.LED_global_colour);
           if (SP[sw].Pressed) LED_show_colour(s, Setting.LED_global_colour);
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, Setting.LED_global_colour);
           break;
         case MUTE:
-          if (Device[Dev]->is_on) LED_show_colour(s, 0);
+          if (Device[Dev]->is_on) LED_show_colour(s, LED_OFF);
           else LED_show_colour(s, SP[sw].Colour);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case SNAPSCENE:
           cs = Device[Dev]->current_snapscene;
           if ((cs == SP[sw].PP_number) || (SP[sw].Pressed)) LED_show_colour(s, SP[sw].Colour);
-          else if ((cs != 0) && ((cs == SP[sw].Value1) || (cs == SP[sw].Value2) || (cs == SP[sw].Value3))) LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
-          else if (Device[Dev]->check_snapscene_active(SP[sw].PP_number)) LED_show_colour(s, 3 | LED_DIMMED); // Show blue LEDs for active scenes SY1000
-          else LED_show_colour(s, 0);
+          else if (cs != 0) {
+            if (cs == SP[sw].Value1) LED_show_colour(s, SP[sw].Colour); // First scene under switch
+            else if (cs == SP[sw].Value2) LED_show_colour(s, LED_WHITE); // Second scene under switch
+            else if (cs == SP[sw].Value3) LED_show_colour(s, LED_PURPLE); // Third scene under switch
+            else if (Device[Dev]->check_snapscene_active(SP[sw].PP_number)) LED_show_colour(s, LED_BLUE | LED_DIMMED); // Show blue LEDs for active scenes SY1000
+            else LED_show_colour(s, LED_OFF);
+          }
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case LOOPER:
@@ -337,8 +388,8 @@ void LED_update() {
           Backlight_show_colour(s, Device[Dev]->show_looper_LED(sw) & 0x0F);
           break;
         default:
-          LED_show_colour(s, 0); // Show nothing with undefined LED
-          Backlight_show_colour(s, 0);
+          LED_show_colour(s, LED_OFF); // Show nothing with undefined LED
+          Backlight_show_colour(s, LED_OFF);
           break;
       }
     }
@@ -350,18 +401,18 @@ void LED_update() {
           break;
         case SET_TEMPO:
           if (SP[sw].Pressed) LED_show_colour(s, Setting.LED_bpm_colour);
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, Setting.LED_bpm_colour);
           break;
         case MIDI_PC:
           if (SP[sw].PP_number == MIDI_recall_PC(SP[sw].Value1, SP[sw].Value2)) LED_show_colour(s, SP[sw].Colour); // Value1 stores MIDI channel, value2 stores MIDI port
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case MIDI_NOTE:
         case MENU:
           if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case MIDI_CC:
@@ -379,7 +430,7 @@ void LED_update() {
           break;
         case PAGE:
           if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           if (SP[sw].Latch == BANKSELECT) { // Override colour if bank is in selection
             if ((device_in_bank_selection == PAGE_BANK_SELECTION_IN_PROGRESS) && (SCO_valid_page(SP[sw].PP_number))) LED_show_colour(s, SP[sw].Colour | LED_FLASHING);
           }
@@ -393,12 +444,12 @@ void LED_update() {
           break;
         case GLOBAL_TUNER:
           if (global_tuner_active) LED_show_colour(s, Setting.LED_global_colour);
-          else LED_show_colour(s, 0);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, Setting.LED_global_colour);
           break;
         default:
-          LED_show_colour(s, 0); // Show nothing with undefined LED
-          Backlight_show_colour(s, 0);
+          LED_show_colour(s, LED_OFF); // Show nothing with undefined LED
+          Backlight_show_colour(s, LED_OFF);
       }
     }
   }
@@ -441,47 +492,22 @@ uint8_t LED_FX_type_colour(uint8_t type) { // Read the FX colour from the settin
 
 void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the specified LED to the specified colour
 
-  uint8_t number_fixed = colour_number & LED_MASK;
-  if (number_fixed < NUMBER_OF_COLOURS) {
-    if (colour_number & LED_FLASHING) { // Check if it is not a flashing LED
-      // Update flashing LED
-      if (LED_flashing_state_on == true) {
-        // Turn the LED on
-        if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
-        if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
-        if (MIDI_LEDs[LED_number] != number_fixed) {
-          MIDI_LEDs[LED_number] = number_fixed;
-          LED_state_changed = true;
-        }
-      }
-      else {
-        // Turn the LED off
-        if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], 0, 0, 0);
-        if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, 0); // Update the virtual LEDs on the LCD as well
-        if (MIDI_LEDs[LED_number] != 0) {
-          MIDI_LEDs[LED_number] = 0;
-          LED_state_changed = true;
-        }
-      }
-    }
-    else {
-      // Turn the LED on
-      if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[number_fixed].red, colours[number_fixed].green, colours[number_fixed].blue));
-      if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, number_fixed); // Update the virtual LEDs on the LCD as well
-      if (MIDI_LEDs[LED_number] != number_fixed) {
-        MIDI_LEDs[LED_number] = number_fixed;
-        LED_state_changed = true;
-      }
-    }
+  uint8_t colour = colour_number & LED_MASK;
+  if (colour >= NUMBER_OF_COLOURS) colour = 0;
+  if ((colour_number & LED_FLASHING) && (!LED_flashing_state_on)) colour = 0;
+
+  if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[colour].red, colours[colour].green, colours[colour].blue));
+#ifdef IS_VCTOUCH
+  if (Setting.Physical_LEDs) {
+    //uint16_t colour_565 = ((colours[colour].red & 0xF8) << 8) + ((colours[colour].green & 0xFC) << 3) + ((colours[colour].blue & 0xF8) >> 3);
+    uint16_t colour_565 = TFT_colours[colour];
+    TFT_update_LED(LED_number, colour_565);
   }
-  else {
-    // Invalid colour: show message and give error
-    LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[10].red, colours[10].green, colours[10].blue));
-    DEBUGMSG("Invalid colour (number " + String(number_fixed) + ") on LED " + String(LED_number));
-    if (MIDI_LEDs[LED_number] != 0) {
-      MIDI_LEDs[LED_number] = 0;
-      LED_state_changed = true;
-    }
+#endif
+  if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, colour); // Update the virtual LEDs on the LCD as well
+  if (MIDI_LEDs[LED_number] != colour) {
+    MIDI_LEDs[LED_number] = colour;
+    LED_state_changed = true;
   }
 }
 
@@ -561,7 +587,7 @@ void LED_flash() {
 void LED_update_pressed_state_only() { // Show LED when button is pressed. Used for the MENU "are you sure" loops
   for (uint8_t s = 0; s < NUMBER_OF_LEDS; s++) {
     if (SP[s].Pressed) LED_show_colour(s, Setting.LED_global_colour);
-    else LED_show_colour(s, 0);
+    else LED_show_colour(s, LED_OFF);
   }
   update_LEDS = true;
 }
@@ -569,13 +595,13 @@ void LED_update_pressed_state_only() { // Show LED when button is pressed. Used 
 void LED_show_are_you_sure() {
   LED_turn_all_off();
 #ifdef BACKLIGHTNEOPIXELPIN
-  Backlight_show_colour(9, Setting.LED_global_colour);
-  Backlight_show_colour(10, Setting.LED_global_colour);
+  Backlight_show_colour(YES_SWITCH, Setting.LED_global_colour);
+  Backlight_show_colour(NO_SWITCH, Setting.LED_global_colour);
   Backlights.show();
 #else
   for (uint8_t l = 0; l < NUMBER_OF_DISPLAYS; l++) LCD_switch_off_backlight(l);
-  LCD_switch_on_backlight(9);
-  LCD_switch_on_backlight(10);
+  LCD_switch_on_backlight(YES_SWITCH);
+  LCD_switch_on_backlight(NO_SWITCH);
 #endif
 }
 

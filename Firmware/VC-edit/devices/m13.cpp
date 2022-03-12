@@ -2,6 +2,7 @@
 
 #include "VController/config.h"
 #include "VController/leds.h"
+#include "VController/globals.h"
 
 void M13_class::init()
 {
@@ -11,13 +12,28 @@ void M13_class::init()
     patch_max = M13_PATCH_MAX;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 1; // Default value: green
+    MIDI_port_manual = MIDI_port_number(M13_MIDI_PORT);
     MIDI_channel = M13_MIDI_CHANNEL; // Default value
     bank_number = 0; // Default value
     is_always_on = true; // Default value
-    my_device_page1 = M13_DEFAULT_PAGE1; // Default value
-    my_device_page2 = M13_DEFAULT_PAGE2; // Default value
-    my_device_page3 = M13_DEFAULT_PAGE3; // Default value
-    my_device_page4 = M13_DEFAULT_PAGE4; // Default value
+    if (VC_type == VCONTROLLER) {
+      my_device_page1 = M13_DEFAULT_VC_PAGE1; // Default value
+      my_device_page2 = M13_DEFAULT_VC_PAGE2; // Default value
+      my_device_page3 = M13_DEFAULT_VC_PAGE3; // Default value
+      my_device_page4 = M13_DEFAULT_VC_PAGE4; // Default value
+    }
+    if (VC_type == VCMINI) {
+      my_device_page1 = M13_DEFAULT_VCMINI_PAGE1; // Default value
+      my_device_page2 = M13_DEFAULT_VCMINI_PAGE2; // Default value
+      my_device_page3 = M13_DEFAULT_VCMINI_PAGE3; // Default value
+      my_device_page4 = M13_DEFAULT_VCMINI_PAGE4; // Default value
+    }
+    if (VC_type == VCTOUCH) {
+      my_device_page1 = M13_DEFAULT_VCTOUCH_PAGE1; // Default value
+      my_device_page2 = M13_DEFAULT_VCTOUCH_PAGE2; // Default value
+      my_device_page3 = M13_DEFAULT_VCTOUCH_PAGE3; // Default value
+      my_device_page4 = M13_DEFAULT_VCTOUCH_PAGE4; // Default value
+    }
 }
 
 bool M13_class::check_command_enabled(uint8_t cmd)

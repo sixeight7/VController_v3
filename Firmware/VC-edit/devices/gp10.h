@@ -5,6 +5,7 @@
 #include <QApplication>
 
 #define GP10_MIDI_CHANNEL 1 // Was unable to change patch when GP-10 channel was not 1. Seems to be a bug in the GP-10
+#define GP10_MIDI_PORT USBHMIDI_PORT
 #define GP10_PATCH_MIN 0
 #define GP10_PATCH_MAX 99
 #define GP10_NUMBER_OF_ASSIGNS 8
