@@ -55,7 +55,7 @@ bool ZG3_class::check_command_enabled(uint8_t cmd)
 
 QString ZG3_class::number_format(uint16_t patch_no)
 {
-    QChar BankChar = 65 + (patch_no / 10);
+    QChar BankChar = (QChar)(65 + (patch_no / 10));
     return BankChar + QString::number(patch_no % 10);
 }
 

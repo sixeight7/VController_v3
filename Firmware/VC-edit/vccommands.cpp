@@ -434,7 +434,7 @@ void VCcommands::updateCommandsTableWidget()
             load_cmd_byte(MyTable, i);
         }
     }
-    uint8_t item = current_item;
+    //uint8_t item = current_item;
     saveCommand(current_page, current_switch, current_item);
     emit updateEditCommandScreen();
     qDebug() << "Command TableWidget updated";
@@ -1140,7 +1140,7 @@ void VCcommands::set_type_and_value(uint8_t number, uint8_t type, uint8_t index,
 
     uint8_t max = cmdtype[type].Max;
     if (cmdtype[type].Sublist == SUBLIST_PAGE) max = last_fixed_cmd_page;
-    if (cmdtype[type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports;
+    if (cmdtype[type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports - 1;
     cmdbyte[number].Max = max;
     cmdbyte[number].Min = cmdtype[type].Min;
     if (in_edit_mode) {
@@ -1754,7 +1754,7 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
         msg = getSwitchName(value);
         break;
     case SUBLIST_MIDI_PORT:
-        msg = midi_port_names.at(value);
+        if (value < midi_port_names.size()) msg = midi_port_names.at(value);
         break;
     default: // Static sublist - read it from the cmd_sublist array
         index = indexFromValue(cmd_type, value) + cmdtype[cmd_type].Sublist;

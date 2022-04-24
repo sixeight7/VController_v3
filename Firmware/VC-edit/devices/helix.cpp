@@ -56,7 +56,7 @@ bool HLX_class::check_command_enabled(uint8_t cmd)
 QString HLX_class::number_format(uint16_t patch_no)
 {
     uint8_t bank_no = patch_no >> 2;
-    QChar PatchChar = 65 + patch_no % 4;
+    QChar PatchChar = (QChar)(65 + patch_no % 4);
     return QString::number((bank_no + 1) / 10) + QString::number((bank_no + 1) % 10) + PatchChar;
 }
 

@@ -56,7 +56,7 @@ bool AXEFX_class::check_command_enabled(uint8_t cmd)
 
 QString AXEFX_class::number_format(uint16_t patch_no)
 {
-    QChar BankChar = 65 + (patch_no >> 7);
+    QChar BankChar = (QChar)(65 + (patch_no >> 7));
     uint16_t number_plus_one = patch_no + 1;
     return BankChar + QString::number(number_plus_one / 100) + QString::number((number_plus_one / 10) % 10)
             + QString::number(number_plus_one % 10);

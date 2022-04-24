@@ -180,10 +180,11 @@ void MainWindow::loadAppSettings() {
             booted = true;
         }
         else {
-            QString program = qApp->arguments()[0];
-            QStringList arguments = qApp->arguments().mid(1);
-            qApp->quit();
-            QProcess::startDetached(program, arguments);
+            // reboot VC-edit
+            //QString program = qApp->arguments()[0];
+            //QStringList arguments = qApp->arguments().mid(1);
+            qApp->exit(EXIT_CODE_REBOOT);
+            //QProcess::startDetached(program, arguments);
         }
     }
 }
@@ -680,7 +681,7 @@ QString MainWindow::addNonBreakingSpaces(QString text)
 {
     QString output = "";
     for (int i = 0; i < text.size(); i++) {
-        if (text.at(i) == " ") output.append("&nbsp;");
+        if (text.at(i) == ' ') output.append("&nbsp;");
         else output.append(text.at(i));
     }
     return output;
@@ -1830,7 +1831,7 @@ void MainWindow::drawRemoteSwitch(QHBoxLayout *layout, uint8_t switchNumber, int
     action->setAutoRepeat(false);
     action->setShortcuts({ QString(QChar::fromLatin1(myShortCut)) });
     this->addAction(action);
-    connect(action, &QAction::triggered, [roundSwitch](){ roundSwitch->animateClick(100); });
+    connect(action, &QAction::triggered, [roundSwitch](){ roundSwitch->animateClick(); });
 
     roundSwitch->setText(QString(QChar::fromLatin1(myShortCut)));
     switchNumber++;

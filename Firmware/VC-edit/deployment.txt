@@ -1,6 +1,10 @@
 Deploy VC-edit for Mac:
 
 1) Make sure Qt creator is set to Release (and not Debug) and run the app.
+2) Deploy the app by running the following command in Terminal: ~/Qt/6.3.0/macos/bin/macdeployqt ~/qt-projects/build-VC-edit-Qt_6_3_0_for_macOS-Release/VC-edit.app ls -dmg -always-overwrite
+3) The VC-edit.dmg file is in folder ~/qt-projects/build-VC-edit-Qt_6_3_0_for_macOS-Release
+
+(Previous version)
 2) Deploy the app by running the following command in Terminal: ~/Qt/5.11.1/clang_64/bin/macdeployqt ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/VC-edit.app ls -dmg -always-overwrite
 3) The VC-edit.dmg file is in folder ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/
 

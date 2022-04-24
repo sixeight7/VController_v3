@@ -1,13 +1,16 @@
 #include "mainwindow.h"
 #include <QApplication>
 
+int currentExitCode = 0;
+
 int main(int argc, char *argv[])
 {
-    QApplication a(argc, argv);
+    do {
+        QApplication a(argc, argv);
+        MainWindow main_window;
+        main_window.show();
+        currentExitCode = a.exec();
+    } while (currentExitCode == EXIT_CODE_REBOOT);
 
-    // Create and start main window
-    MainWindow main_window;
-    main_window.show();
-
-    return a.exec();
+    return currentExitCode;
 }
