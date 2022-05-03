@@ -1,3 +1,5 @@
+// Please read VCCtouch_wireless.ino for information about the license and authors
+
 #include <Preferences.h>
 
 #define CURRENT_EEPROM_VERSION 1

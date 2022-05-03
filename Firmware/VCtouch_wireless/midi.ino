@@ -1,3 +1,5 @@
+// Please read VCCtouch_wireless.ino for information about the license and authors
+
 // MIDI
 
 // Midi IDs for sysex messages of the VController

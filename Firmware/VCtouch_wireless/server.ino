@@ -1,3 +1,5 @@
+// Please read VCCtouch_wireless.ino for information about the license and authors
+
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Update.h>

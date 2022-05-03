@@ -1,3 +1,5 @@
+// Please read VCCtouch_wireless.ino for information about the license and authors
+
 // AppleMidi communication
 
 #include <WiFi.h>

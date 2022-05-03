@@ -1,4 +1,4 @@
-// Please read VController_v3.ino for information about the license and authors
+// Please read VCCtouch_wireless.ino for information about the license and authors
 
 #ifndef DEBUG_H
 #define DEBUG_H
