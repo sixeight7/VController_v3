@@ -121,18 +121,24 @@ FLASHMEM void MD_SY1000_class::init() { // Default values for variables
   nrml_pu_onoff = 0;
   sysex_delay_length = 5; // minimum delay time between sysex messages (in msec).
   my_LED_colour = 11; // Default value: light blue
+  my_snapscene_colour = 11;
   MIDI_channel = SY1000_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(SY1000_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = SY1000_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = SY1000_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = SY1000_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = SY1000_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = SY1000_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = SY1000_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = SY1000_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = SY1000_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = SY1000_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = SY1000_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = SY1000_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = SY1000_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = SY1000_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = SY1000_DEFAULT_VC_PAGE2; // Default value
@@ -190,8 +196,7 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
     if (((address == SY1000_GM_CURRENT_PATCH_NUMBER) || (address == SY1000_BM_CURRENT_PATCH_NUMBER)) && (checksum_ok)) {
       uint16_t new_patch = (sxdata[sx_index(data3, 12)] << 12) + (sxdata[sx_index(data3, 13)] << 8) + (sxdata[sx_index(data3, 14)] << 4) + sxdata[sx_index(data3, 15)];
       if ((patch_number != new_patch) || (data_item == 3)) { // Right after a patch change the patch number is sent again. So here we catch that message.
-        prev_patch_number = patch_number;
-        patch_number = new_patch;
+        set_patch_number(new_patch);
         //page_check();
         set_patch_gap_timer();
         do_after_patch_selection();
@@ -374,8 +379,7 @@ void MD_SY1000_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // SY1000 sends a program change
     uint16_t new_patch = (CC00 * 100) + program;
     if (patch_number != new_patch) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch;
+      set_patch_number(new_patch);
       do_after_patch_selection();
       check_ample_time_between_pc_messages_timer = millis() + CHECK_AMPLE_TIME_BETWEEN_PC_MESSAGES_TIME; // Fix for patch up/down on SY1000 sending double PC messages, triggering save patch on VController!
     }
@@ -629,8 +633,7 @@ void MD_SY1000_class::check_send_tempo_timer() {
 
 FLASHMEM void MD_SY1000_class::select_patch(uint16_t new_patch) {
   //if (new_patch == patch_number) unmute();
-  prev_patch_number = patch_number;
-  patch_number = new_patch;
+  set_patch_number(new_patch);
 
   if ((MIDI_out_port & 0xF0) != USBHMIDI_PORT) {
     MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_out_port);
@@ -745,7 +748,7 @@ FLASHMEM void MD_SY1000_class::direct_select_format(uint16_t number, String &Out
 
 FLASHMEM bool MD_SY1000_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
-  if (direct_select_state == 0) { // Show all switches on first digit
+  if (direct_select_state == 0) {
     result = ((number * 40) <= (patch_max - patch_min + 1));
   }
   else {
@@ -2325,6 +2328,7 @@ const PROGMEM SY1000_scene_parameter_struct SY1000_scene_parameters[] {
 #define INST2_TYPE_ITEM 7
 #define INST3_SW_ITEM 12
 #define INST3_TYPE_ITEM 13
+#define NORM_GTR_ITEM 18
 
 
 const uint16_t SY1000_NUMBER_OF_SCENE_PARAMETERS = sizeof(SY1000_scene_parameters) / sizeof(SY1000_scene_parameters[0]);
@@ -2630,6 +2634,7 @@ FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene)
   INST_type[1] = read_scene_data(new_scene, INST2_TYPE_ITEM);
   INST_onoff[2] = read_scene_data(new_scene, INST3_SW_ITEM);
   INST_type[2] = read_scene_data(new_scene, INST3_TYPE_ITEM);
+  nrml_pu_onoff = read_scene_data(new_scene, NORM_GTR_ITEM);
   uint8_t prev_inst_type[3];
   prev_inst_type[0] = read_scene_data(prev_scene, INST1_TYPE_ITEM);
   prev_inst_type[1] = read_scene_data(prev_scene, INST2_TYPE_ITEM);
@@ -2771,9 +2776,8 @@ FLASHMEM void MD_SY1000_class::save_scene() {
     scene_label_buffer[0] = '*';
     scene_label_buffer[1] = '*';
   }
-  open_menu_for_SY1000_scene_save = true;
+  open_specific_menu = SY1000 + 1;
   SCO_select_page(PAGE_MENU); // Open the menu
-  open_menu_for_SY1000_scene_save = false;
 }
 
 FLASHMEM void MD_SY1000_class::store_scene() { // Returning from menu

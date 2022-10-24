@@ -88,6 +88,8 @@ DMAMEM char TFT_label_text[NUMBER_OF_TOUCH_SWITCHES][LCD_DISPLAY_SIZE + 1] = { '
 bool TFT_bar_showing = false;
 uint8_t TFT_current_brightness = 0;
 uint8_t TFT_current_device_for_pic = 255;
+String TFT_main_spaces = ""; // To clear the display
+String TFT_spaces = ""; // To clear the display
 #endif
 
 bool touch_active = false;
@@ -95,11 +97,27 @@ uint8_t show_ble_state = 0;
 uint8_t show_wifi_state = 0;
 uint8_t show_rtpmidi_state = 0;
 
-// Main display modes - stored in Setting.Main_display_mode
+// Main display modes - for top or bottom line
 #define MD_SHOW_PAGE_NAME 0
 #define MD_SHOW_CURRENT_PATCH 1
 #define MD_SHOW_PATCHES_COMBINED 2
 #define MD_SHOW_3_SWITCH_LABELS 3 // Made for VC mini to display switch labels
+#define MD_SHOW_CURRENT_SCENE 4
+#define MD_SHOW_ALL_PATCH_NUMBERS 5
+#define MD_SHOW_PAGE_NUMBER 6
+#define MD_SHOW_PAGE_NUMBER_AND_NAME 7
+#define MD_SHOW_SONG_NUMBER_AND_NAME 8
+#define MD_SHOW_PART_NUMBER_AND_NAME 9
+#define MD_SHOW_SETLIST_NUMBER_AND_NAME 10
+#define MD_SHOW_SETLIST_TARGET_NAME 11
+
+// Main display_modes - added to top line
+#define MDT_OFF 0
+#define MDT_CURRENT_DEVICE 1
+#define MDT_CURRENT_TEMPO 2
+#define MDT_SCENE_NAME 3
+#define MDT_PATCH_NUMBER 4
+#define MDT_SCENE_NUMBER 5
 
 // Displays above the switches
 
@@ -220,12 +238,12 @@ String Current_device_name = "";
 //String Main_menu_line1 = ""; // Text that is show on the main display from the menu on line 1
 //String Main_menu_line2 = ""; // Text that is show on the main display from the menu on line 2
 //String topline;
-DMAMEM char main_lcd_title[MAIN_LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 1
-DMAMEM char main_lcd_label[MAIN_LCD_DISPLAY_SIZE + 1]; // Text that is show on the main display from the menu on line 2
+DMAMEM char main_lcd_title[MAIN_LCD_DISPLAY_SIZE + 1] = { ' ' }; // Text that is show on the main display from the menu on line 1
+DMAMEM char main_lcd_label[MAIN_LCD_DISPLAY_SIZE + 1] = { ' ' }; // Text that is show on the main display from the menu on line 2
 uint8_t Main_menu_cursor = 0; // Position of main menu cursor. Zero = off.
-DMAMEM char lcd_title[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display titles
-DMAMEM char lcd_label[LCD_DISPLAY_SIZE + 1]; // char array reserved for individual display labels
-DMAMEM char lcd_mem[NUMBER_OF_DISPLAYS + 1][2][LCD_DISPLAY_SIZE + 1]; // Memory for individual displays
+DMAMEM char lcd_title[LCD_DISPLAY_SIZE + 1]= { ' ' }; // char array reserved for individual display titles
+DMAMEM char lcd_label[LCD_DISPLAY_SIZE + 1] = { ' ' }; // char array reserved for individual display labels
+DMAMEM char lcd_mem[NUMBER_OF_DISPLAYS + 1][2][LCD_DISPLAY_SIZE + 1] = { ' ' }; // Memory for individual displays
 
 String Combined_patch_name; // Patchname displayed in the main display
 uint16_t Current_patch_number = 0;              // Patchnumber displayed in the main display
@@ -285,12 +303,11 @@ byte qnote[8] = {B00010, B00010, B00010, B00010, B01110, B11110, B01100, 0};
 
 void setup_LCD_control()
 {
-  // Set i2C speed
-
-  //Wire.begin();
+  DEBUGMAIN("Starting LCD control");
 
   // Initialize main LCD
 #ifndef MAIN_TFT_DISPLAY
+  DEBUGMAIN("Starting main LCD display");
   Main_lcd.begin (16, 2); // Main LCD is 16x2
 #endif
 #ifdef SECONDARY_MAIN_DISPLAY_ADDRESS
@@ -303,12 +320,14 @@ void setup_LCD_control()
 #endif
 
 #ifdef IS_VCTOUCH
+  DEBUGMAIN("Starting main TFT display");
   Master_bridge.Reset(); // SD2828 reset
   tft.RA8876_IO_Init(); // RA8876 IO init
   tft.RA8876_HW_Reset(); // RA8876 HW reset
   Master_bridge.Initial(); // SSD2828 init
   tft.RA8876_initial();
   tft.Display_ON();
+  DEBUGMAIN("Starting backlight");
 #ifdef MAIN_TFT_BACKLIGHT_PIN
   analogWriteResolution(12);
   pinMode(MAIN_TFT_BACKLIGHT_PIN, OUTPUT);
@@ -316,10 +335,13 @@ void setup_LCD_control()
   analogWriteFrequency(MAIN_TFT_BACKLIGHT_PIN, 36621.09); // Change the frequency to avoid noise - ideal frequency for 12 bit resolution (https://www.pjrc.com/teensy/td_pulse.html)
   TFT_current_brightness = EEPROM_read_brightness();
   analogWrite(MAIN_TFT_BACKLIGHT_PIN, 256); // Enough to start up the display on low brightness
+  for (uint8_t c = 0; c < MAIN_LCD_DISPLAY_SIZE; c++) TFT_main_spaces += ' ';
+  for (uint8_t c = 0; c < LCD_DISPLAY_SIZE - 1; c++) TFT_spaces += ' ';
 #else
   tft.Backlight_ON();
 #endif
   TFT_fillScreen(Black);
+  DEBUGMAIN("Starting touch module");
   touch.setHandler(TFT_handleTouch);
   touch.begin();
 #endif
@@ -348,6 +370,7 @@ void setup_LCD_control()
 #ifdef INDIVIDUAL_DISPLAYS
 
   // Initialize individual LCDs - same for both methods
+  DEBUGMAIN("Starting individual displays");
   for (uint8_t i = 0; i < NUMBER_OF_DISPLAYS; i++) {
     lcd[i].begin (16, 2);
     lcd[i].setBacklightPin(BACKLIGHT_PIN, POSITIVE);
@@ -378,10 +401,15 @@ void setup_LCD_control()
 
 void main_LCD_control()
 {
-  if (on_screen_keyboard_active == false) {
-    if (update_main_lcd == true) {
+  if (!on_screen_keyboard_active) {
+
+    if (update_main_lcd) {
+      DEBUGMSG("Refreshing main display");
       update_main_lcd = false;
-      LCD_update_main_display();
+      LCD_update_top_line();
+      LCD_update_bottom_line();
+      LCD_print_main_lcd_txt();
+      LCD_show_text_entry_cursor(); // Must be last to avoid incorrect cursor position on LCD displays
     }
 
     if ((popup_label_showing) || (popup_title_showing)) {
@@ -412,120 +440,224 @@ void main_LCD_control()
       TFT_hide_bar();
       TFT_bar_showing = false;
     }
+    LCD_update_TFT_brightness();
 #endif
 
     if (update_lcd > 0) {
       LCD_update(update_lcd, true);
       update_lcd = 0;
     }
-  }
+  } // (!on_screen_keyboard_active)
 
 #ifdef IS_VCTOUCH
   touch.loop();
-  LCD_update_TFT_brightness();
 #endif
 }
 
 #define PATCH_NUMBER_SEPERATOR "+"
 
-void LCD_update_main_display() {
-
-  if (!popup_title_showing) { // Clear title_string
-    for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
-      main_lcd_title[i] = ' ';
-    }
-
-    if (global_tuner_active) { // Show tuner message if active
-      LCD_main_set_title("  Tuner active  ");
-      LCD_print_main_lcd_txt();
-    }
-
-    else if (Current_page == PAGE_MENU) { // Show menu content if active
-      menu_set_main_title();
-      LCD_print_main_lcd_txt();
-
+void LCD_show_text_entry_cursor() {
 #ifndef MAIN_TFT_DISPLAY
-      // Show cursor
-      if (Main_menu_cursor > 0) {
-        Main_lcd.setCursor (Main_menu_cursor - 1, 1);
-        Main_lcd.cursor();
-      }
-      else Main_lcd.noCursor();
+  if (Current_page == PAGE_MENU) {
+    // Show cursor
+    if (Main_menu_cursor > 0) {
+      Main_lcd.setCursor (Main_menu_cursor - 1, 1);
+      Main_lcd.cursor();
+    }
+    else Main_lcd.noCursor();
+  }
 #endif
-    }
+}
 
-    else { // Show patchnumers and device name on top line
-      LCD_set_combined_patch_number_and_name();
+void LCD_update_top_line() {
 
-      uint8_t ps_length = Current_patch_number_string.length();
-      if (ps_length > MAIN_LCD_DISPLAY_SIZE) ps_length = MAIN_LCD_DISPLAY_SIZE;
-      for (uint8_t i = 0; i < ps_length; i++) {
-        main_lcd_title[i] = Current_patch_number_string[i];
-      }
+  if (popup_title_showing) return;
 
-      String top_right = "";
-      if (Setting.Main_display_show_top_right == 0) {
-        if (Current_device < NUMBER_OF_DEVICES) {
-          Current_device_name = Device[Current_device]->device_name;
-          top_right = Current_device_name;
-        }
-      }
-
-      if (Setting.Main_display_show_top_right == 1) {
-        top_right = char(CHAR_QUARTER_NOTE);
-        top_right += "=";
-        top_right += String(Setting.Bpm);
-      }
-
-      if (Setting.Main_display_show_top_right == 2) {
-        uint8_t sc = Device[Current_device]->current_snapscene;
-        if (sc > 0) Device[Current_device]->get_snapscene_label(sc, top_right);
-        else top_right = "";
-        top_right.trim();
-      }
-
-      uint8_t name_length = top_right.length();
-      if (ps_length < (MAIN_LCD_DISPLAY_SIZE - name_length)) { // Only show top right string if it fits
-        for (uint8_t i = 0; i < name_length; i++) {
-          main_lcd_title[MAIN_LCD_DISPLAY_SIZE - name_length + i] = top_right[i];
-        }
-      }
-    }
+  for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
+    main_lcd_title[i] = ' ';
   }
 
-  // Show current page name, current patch or patches combined on second line
-  if (!popup_label_showing) {
-    for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
-      main_lcd_label[i] = ' ';
-    }
+  if (global_tuner_active) { // Show tuner message if active
+    LCD_main_set_title("Tuner active");
+    return;
+  }
 
-    if (Current_page == PAGE_MENU) {
-      menu_set_main_label();
-      LCD_print_main_lcd_txt();
-      return;
-    }
+  if (Current_page == PAGE_MENU) { // Show menu content if active
+    menu_set_main_title();
 
-    uint8_t main_display_mode = Setting.Main_display_mode;
+    return;
+  }
+
+  // Show patchnumbers and device name on top line
+  LCD_set_combined_patch_number_and_name();
+  String topline = "";
+  String msg = "";
+
+  uint8_t toplinemode = Setting.Main_display_top_line_mode;
+  if (Current_mode == SONG_MODE) toplinemode = MD_SHOW_SONG_NUMBER_AND_NAME;
+  if (Current_mode == PAGE_MODE) {
 #ifdef IS_VCMINI
-    if (Current_page <= PAGE_SELECT) main_display_mode = MD_SHOW_3_SWITCH_LABELS; // Always show labels on VC-mini for menu and page select
+    if ((Current_page != PAGE_FOR_DEVICE_MODE) && (Current_page != PAGE_FOR_PAGE_MODE)) toplinemode = MD_SHOW_PAGE_NUMBER_AND_NAME;
+    else toplinemode = MD_SHOW_PAGE_NAME;
+#else
+    toplinemode = MD_SHOW_PAGE_NUMBER;
 #endif
-    switch (main_display_mode) {
-      case MD_SHOW_PAGE_NAME:
-        EEPROM_read_title(Current_page, 0, Current_page_name); // Read page name from EEPROM
-        LCD_main_set_label(Current_page_name);
-        break;
-      case MD_SHOW_CURRENT_PATCH:
-        if (Current_device < NUMBER_OF_DEVICES) LCD_main_set_label(Device[Current_device]->current_patch_name);
-        break;
-      case MD_SHOW_PATCHES_COMBINED:
-        LCD_main_set_label(Combined_patch_name); // Show the combined patchname
-        break;
-      case MD_SHOW_3_SWITCH_LABELS:
-        LCD_show_3_switch_labels();
-        break;
+  }
+  if (Current_page == PAGE_SETLIST_SELECT) toplinemode = MD_SHOW_SETLIST_NUMBER_AND_NAME;
+  LCD_fill_line_main_display(toplinemode, topline);
+  topline.trim();
+
+  if (Setting.Main_display_show_top_right == MDT_PATCH_NUMBER) {
+    if (Current_device < NUMBER_OF_DEVICES) {
+      uint16_t patch_no = Device[Current_device]->patch_number;
+      Device[Current_device]->number_format(patch_no, msg);
+      msg += ':';
+      uint8_t spaces = (MAIN_LCD_DISPLAY_SIZE - topline.length() + 1) / 2;
+      if (spaces > msg.length()) spaces -= msg.length();
+      else spaces = 0;
+      String spacestring = "";
+      for (uint8_t i = 0; i < spaces; i++) spacestring += ' ';
+      topline = msg + spacestring + topline;
     }
   }
-  LCD_print_main_lcd_txt();
+
+  if (Setting.Main_display_show_top_right == MDT_SCENE_NUMBER) {
+    if (Current_device < NUMBER_OF_DEVICES) {
+      uint8_t scene_no = Device[Current_device]->current_snapscene;
+      if (scene_no > 0) {
+        topline = String(scene_no) + ": " + topline;
+      }
+    }
+  }
+
+  uint8_t topline_length = topline.length();
+  if (topline_length > MAIN_LCD_DISPLAY_SIZE) topline_length = MAIN_LCD_DISPLAY_SIZE;
+  for (uint8_t i = 0; i < topline_length; i++) {
+    main_lcd_title[i] = topline[i];
+  }
+
+  String top_right = "";
+
+  if (Setting.Main_display_show_top_right == MDT_OFF) {
+    LCD_main_set_title(main_lcd_title); // To center the title
+  }
+
+  if (Setting.Main_display_show_top_right == MDT_CURRENT_DEVICE) {
+    if (Current_device < NUMBER_OF_DEVICES) {
+      Current_device_name = Device[Current_device]->device_name;
+      top_right = Current_device_name;
+    }
+  }
+
+  if (Setting.Main_display_show_top_right == MDT_CURRENT_TEMPO) {
+    top_right = char(CHAR_QUARTER_NOTE);
+    top_right += "=";
+    top_right += String(Setting.Bpm);
+  }
+
+  if (Setting.Main_display_show_top_right == MDT_SCENE_NAME) {
+    uint8_t sc = Device[Current_device]->current_snapscene;
+    if (sc > 0) Device[Current_device]->get_snapscene_label(sc, top_right);
+    else top_right = "";
+    top_right.trim();
+    if (top_right.length() > 8) top_right.substring(0, 8);
+  }
+
+  uint8_t topright_length = top_right.length();
+  if ((topline_length < (MAIN_LCD_DISPLAY_SIZE - topright_length)) && (topright_length > 0)) { // Only show top right string if it fits
+    for (uint8_t i = 0; i < topright_length; i++) {
+      main_lcd_title[MAIN_LCD_DISPLAY_SIZE - topright_length + i] = top_right[i];
+    }
+  }
+}
+
+
+void LCD_update_bottom_line() {
+  if (popup_label_showing) return;
+  for (uint8_t i = 0; i < MAIN_LCD_DISPLAY_SIZE; i++) {
+    main_lcd_label[i] = ' ';
+  }
+
+  if (Current_page == PAGE_MENU) {
+    menu_set_main_label();
+    return;
+  }
+
+  String bottomline = "";
+  uint8_t bottomlinemode = Setting.Main_display_bottom_line_mode;
+  if (Current_mode == SONG_MODE) bottomlinemode = MD_SHOW_PART_NUMBER_AND_NAME;
+  if (Current_mode == PAGE_MODE) bottomlinemode = MD_SHOW_PAGE_NAME;
+  if (Current_page == PAGE_SETLIST_SELECT) bottomlinemode = MD_SHOW_SETLIST_TARGET_NAME;
+#ifdef IS_VCMINI
+  if ((Current_mode == PAGE_MODE) || (Current_page <= PAGE_SELECT) || (Current_page == PAGE_SETLIST_SELECT)) bottomlinemode = MD_SHOW_3_SWITCH_LABELS; // Always show labels on VC-mini for menu and page select
+#endif
+  LCD_fill_line_main_display(bottomlinemode, bottomline);
+  LCD_main_set_label(bottomline);
+}
+
+void LCD_fill_line_main_display(uint8_t setting, String &line) {
+  String msg;
+  uint8_t l1, l2, l3;
+  switch (setting) {
+    case MD_SHOW_PAGE_NAME:
+      EEPROM_read_title(Current_page, 0, Current_page_name); // Read page name from EEPROM
+      line += Current_page_name;
+      break;
+    case MD_SHOW_CURRENT_PATCH:
+      if (Current_device < NUMBER_OF_DEVICES) line += Device[Current_device]->current_patch_name;
+      break;
+    case MD_SHOW_PATCHES_COMBINED:
+      line += Combined_patch_name; // Show the combined patchname
+      break;
+    case MD_SHOW_3_SWITCH_LABELS:
+      l3 = (MAIN_LCD_DISPLAY_SIZE - 2) / 3;
+      l2 = (MAIN_LCD_DISPLAY_SIZE - l3 - 2) / 2;
+      l1 = MAIN_LCD_DISPLAY_SIZE - l3 - l2 - 2;
+      LCD_load_short_message(1, msg);
+      LCD_set_length(msg, l1);
+      line += msg;
+      line += '|';
+      LCD_load_short_message(2, msg);
+      LCD_set_length(msg, l2);
+      line += msg;
+      line += '|';
+      LCD_load_short_message(3, msg);
+      LCD_set_length(msg, l3);
+      line += msg;
+      break;
+    case MD_SHOW_CURRENT_SCENE:
+      l1 = Device[Current_device]->current_snapscene;
+      if (l1 > 0) Device[Current_device]->get_snapscene_label(l1, line);
+      break;
+    case MD_SHOW_ALL_PATCH_NUMBERS:
+      line = Current_patch_number_string;
+      break;
+    case MD_SHOW_PAGE_NUMBER:
+      line += "PG " + String(Current_page);
+      break;
+    case MD_SHOW_PAGE_NUMBER_AND_NAME:
+      line += "P" + String(Current_page) + ' ';
+      EEPROM_read_title(Current_page, 0, Current_page_name); // Read page name from EEPROM
+      line += Current_page_name;
+      break;
+    case MD_SHOW_SONG_NUMBER_AND_NAME:
+      SCO_get_song_number_name(Current_song, line);
+      line += ": ";
+      SCO_get_song_name(Current_song, line);
+      break;
+    case MD_SHOW_PART_NUMBER_AND_NAME:
+      SCO_get_part_number_name(Current_part, line);
+      line += ": ";
+      SCO_get_part_name(Current_part, line);
+      break;
+    case MD_SHOW_SETLIST_NUMBER_AND_NAME:
+      line += "SETLIST " + String(Current_setlist) + ": ";
+      SCO_get_setlist_name(Current_setlist, line);
+      break;
+    case MD_SHOW_SETLIST_TARGET_NAME:
+      SCO_get_setlist_target_name(Current_setlist_target, line);
+      break;
+  }
 }
 
 void LCD_update_TFT_brightness() {
@@ -546,10 +678,16 @@ void LCD_set_TFT_brightness(uint8_t val) { // Scale the brightness logarithmical
 #endif
 
 void LCD_show_page_name() { // Will temporary show the name of the current page
-  if (Setting.Main_display_mode == MD_SHOW_PAGE_NAME) return; // Do not show when display already shows the page name.
-  LCD_update_main_display();
+  if ((Setting.Main_display_top_line_mode == MD_SHOW_PAGE_NAME) || (Setting.Main_display_bottom_line_mode == MD_SHOW_PAGE_NAME)) return; // Do not show when display already shows the page name.
+  //LCD_update_main_display();
   EEPROM_read_title(Current_page, 0, Current_page_name); // Read page name from EEPROM
   LCD_show_popup_label(Current_page_name, ACTION_TIMER_LENGTH);
+}
+
+bool LCD_check_main_display_show_patchname() {
+  if (Setting.Main_display_top_line_mode == MD_SHOW_CURRENT_PATCH) return true;
+  if (Setting.Main_display_bottom_line_mode == MD_SHOW_CURRENT_PATCH) return true;
+  return false;
 }
 
 void LCD_set_combined_patch_number_and_name() {
@@ -602,23 +740,6 @@ void LCD_set_combined_patch_number_and_name() {
   }
 }
 
-void LCD_show_3_switch_labels() {
-  String msg, outmsg;
-  uint8_t l3 = (MAIN_LCD_DISPLAY_SIZE - 2) / 3;
-  uint8_t l2 = (MAIN_LCD_DISPLAY_SIZE - l3 - 2) / 2;
-  uint8_t l1 = MAIN_LCD_DISPLAY_SIZE - l3 - l2 - 2;
-  LCD_load_short_message(1, outmsg);
-  LCD_set_length(outmsg, l1);
-  outmsg += '|';
-  LCD_load_short_message(2, msg);
-  LCD_set_length(msg, l2);
-  outmsg += msg;
-  outmsg += '|';
-  LCD_load_short_message(3, msg);
-  LCD_set_length(msg, l3);
-  outmsg += msg;
-  LCD_main_set_label(outmsg);
-}
 
 void LCD_load_short_message(uint8_t sw, String & msg) {
   if (EEPROM_check4label(Current_page, sw)) {
@@ -638,7 +759,7 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
           msg = SP[sw].Label;
           if (msg.trim() == "") { // Check if label is empty - then there is no patch name, so we will display the patch number
             msg = "";
-            Device[Dev]->number_format(SP[sw].PP_number, msg);
+            if (SP[sw].PP_number != NO_RESULT) Device[Dev]->number_format(SCO_get_patchnumber(Dev, SP[sw].PP_number), msg);
           }
         }
         if (SP[sw].Sel_type == NEXT) {
@@ -707,8 +828,8 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         msg = "M EXP";
         break;
       case SNAPSCENE:
-        msg = "[S";
-        msg += String(SP[sw].PP_number);
+        msg = '[';
+        if (Dev < NUMBER_OF_DEVICES) Device[Dev]->get_snapscene_title_short(SP[sw].PP_number, msg);
         msg += "] ";
         break;
       case LOOPER:
@@ -756,8 +877,16 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         msg = char(CHAR_QUARTER_NOTE) + String(SP[sw].PP_number);
         break;
       case MIDI_PC:
-        msg = 'P';
-        LCD_add_3digit_number(SP[sw].PP_number, msg);
+        if (SP[sw].Sel_type == SELECT) {
+          msg = 'P';
+          LCD_add_3digit_number(SP[sw].PP_number, msg);
+        }
+        if (SP[sw].Sel_type == NEXT) {
+          msg = "NEXT ";
+        }
+        if (SP[sw].Sel_type == PREV) {
+          msg = "PREV ";
+        }
         break;
       case MIDI_CC:
         msg = 'C';
@@ -769,6 +898,66 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         break;
       case SELECT_NEXT_DEVICE:
         msg = Device[SCO_get_number_of_next_device()]->device_name;
+        break;
+      case SETLIST:
+        if ((SP[sw].Sel_type == SL_SELECT) || (SP[sw].Sel_type == SL_BANKSELECT)) {
+          msg = SP[sw].Label;
+        }
+        if (SP[sw].Sel_type == SL_NEXT) {
+          msg = "SL+  ";
+        }
+        if (SP[sw].Sel_type == SL_PREV) {
+          msg = "SL-  ";
+        }
+        if (SP[sw].Sel_type == SL_BANKUP) {
+          msg = "BNK+ ";
+        }
+        if (SP[sw].Sel_type == SL_BANKDOWN) {
+          msg = "BNK- ";
+        }
+        if (SP[sw].Sel_type == SL_EDIT) {
+          msg = "EDIT ";
+        }
+        break;
+      case SONG:
+        if ((SP[sw].Sel_type == SONG_SELECT) || (SP[sw].Sel_type == SONG_BANKSELECT)) {
+          msg = SP[sw].Label;
+        }
+        if (SP[sw].Sel_type == SONG_NEXT) {
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONG) msg = "SNG+  ";
+          if (SP[sw].Trigger == SONG_PREVNEXT_PART) msg = "PRT+  ";
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONGPART) msg = "SP+  ";
+        }
+        if (SP[sw].Sel_type == SONG_PREV) {
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONG) msg = "SNG-  ";
+          if (SP[sw].Trigger == SONG_PREVNEXT_PART) msg = "PRT-  ";
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONGPART) msg = "SP-  ";
+        }
+        if (SP[sw].Sel_type == SONG_BANKUP) {
+          msg = "BNK+ ";
+        }
+        if (SP[sw].Sel_type == SONG_BANKDOWN) {
+          msg = "BNK- ";
+        }
+        if (SP[sw].Sel_type == SONG_PARTSEL) {
+          msg = SP[sw].Label;
+        }
+        if (SP[sw].Sel_type == SONG_EDIT) {
+          msg = "EDIT ";
+        }
+        break;
+      case MODE:
+        if (SP[sw].PP_number == SONG_MODE) msg = "SONG";
+        if (SP[sw].PP_number == PAGE_MODE) msg = "PAGE";
+        if (SP[sw].PP_number == DEVICE_MODE) msg = "DEV";
+        break;
+      case MIDI_MORE:
+        if (SP[sw].PP_number == MIDI_START) msg = "START";
+        if (SP[sw].PP_number == MIDI_STOP) msg = "STOP";
+        if (SP[sw].PP_number == MIDI_START_STOP) {
+          if (MIDI_get_start_stop_state(SP[sw].Value1)) msg = "STOP";
+          else msg = "START";
+        }
         break;
     }
   }
@@ -807,22 +996,28 @@ void LCD_show_popup_title(String message, uint16_t time)
 void LCD_show_startup_message() {
   LCD_clear_main_lcd_txt();
   String msg = VC_NAME;
+#ifndef IS_VCTOUCH
   LCD_center_string(msg);
+#endif
   LCD_main_set_title(msg);  // Show startup message
-  msg = "version " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_BUILD);
-  LCD_center_string(msg);
-  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);  //Please give me the credits :-)
+  String msg1 = "version " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_BUILD);
+#ifndef IS_VCTOUCH
+  LCD_center_string(msg1);
+#endif
+  LCD_show_popup_label(msg1, MESSAGE_TIMER_LENGTH);
 #ifdef IS_VCTOUCH
-  for (uint8_t b = 0; b <= TFT_current_brightness; b++) {
+  /*for (uint8_t b = 0; b <= TFT_current_brightness; b++) {
     LCD_set_TFT_brightness(b);
     delay((255 - b) >> 4);
-  }
-#else
-  delay(800);
+    }*/
+  LCD_set_TFT_brightness(TFT_current_brightness);
 #endif
-  msg = "by SixEight"; //Please give me the credits :-)
-  LCD_center_string(msg);
-  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  delay(800);
+  String msg2 = "by SixEight"; //Please give me the credits :-)
+#ifndef IS_VCTOUCH
+  LCD_center_string(msg2);
+#endif
+  LCD_show_popup_label(msg2, MESSAGE_TIMER_LENGTH);
   delay(800);
 }
 
@@ -849,24 +1044,52 @@ void LCD_main_set_title(const String & msg) { // Will set the Title string in th
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
   if (msg_length > MAIN_LCD_DISPLAY_SIZE) msg_length = MAIN_LCD_DISPLAY_SIZE;
+  while ((msg_length > 0) && (msg[msg_length - 1] == ' ')) msg_length--; // Remove spaces at the end
+#ifdef IS_VCTOUCH // Center the string
+  uint8_t leftlen = (MAIN_LCD_DISPLAY_SIZE - msg_length) / 2;
+  for (uint8_t i = 0; i < leftlen; i++) { // Fill the remaining chars with spaces
+    main_lcd_title[i] = ' ';
+  }
+  for (uint8_t i = 0; i < msg_length; i++) {
+    main_lcd_title[i + leftlen] = msg[i];
+  }
+  for (uint8_t i = (msg_length + leftlen); i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    main_lcd_title[i] = ' ';
+  }
+#else
   for (uint8_t i = 0; i < msg_length; i++) {
     main_lcd_title[i] = msg[i];
   }
   for (uint8_t i = msg_length; i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
     main_lcd_title[i] = ' ';
   }
+#endif
 }
 
 void LCD_main_set_label(const String & msg) { // Will set the Title string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t msg_length = msg.length();
   if (msg_length > MAIN_LCD_DISPLAY_SIZE) msg_length = MAIN_LCD_DISPLAY_SIZE;
+  while ((msg_length > 0) && (msg[msg_length - 1] == ' ')) msg_length--; // Remove spaces at the end
+#ifdef IS_VCTOUCH // Center the string
+  uint8_t leftlen = (MAIN_LCD_DISPLAY_SIZE - msg_length) / 2;
+  for (uint8_t i = 0; i < leftlen; i++) { // Fill the remaining chars with spaces
+    main_lcd_label[i] = ' ';
+  }
+  for (uint8_t i = 0; i < msg_length; i++) {
+    main_lcd_label[i + leftlen] = msg[i];
+  }
+  for (uint8_t i = (msg_length + leftlen); i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
+    main_lcd_label[i] = ' ';
+  }
+#else
   for (uint8_t i = 0; i < msg_length; i++) {
     main_lcd_label[i] = msg[i];
   }
   for (uint8_t i = msg_length; i < MAIN_LCD_DISPLAY_SIZE; i++) { // Fill the remaining chars with spaces
     main_lcd_label[i] = ' ';
   }
+#endif
 }
 
 void LCD_main_set_label_right(const String & msg) { // Will set the Title string in the SP array
@@ -910,6 +1133,23 @@ const char LCD_Looper[] = "<LOOPER>";
 const char LCD_Page[] = VC_NAME;
 const char LCD_Unknown[] = "Unknown";
 const char LCD_Next_Device[] = "<NEXT DEVICE>";
+const char LCD_Next_Setlist[] = "<NEXT SETLIST>";
+const char LCD_Prev_Setlist[] = "<PREV SETLIST>";
+const char LCD_Next_Song[] = "<NEXT SONG>";
+const char LCD_Prev_Song[] = "<PREV SONG>";
+const char LCD_Next_Part[] = "<NEXT PART>";
+const char LCD_Prev_Part[] = "<PREV PART>";
+const char LCD_Next_SongPart[] = "<NEXT PART/SONG>";
+const char LCD_Prev_SongPart[] = "<PREV PART/SONG>";
+const char LCD_Setlist[] = "<SETLIST>";
+const char LCD_Song[] = "<SONG>";
+const char LCD_Edit[] = "EDIT";
+const char LCD_Song_Mode[] = "SONG MODE";
+const char LCD_Page_Mode[] = "PAGE MODE";
+const char LCD_Device_Mode[] = "DEVICE MODE";
+const char LCD_Start[] = "START";
+const char LCD_End[] = "END";
+
 
 void LCD_update(uint8_t sw, bool do_show) {
   if (on_screen_keyboard_active) return;
@@ -926,6 +1166,7 @@ void LCD_update(uint8_t sw, bool do_show) {
   DEBUGMSG("Update display no:" + String(sw));
 
   LCD_clear_lcd_txt();
+  Display_number_string = "";
 
   if (EEPROM_check4label(Current_page, sw)) {
     String msg;
@@ -941,8 +1182,18 @@ void LCD_update(uint8_t sw, bool do_show) {
       case PATCH:
         if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
           Display_number_string = "";
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
-          if (SP[sw].PP_number == Device[Dev]->patch_number) {
+          if (SP[sw].PP_number != NO_RESULT) {
+            if ((SCO_setlist_active(Dev + SETLIST_TARGET_FIRST_DEVICE)) && (SP[sw].Sel_type == BANKSELECT)) {
+              LCD_add_2digit_number(SP[sw].PP_number + 1, Display_number_string);
+              Display_number_string += ':';
+              if (SP[sw].PP_number == NEW_PATCH) Display_number_string += "NEW PATCH";
+              else Device[Dev]->setlist_song_short_item_format(SCO_read_setlist_item(SP[sw].PP_number), Display_number_string);
+            }
+            else {
+              Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
+            }
+          }
+          if (Device[Dev]->patch_number_in_current_setlist(SP[sw].PP_number) == Device[Dev]->patch_number) {
             if (Setting.CURNUM_action == CN_PREV_PATCH) {
               Display_number_string += " (";
               Device[Dev]->number_format(Device[Dev]->prev_patch_number, Display_number_string);
@@ -964,7 +1215,11 @@ void LCD_update(uint8_t sw, bool do_show) {
         }
         if (SP[sw].Sel_type == NEXT) {
           Display_number_string = "NEXT (";
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
+          if (SCO_setlist_active(Dev + SETLIST_TARGET_FIRST_DEVICE)) {
+            if (SP[sw].PP_number == Device[Dev]->get_patch_max()) Display_number_string = LCD_End;
+            else Device[Dev]->setlist_song_short_item_format(SP[sw].PP_number, Display_number_string);
+          }
+          else Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
           Display_number_string += ')';
           LCD_add_vled(2);
           LCD_add_title(Display_number_string);
@@ -972,7 +1227,11 @@ void LCD_update(uint8_t sw, bool do_show) {
         }
         if (SP[sw].Sel_type == PREV) {
           Display_number_string = "PREV (";
-          Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
+          if (SCO_setlist_active(Dev + SETLIST_TARGET_FIRST_DEVICE)) {
+            if (SP[sw].PP_number == Device[Dev]->get_patch_min()) Display_number_string = LCD_Start;
+            else Device[Dev]->setlist_song_short_item_format(SP[sw].PP_number, Display_number_string);
+          }
+          else Device[Dev]->number_format(SP[sw].PP_number, Display_number_string);
           Display_number_string += ')';
           LCD_add_vled(2);
           LCD_add_title(Display_number_string);
@@ -1090,23 +1349,23 @@ void LCD_update(uint8_t sw, bool do_show) {
         LCD_add_vled(3);
         Display_number_string = "";
         if (SP[sw].Value2 == 0) { // Single snapshot in view
-          Display_number_string += "      ";
+          Display_number_string += "    ";
           Device[Dev]->get_snapscene_title(SP[sw].PP_number, Display_number_string);
-          Display_number_string += "      ";
+          Display_number_string += "     ";
         }
         else if (SP[sw].Value3 == 0) { // Two snapshots in view
           Display_number_string += "  ";
-          LCD_add_snapshot_number(SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(Dev, SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
           Display_number_string += "    ";
-          LCD_add_snapshot_number(SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(Dev, SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
           Display_number_string += "  ";
         }
         else { // Three snapshots in view
-          LCD_add_snapshot_number(SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(Dev, SP[sw].Value1, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
           Display_number_string += "  ";
-          LCD_add_snapshot_number(SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(Dev, SP[sw].Value2, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
           Display_number_string += "  ";
-          LCD_add_snapshot_number(SP[sw].Value3, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
+          LCD_add_snapshot_number(Dev, SP[sw].Value3, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
         }
         LCD_set_title(Display_number_string);
         strcpy(lcd_label, SP[sw].Label);
@@ -1137,24 +1396,28 @@ void LCD_update(uint8_t sw, bool do_show) {
       case PAGE:
         if (SP[sw].Sel_type == SELECT) {
           LCD_add_vled(3);
-          LCD_add_label(SP[sw].Label);
+          LCD_add_title(SP[sw].Label);
         }
         if (SP[sw].Sel_type == NEXT) {
           LCD_add_vled(1);
           LCD_add_title(LCD_Page_Up);
-          LCD_add_label(SP[sw].Label);
+          if (Current_page_setlist_item == SCO_get_page_max()) LCD_add_label(LCD_End);
+          else LCD_add_label(SP[sw].Label);
         }
         if (SP[sw].Sel_type == PREV) {
           LCD_add_vled(1);
           LCD_add_title(LCD_Page_Down);
-          LCD_add_label(SP[sw].Label);
+          if (Current_page_setlist_item == SCO_get_page_min()) LCD_add_label(LCD_Start);
+          else LCD_add_label(SP[sw].Label);
         }
         if (SP[sw].Sel_type == BANKSELECT) {
           Display_number_string = "PG ";
-          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
-          LCD_add_vled(3);
-          LCD_add_title(Display_number_string);
-          LCD_add_label(SP[sw].Label);
+          if (SCO_get_page_number(SP[sw].PP_number) > 0) {
+            LCD_add_3digit_number(SCO_get_page_number(SP[sw].PP_number), Display_number_string);
+            LCD_add_vled(3);
+            LCD_add_title(Display_number_string);
+            LCD_add_label(SP[sw].Label);
+          }
         }
         if (SP[sw].Sel_type == BANKUP) {
           LCD_add_vled(2);
@@ -1189,13 +1452,40 @@ void LCD_update(uint8_t sw, bool do_show) {
         //LCD_print_lcd_txt(sw);
         break;
       case MIDI_PC:
-        Display_number_string = "<PC ";
-        LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
-        Display_number_string += '>';
-        LCD_add_vled(3);
-        LCD_add_title(Display_number_string);
-        LCD_add_label(SP[sw].Label);
-        //LCD_print_lcd_txt(sw);
+        if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
+          Display_number_string = "<PC ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          Display_number_string += '>';
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == NEXT) {
+          Display_number_string = "NEXT (PC ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          Display_number_string += ')';
+          LCD_add_vled(2);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == PREV) {
+          Display_number_string = "PREV (PC ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          Display_number_string += ')';
+          LCD_add_vled(2);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == BANKUP) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Up);
+          //LCD_add_label(Device[Dev]->device_name);
+        }
+        if (SP[sw].Sel_type == BANKDOWN) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Down);
+          //LCD_add_label(Device[Dev]->device_name);
+        }
         break;
       case MIDI_CC:
         Display_number_string = "";
@@ -1223,6 +1513,105 @@ void LCD_update(uint8_t sw, bool do_show) {
         LCD_add_vled(1);
         LCD_add_title(LCD_Next_Device);
         LCD_add_label(Device[SCO_get_number_of_next_device()]->device_name);
+        break;
+      case SETLIST:
+        if ((SP[sw].Sel_type == SL_SELECT) || (SP[sw].Sel_type == SL_BANKSELECT)) {
+          Display_number_string = "SL ";
+          LCD_add_3digit_number(SP[sw].PP_number, Display_number_string);
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SL_NEXT) {
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Next_Setlist);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SL_PREV) {
+          LCD_add_vled(1);
+          LCD_add_title(LCD_Prev_Setlist);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SL_BANKUP) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Up);
+          LCD_add_label(LCD_Setlist);
+        }
+        if (SP[sw].Sel_type == SL_BANKDOWN) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Down);
+          LCD_add_label(LCD_Setlist);
+        }
+        if (SP[sw].Sel_type == SL_EDIT) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Edit);
+          LCD_add_label(LCD_Setlist);
+        }
+        break;
+      case SONG:
+        if ((SP[sw].Sel_type == SONG_SELECT) || (SP[sw].Sel_type == SONG_BANKSELECT)) {
+          if ((SCO_setlist_active(SETLIST_TARGET_SONG)) && (SP[sw].Sel_type == BANKSELECT)) {
+            LCD_add_2digit_number(SP[sw].PP_number + 1, Display_number_string);
+            Display_number_string += ':';
+          }
+          SCO_get_song_number_name(SCO_get_song_number(SP[sw].PP_number), Display_number_string);
+          LCD_add_vled(3);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SONG_NEXT) {
+          LCD_add_vled(1);
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONG) LCD_add_title(LCD_Next_Song);
+          if (SP[sw].Trigger == SONG_PREVNEXT_PART) LCD_add_title(LCD_Next_Part);
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONGPART) LCD_add_title(LCD_Next_SongPart);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SONG_PREV) {
+          LCD_add_vled(1);
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONG) LCD_add_title(LCD_Prev_Song);
+          if (SP[sw].Trigger == SONG_PREVNEXT_PART) LCD_add_title(LCD_Prev_Part);
+          if (SP[sw].Trigger == SONG_PREVNEXT_SONGPART) LCD_add_title(LCD_Prev_SongPart);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SONG_BANKUP) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Up);
+          LCD_add_label(LCD_Song);
+        }
+        if (SP[sw].Sel_type == SONG_BANKDOWN) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Bank_Down);
+          LCD_add_label(LCD_Song);
+        }
+        if (SP[sw].Sel_type == SONG_PARTSEL) {
+          SCO_get_part_number_name(SP[sw].PP_number, Display_number_string);
+          LCD_add_vled(2);
+          LCD_add_title(Display_number_string);
+          LCD_add_label(SP[sw].Label);
+        }
+        if (SP[sw].Sel_type == SONG_EDIT) {
+          LCD_add_vled(2);
+          LCD_add_title(LCD_Edit);
+          LCD_add_label(LCD_Song);
+        }
+        break;
+      case MODE:
+        if (SP[sw].PP_number == SONG_MODE) {
+          LCD_add_title(LCD_Song_Mode);
+          if (Current_mode == SONG_MODE) LCD_add_label(LCD_Edit);
+        }
+        if (SP[sw].PP_number == PAGE_MODE) LCD_add_title(LCD_Page_Mode);
+        if (SP[sw].PP_number == DEVICE_MODE) LCD_add_title(LCD_Device_Mode);
+        break;
+      case MIDI_MORE:
+        if (SP[sw].PP_number == MIDI_START) LCD_add_title("START");
+        if (SP[sw].PP_number == MIDI_STOP) LCD_add_title("STOP");
+        if (SP[sw].PP_number == MIDI_START_STOP) {
+          if (MIDI_get_start_stop_state(SP[sw].Value1) == true) LCD_add_title("[START] STOP ");
+          else LCD_add_title(" START [STOP]");
+        }
+        LCD_add_label(SP[sw].Label);
+        
         break;
       default:
         //LCD_print_lcd_txt(sw);
@@ -1254,12 +1643,11 @@ void LCD_parameter_label_short(uint8_t sw, uint8_t Dev, String & msg) { // Will 
   }
 }
 
-void LCD_add_snapshot_number(uint8_t number, uint8_t current_number, uint8_t current_snap, String & msg) {
+void LCD_add_snapshot_number(uint8_t Dev, uint8_t number, uint8_t current_number, uint8_t current_snap, String & msg) {
   if (number == current_snap) msg += '[';
   else if (number == current_number) msg += '<';
   else msg += ' ';
-  msg += "S";
-  msg += String(number);
+  if (Dev < NUMBER_OF_DEVICES) Device[Dev]->get_snapscene_title_short(number, msg);
   if (number == current_snap) msg += ']';
   else if (number == current_number) msg += '>';
   else msg += ' ';
@@ -1274,6 +1662,7 @@ void LCD_parameter_title(uint8_t sw, uint8_t Dev, String & msg) { // Will print 
         msg += ']';
         break;
       case MOMENTARY:
+      case ONE_SHOT:
         msg += '<';
         Device[Dev]->read_parameter_title(SP[sw].PP_number, msg);
         msg += '>';
@@ -1547,6 +1936,11 @@ void LCD_add_label(const char* lbl) {
   }
 }
 
+void LCD_add_2digit_number(uint16_t number, String & msg) {
+  msg += String(number / 10);
+  msg += String(number % 10);
+}
+
 void LCD_add_3digit_number(uint16_t number, String & msg) {
   msg += String(number / 100);
   msg += String((number % 100) / 10);
@@ -1569,8 +1963,11 @@ bool LCD_print_delta(uint8_t number, uint8_t line, const char * source) {
   // We will only update the characters on the displays that have changed.
   uint8_t first_char = 255;
   uint8_t last_char = 0;
+  uint8_t lcd_size;
+  if (number == 0) lcd_size = MAIN_LCD_DISPLAY_SIZE;
+  else lcd_size = LCD_DISPLAY_SIZE;
 
-  for (uint8_t i = 0; i < LCD_DISPLAY_SIZE; i++) { // Compare each character of source to the lcd_mem. Find first_char and last_char
+  for (uint8_t i = 0; i < lcd_size; i++) { // Compare each character of source to the lcd_mem. Find first_char and last_char
     if (source[i] != lcd_mem[number][line][i]) {
       if (first_char == 255) first_char = i;
       last_char = i;
@@ -1585,9 +1982,7 @@ bool LCD_print_delta(uint8_t number, uint8_t line, const char * source) {
       for (uint8_t i = first_char; i <= last_char; i++) {  // Print the characters that have changed (one by one)
         Main_lcd.print(source[i]);
       }
-#endif
-      // TFT CODE
-#ifdef IS_VCTOUCH
+#else
       if (line == 0) TFT_show_main_title();
       if (line == 1) TFT_show_main_label();
 #endif
@@ -1854,8 +2249,12 @@ void TFT_handleTouch(int8_t contacts, GTPoint *points) {
           last_touch_switch_pressed = sw;
           SC_remote_switch_pressed(last_touch_switch_pressed, true);
         }
+        if (TFT_check_menu_pressed(last_touch_x_pos, last_touch_y_pos)) {
+          if (Current_page != PAGE_MENU) SCO_select_page(PAGE_MENU);
+          else menu_exit();
+        }
       }
-      else { // Pressing key on on-screen keyoard
+      else { // Pressing key on on-screen keyboard
         TFT_check_on_screen_key_press(points[0].x_lsb + (points[0].x_msb << 8), points[0].y_lsb + (points[0].y_msb << 8));
       }
     }
@@ -1927,6 +2326,8 @@ void TFT_draw_main_grid() {
     tft.Line_End_XY(TFT_layout[i].y_pos + TFT_layout[i].y_size, TFT_layout[i].x_pos + TFT_layout[i].x_size);
     tft.Start_Square();
   }
+
+  TFT_draw_menu_icon();
 }
 
 void TFT_switch_off_main_window() {
@@ -1972,7 +2373,14 @@ void TFT_show_display_title(uint8_t number) {
     if (TFT_check_dark_colour(number)) front_colour = White;
     else front_colour = Black;
 #ifdef USE_TFT_USER_FONT
-    TFT_show_user_font(GroteskBold16x32, TFT_title_text[number], TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 4, front_colour, TFT_label_colour[number], true);
+    if (TFT_title_text[number][LCD_DISPLAY_SIZE - 1] == ' ') {
+      String lbl = TFT_title_text[number];
+      lbl = lbl.trim();
+      uint8_t whitespace = (LCD_DISPLAY_SIZE - lbl.length() - 1) * 8;
+      TFT_show_user_font(Grotesk16x32, TFT_spaces, TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 4, front_colour, TFT_label_colour[number], false);
+      TFT_show_user_font(Grotesk16x32, lbl, TFT_layout[number].x_pos + whitespace + 8, TFT_layout[number].y_pos + 4, front_colour, TFT_label_colour[number], false);
+    }
+    else TFT_show_user_font(GroteskBold16x32, TFT_title_text[number], TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 4, front_colour, TFT_label_colour[number], true);
 #else
     tft.Canvas_Image_Start_address(layer1_start_addr);
     tft.Foreground_color_65k(front_colour);
@@ -2003,7 +2411,14 @@ void TFT_show_display_label(uint8_t number) {
     if (TFT_check_dark_colour(number)) front_colour = Yellow;
     else front_colour = 0x2115; // Dark blue
 #ifdef USE_TFT_USER_FONT
-    TFT_show_user_font(Grotesk16x32, TFT_label_text[number], TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 35, front_colour, TFT_label_colour[number], true);
+    if (TFT_label_text[number][LCD_DISPLAY_SIZE - 1] == ' ') {
+      String lbl = TFT_label_text[number];
+      lbl = lbl.trim();
+      uint8_t whitespace = (LCD_DISPLAY_SIZE - lbl.length() - 1) * 8;
+      TFT_show_user_font(Grotesk16x32, TFT_spaces, TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 35, front_colour, TFT_label_colour[number], false);
+      TFT_show_user_font(Grotesk16x32, lbl, TFT_layout[number].x_pos + whitespace + 8, TFT_layout[number].y_pos + 35, front_colour, TFT_label_colour[number], false);
+    }
+    else TFT_show_user_font(Grotesk16x32, TFT_label_text[number], TFT_layout[number].x_pos + 8, TFT_layout[number].y_pos + 35, front_colour, TFT_label_colour[number], true);
 #else
     tft.Canvas_Image_Start_address(layer1_start_addr);
     tft.Foreground_color_65k(front_colour);
@@ -2026,9 +2441,20 @@ bool TFT_check_dark_colour(uint8_t number) {
   else return true;
 }
 
+#define MAIN_LCD_X_POS (640 - (MAIN_LCD_DISPLAY_SIZE * 16)) // Was 380
+#define MAIN_LCD_Y_POS 100
+
 void TFT_show_main_title() {
 #ifdef USE_TFT_USER_FONT
-  TFT_show_user_font(GroteskBold32x64, main_lcd_title, 380, 100, White, Black, false);
+  if (Setting.Main_display_show_top_right == MDT_OFF) {
+    String lbl = main_lcd_title;
+    lbl = lbl.trim();
+    uint16_t whitespace = (MAIN_LCD_DISPLAY_SIZE - lbl.length()) * 16;
+    TFT_show_user_font(Grotesk32x64, TFT_main_spaces, MAIN_LCD_X_POS, MAIN_LCD_Y_POS, White, Black, false);
+    TFT_show_user_font(Grotesk32x64, lbl, MAIN_LCD_X_POS + whitespace, MAIN_LCD_Y_POS, White, Black, false);
+  }
+  else
+    TFT_show_user_font(GroteskBold32x64, main_lcd_title, MAIN_LCD_X_POS, MAIN_LCD_Y_POS, White, Black, false);
 #else
   tft.Canvas_Image_Start_address(layer1_start_addr);
   tft.Foreground_color_65k(White);
@@ -2037,14 +2463,22 @@ void TFT_show_main_title() {
   tft.Font_Select_16x32_32x32();
   tft.Font_Width_X2();
   tft.Font_Height_X2();
-  tft.Goto_Text_XY(100, 380);
+  tft.Goto_Text_XY(MAIN_LCD_Y_POS, MAIN_LCD_X_POS);
   tft.Show_String(main_lcd_title);
 #endif
 }
 
 void TFT_show_main_label() {
 #ifdef USE_TFT_USER_FONT
-  TFT_show_user_font(Grotesk32x64, main_lcd_label, 380, 160, Yellow, Black, false);
+  if (Setting.Main_display_show_top_right == MDT_OFF) {
+    String lbl = main_lcd_label;
+    lbl = lbl.trim();
+    uint16_t whitespace = (MAIN_LCD_DISPLAY_SIZE - lbl.length()) * 16;
+    TFT_show_user_font(Grotesk32x64, TFT_main_spaces, MAIN_LCD_X_POS, MAIN_LCD_Y_POS + 60, Yellow, Black, false);
+    TFT_show_user_font(Grotesk32x64, lbl, MAIN_LCD_X_POS + whitespace, MAIN_LCD_Y_POS + 60, Yellow, Black, false);
+  }
+  else
+    TFT_show_user_font(Grotesk32x64, main_lcd_label, MAIN_LCD_X_POS, MAIN_LCD_Y_POS + 60, Yellow, Black, false);
 #else
   tft.Canvas_Image_Start_address(layer1_start_addr);
   tft.Foreground_color_65k(Yellow);
@@ -2053,14 +2487,14 @@ void TFT_show_main_label() {
   tft.Font_Select_16x32_32x32();
   tft.Font_Width_X2();
   tft.Font_Height_X2();
-  tft.Goto_Text_XY(160, 380);
+  tft.Goto_Text_XY(MAIN_LCD_Y_POS + 60, MAIN_LCD_X_POS);
   tft.Show_String(main_lcd_label);
 #endif
 }
 
-#define TFT_BAR_START_X 380
+#define TFT_BAR_START_X MAIN_LCD_X_POS
 #define TFT_BAR_START_Y 228
-#define TFT_BAR_END_X 900
+#define TFT_BAR_END_X (1280 - MAIN_LCD_X_POS)
 #define TFT_BAR_END_Y 238
 
 void TFT_show_bar(uint8_t value, uint16_t colour) {
@@ -2114,18 +2548,50 @@ void TFT_draw_Big_Point(uint16_t x, uint16_t y, uint16_t colour) {
 
 #define TFT_SYMBOL_ON_COLOUR White
 #define TFT_SYMBOL_OFF_COLOUR 0x8471
+#define TFT_MENU_X_POS 1245
+#define TFT_MENU_Y_POS 80
+#define TFT_MENU_ICON_COLOUR TFT_SYMBOL_OFF_COLOUR
+
+void TFT_draw_menu_icon() {
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer1_start_addr);
+  tft.Main_Image_Width(400);
+  tft.Main_Window_Start_XY(0, 0);
+  tft.Foreground_color_65k(TFT_MENU_ICON_COLOUR);
+
+  // Three lines
+  for (uint8_t i = 0; i < 3; i++) {
+    tft.Line_Start_XY(TFT_MENU_Y_POS + (i * 10), TFT_MENU_X_POS + 4);
+    tft.Line_End_XY(TFT_MENU_Y_POS + 5 + (i * 10), TFT_MENU_X_POS + 28);
+    //tft.Circle_Square_Radius_RxRy(2, 2);
+    //tft.Start_Circle_Square_Fill();
+    tft.Start_Square_Fill();
+  }
+
+  // Text
+  //const String menu_txt = "MENU";
+  //TFT_show_user_font(Grotesk16x32, menu_txt, TFT_MENU_X_POS + 36, TFT_MENU_Y_POS - 3, TFT_MENU_ICON_COLOUR, Black, false);
+}
+
+bool TFT_check_menu_pressed(uint16_t x_pos, uint16_t y_pos) {
+  if ((x_pos > TFT_MENU_X_POS - 90) && (y_pos > TFT_MENU_Y_POS) && (y_pos < TFT_MENU_Y_POS + 35)) return true;
+  return false;
+}
 
 void TFT_show_bluetooth_state() {
+  if (on_screen_keyboard_active) return;
   char bt_char;
   uint16_t bt_colour;
   if (Setting.BLE_mode != 0) bt_char = '"';
   else bt_char = ' ';
   if (show_ble_state != 0) bt_colour = TFT_SYMBOL_ON_COLOUR;
   else bt_colour = TFT_SYMBOL_OFF_COLOUR;
-  TFT_show_user_font(Symbols24x24, bt_char, 1190, 80, bt_colour, Black, false);
+  TFT_show_user_font(Symbols24x24, bt_char, 1155, 80, bt_colour, Black, false);
 }
 
 void TFT_show_wifi_state() {
+  if (on_screen_keyboard_active) return;
   char wifi_char;
   uint16_t wifi_colour;
   if (Setting.WIFI_mode == 1) wifi_char = '!';
@@ -2133,17 +2599,18 @@ void TFT_show_wifi_state() {
   else wifi_char = ' ';
   if (show_wifi_state != 0) wifi_colour = TFT_SYMBOL_ON_COLOUR;
   else wifi_colour = TFT_SYMBOL_OFF_COLOUR;
-  TFT_show_user_font(Symbols24x24, wifi_char, 1220, 80, wifi_colour, Black, false);
+  TFT_show_user_font(Symbols24x24, wifi_char, 1185, 80, wifi_colour, Black, false);
 }
 
 void TFT_show_rtpmidi_state() {
+  if (on_screen_keyboard_active) return;
   char rtpmidi_char;
   if (Setting.WIFI_mode > 0) rtpmidi_char = '#';
   else rtpmidi_char = ' ';
   uint16_t rtpmidi_colour;
   if (show_rtpmidi_state != 0) rtpmidi_colour = TFT_SYMBOL_ON_COLOUR;
   else rtpmidi_colour = TFT_SYMBOL_OFF_COLOUR;
-  TFT_show_user_font(Symbols24x24, rtpmidi_char, 1250, 80, rtpmidi_colour, Black, false);
+  TFT_show_user_font(Symbols24x24, rtpmidi_char, 1215, 80, rtpmidi_colour, Black, false);
 }
 
 // ********************************* Section 7: TFT On-screen Keyboard ********************************************
@@ -2511,7 +2978,7 @@ void TFT_show_user_font(const uint8_t * font, String text, uint16_t x, uint16_t 
   tft.Main_Window_Start_XY(0, 0);
 
   uint8_t len = text.length();
-  
+
   uint8_t font_height = font[0];
   uint8_t font_width = font[1];
   uint8_t first_char = font[2];
@@ -2545,6 +3012,41 @@ void TFT_show_user_font(const uint8_t * font, String text, uint16_t x, uint16_t 
     }
   }
 }
+
+/*bool TFT_check_mem_chip() {
+  bool TFT_mem_check = true;
+  uint8_t data = 0;
+  TFT_read_write_sdram(&data, true);
+  data = 0xFF;
+  TFT_read_write_sdram(&data, false);
+  DEBUGMSG("MEMCHECK - data #1: " + String(data));
+  if (data != 0x00) TFT_mem_check = false;
+  data = 0xFF;
+  TFT_read_write_sdram(&data, true);
+  data = 0;
+  TFT_read_write_sdram(&data, false);
+  DEBUGMSG("MEMCHECK - data #2: " + String(data));
+  if (data != 222) TFT_mem_check = false;
+  return TFT_mem_check;
+  }
+
+  void TFT_read_write_sdram(uint8_t *data, bool do_write) {
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer6_start_addr);
+  tft.Main_Image_Width(1);
+
+  tft.Main_Window_Start_XY(0, 0);
+
+  tft.Canvas_Image_Start_address(layer1_start_addr);//
+  tft.Main_Image_Width(1);
+  tft.Active_Window_XY(0, 0);
+  tft.Active_Window_WH(1, 1);
+  tft.Goto_Pixel_XY(0, 0);
+  delay(1);
+  if (do_write) tft.Show_picture(1, data);
+  else tft.Read_picture(1, data);
+  delay(1);
+  }*/
 
 // Optional code to diagonally mirror the fonts from http://www.rinkydinkelectronics.com/r_fonts.php
 void TFT_fix_rinkydink_font(const uint8_t * font) {
@@ -2610,13 +3112,5 @@ void write_hex_code(uint8_t number) {
   Serial.print(", ");
 }
 #endif
-
-/*void update_wireless_symbols() {
-  #ifdef IS_VCTOUCH
-  TFT_show_bluetooth_state();
-  TFT_show_wifi_state();
-  TFT_show_rtpmidi_state();
-  #endif
-  }*/
 
 #endif

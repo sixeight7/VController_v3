@@ -11,6 +11,8 @@
 // Section 8: Bass Mode (Low/High String Priority)
 // Section 9: VController Power On/Off Switching
 // Section 10: Master expression pedal control
+// Section 11: Setlist Commands
+// Section 12: Song Commands
 
 // ********************************* Section 1: Switch Action Trigger and Command Lookup ********************************************
 
@@ -60,7 +62,9 @@ uint8_t arm_page_cmd_exec = 0; // Set to the number of the selected page to exec
 
 void setup_switch_control()
 {
+  DEBUGMAIN("Starting switch control");
   SCO_MIDI_clock_start();
+  SCO_load_current_song();
 }
 
 // Take action on switch being pressed / released/ held / long pressed or extra long pressed.
@@ -240,6 +244,8 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
+  uint8_t new_mode;
+  uint8_t pg;
 
   DEBUGMAIN("Execute command " + String(Type) + " for device " + String(Dev));
 
@@ -285,9 +291,13 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
           else SCO_page_up_down(-1);
         }
         if (Data1 == BANKSELECT) {
-          SCO_trigger_default_page_cmds(SP[Sw].PP_number);
-          SCO_select_page(SP[Sw].PP_number);
-          page_last_selected = SP[Sw].PP_number;
+          Current_page_setlist_item = SP[Sw].PP_number;
+          if (Current_page_setlist_item <= SCO_get_page_max()) {
+            pg = SCO_get_page_number(Current_page_setlist_item);
+            SCO_trigger_default_page_cmds(pg);
+            SCO_select_page(pg);
+            page_last_selected = pg;
+          }
         }
         if (Data1 == BANKUP) {
           if (SC_switch_is_encoder()) SC_page_bank_updown(Enc_value, Data2);
@@ -323,33 +333,204 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case MIDI_CC:
-        SCO_CC_press(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd);
+        SCO_CC_press(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd);
         if (SC_switch_triggered_by_PC()) break;
         if (!SC_switch_is_expr_pedal()) {
-          update_page = REFRESH_PAGE;
+          update_page = RELOAD_PAGE;
         }
         break;
       case MIDI_PC:
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) {
-          MIDI_send_PC(Data1, Data2, SCO_MIDI_port(PC_value));
-          MIDI_remember_PC(Data1, Data2, SCO_MIDI_port(PC_value));
+          MIDI_send_PC(Data2, cmd->Value1, MIDI_set_port_number_from_menu(PC_value));
+          MIDI_update_PC_ledger(Data2, cmd->Value1, MIDI_set_port_number_from_menu(PC_value), true);
           break;
         }
-        MIDI_send_PC(Data1, Data2, SCO_MIDI_port(cmd->Value1));
-        MIDI_remember_PC(Data1, Data2, SCO_MIDI_port(cmd->Value1));
+        if (Data1 == SELECT) {
+          MIDI_send_PC(Data2, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
+          MIDI_update_PC_ledger(Data2, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2), true);
+        }
+        if ((Data1 == NEXT) || (Data1 == PREV)) {
+          MIDI_send_PC(SP[Sw].PP_number, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
+          MIDI_update_PC_ledger(SP[Sw].PP_number, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2), true);
+        }
+        if (Data1 == BANKSELECT) {
+          MIDI_send_PC(SP[Sw].PP_number, cmd->Value2, MIDI_set_port_number_from_menu(cmd->Value3));
+          MIDI_update_PC_ledger(SP[Sw].PP_number, cmd->Value2, MIDI_set_port_number_from_menu(cmd->Value3), true);
+          device_in_bank_selection = 0;
+        }
+        if (Data1 == BANKUP) {
+          if (SC_switch_is_encoder()) SC_midi_pc_bank_updown(Enc_value, Data2, Sw);
+          else SC_midi_pc_bank_updown(1, Data2, Sw);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == BANKDOWN) {
+          if (SC_switch_is_encoder()) SC_midi_pc_bank_updown(Enc_value, Data2, Sw);
+          else SC_midi_pc_bank_updown(-1, Data2, Sw);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
         switch_controlled_by_master_exp_pedal = 0;
+        update_page = REFRESH_PAGE;
+        break;
+      case SETLIST:
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_triggered_by_PC()) {
+          SCO_select_setlist(PC_value);
+          switch_controlled_by_master_exp_pedal = 0;
+          break;
+        }
+        if (Data1 == SL_SELECT) {
+          SCO_select_setlist(Data2);
+        }
+        if (Data1 == SL_NEXT) {
+          if (SC_switch_is_encoder()) SCO_setlist_up_down(Enc_value);
+          else SCO_setlist_up_down(1);
+        }
+        if (Data1 == SL_PREV) {
+          if (SC_switch_is_encoder()) SCO_setlist_up_down(Enc_value);
+          else SCO_setlist_up_down(-1);
+        }
+        if (Data1 == SL_BANKSELECT) {
+          SCO_select_setlist(SP[Sw].PP_number);
+        }
+        if (Data1 == SL_BANKUP) {
+          if (SC_switch_is_encoder()) SC_setlist_bank_updown(Enc_value, Data2);
+          else SC_setlist_bank_updown(1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == SL_BANKDOWN) {
+          if (SC_switch_is_encoder()) SC_setlist_bank_updown(Enc_value, Data2);
+          else SC_setlist_bank_updown(-1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == SL_EDIT) {
+          open_specific_menu = SETLIST_ID;
+          SCO_select_page(PAGE_MENU); // Open the menu
+        }
+        switch_controlled_by_master_exp_pedal = 0;
+        break;
+      case SONG:
+        if (SC_switch_is_expr_pedal()) break;
+        if (SC_switch_triggered_by_PC()) {
+          SCO_select_song(PC_value);
+          switch_controlled_by_master_exp_pedal = 0;
+          break;
+        }
+        if (Data1 == SONG_SELECT) {
+          SCO_select_song(Data2);
+        }
+        if (Data1 == SONG_PARTSEL) {
+          SCO_select_part(Data2);
+        }
+        if (Data1 == SONG_NEXT) {
+          if (Data2 == SONG_PREVNEXT_SONG) {
+            if (SC_switch_is_encoder()) SCO_song_up_down(Enc_value);
+            else SCO_song_up_down(1);
+          }
+          if (Data2 == SONG_PREVNEXT_PART) {
+            if (SC_switch_is_encoder()) SCO_part_up_down(Enc_value);
+            else SCO_part_up_down(1);
+          }
+          if (Data2 == SONG_PREVNEXT_SONGPART) {
+            if (SC_switch_is_encoder()) SCO_songpart_up_down(Enc_value);
+            else SCO_songpart_up_down(1);
+          }
+        }
+        if (Data1 == SONG_PREV) {
+          if (Data2 == SONG_PREVNEXT_SONG) {
+            if (SC_switch_is_encoder()) SCO_song_up_down(Enc_value);
+            else SCO_song_up_down(-1);
+          }
+          if (Data2 == SONG_PREVNEXT_PART) {
+            if (SC_switch_is_encoder()) SCO_part_up_down(Enc_value);
+            else SCO_part_up_down(-1);
+          }
+          if (Data2 == SONG_PREVNEXT_SONGPART) {
+            if (SC_switch_is_encoder()) SCO_songpart_up_down(Enc_value);
+            else SCO_songpart_up_down(-1);
+          }
+        }
+        if (Data1 == SONG_BANKSELECT) {
+          Current_song_setlist_item = SP[Sw].PP_number;
+          SCO_select_song(SCO_get_song_number(Current_song_setlist_item));
+        }
+        if (Data1 == SONG_BANKUP) {
+          if (SC_switch_is_encoder()) SC_song_bank_updown(Enc_value, Data2);
+          else SC_song_bank_updown(1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == SONG_BANKDOWN) {
+          if (SC_switch_is_encoder()) SC_song_bank_updown(Enc_value, Data2);
+          else SC_song_bank_updown(-1, Data2);
+          update_main_lcd = true;
+          update_page = REFRESH_PAGE;
+        }
+        if (Data1 == SONG_EDIT) {
+          open_specific_menu = SONG_ID;
+          SCO_select_page(PAGE_MENU); // Open the menu
+        }
+        switch_controlled_by_master_exp_pedal = 0;
+        break;
+      case MODE:
+        if (Data1 == SELECT) new_mode = Data2;
+        else new_mode = SP[Sw].PP_number;
+        if (new_mode == SONG_MODE) {
+          if (Current_page != PAGE_FOR_SONG_MODE) {
+            SCO_trigger_default_page_cmds(PAGE_FOR_SONG_MODE);
+            SCO_select_page(PAGE_FOR_SONG_MODE);
+          }
+          else {
+            open_specific_menu = SONG_ID;
+            SCO_select_page(PAGE_MENU); // Open the menu
+          }
+        }
+        if (new_mode == PAGE_MODE) {
+          SCO_trigger_default_page_cmds(PAGE_FOR_PAGE_MODE);
+          SCO_select_page(PAGE_FOR_PAGE_MODE);
+        }
+        if (new_mode == DEVICE_MODE) {
+          if (Current_page != PAGE_FOR_DEVICE_MODE) {
+            SCO_trigger_default_page_cmds(PAGE_FOR_DEVICE_MODE);
+            SCO_select_page(PAGE_FOR_DEVICE_MODE);
+          }
+          else {
+            SCO_select_next_page_of_device(Current_device);
+          }
+        }
+        Current_mode = new_mode;
+        break;
+      case MIDI_MORE:
+        if (Data1 == MIDI_START) {
+          MIDI_send_start(MIDI_set_port_number_from_menu(Data2));
+          MIDI_set_start_stop_state(Data2, true);
+        }
+        if (Data1 == MIDI_STOP) {
+          MIDI_send_stop(MIDI_set_port_number_from_menu(Data2));
+          MIDI_set_start_stop_state(Data2, false);
+        }
+        if (Data1 == MIDI_START_STOP) {
+          bool started = MIDI_get_start_stop_state(Data2);
+          if (started) MIDI_send_stop(MIDI_set_port_number_from_menu(Data2));
+          else MIDI_send_start(MIDI_set_port_number_from_menu(Data2));
+          MIDI_set_start_stop_state(Data2, !started); // toggle state
+          update_page = REFRESH_PAGE;
+        }
         break;
     }
   }
-  if (Dev < NUMBER_OF_DEVICES) { // Check for device specific parameters
+  else if (Dev < NUMBER_OF_DEVICES) { // Check for device specific parameters
     bool updated = false;
     uint16_t pnumber = 0;
     switch (Type) {
       case PATCH:
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) {
-          Device[Dev]->patch_select_pressed(PC_value);
+          Device[Dev]->patch_select_pressed(PC_value, Sw);
           Device[Dev]->update_bank_number(PC_value); // Update the bank number
           //Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
           mute_all_but_me(Dev); // mute all the other devices
@@ -362,29 +543,26 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
           if (SC_switch_is_encoder()) Device[Dev]->bank_updown(Enc_value, Data2);
           else Device[Dev]->bank_updown(1, Data2);
           update_main_lcd = true;
-          update_page = REFRESH_PAGE;
+          update_page = REFRESH_PATCH_BANK_ONLY;
           break;
         }
         if (Data1 == BANKDOWN) {
           if (SC_switch_is_encoder()) Device[Dev]->bank_updown(Enc_value, Data2);
           else Device[Dev]->bank_updown(-1, Data2);
           update_main_lcd = true;
-          update_page = REFRESH_PAGE;
+          update_page = REFRESH_PATCH_BANK_ONLY;
           break;
         }
         if (SC_switch_is_encoder()) {
-          if (Enc_value == 0) break;
-          if (Enc_value > 0) pnumber = Device[Dev]->calculate_next_patch_number();
-          if (Enc_value < 0) pnumber = Device[Dev]->calculate_prev_patch_number();
+          pnumber = Device[Dev]->calculate_prev_next_patch_number(Enc_value);
         }
         else {
           if (Data1 == SELECT) pnumber = (cmd->Value1 * 100) + Data2;
-          else if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_patch_number();
-          else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_next_patch_number();
+          else if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_next_patch_number(-1);
+          else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_prev_next_patch_number(1);
           else pnumber = SP[Sw].PP_number;
         }
-        Device[Dev]->patch_select_pressed(pnumber);
-        Device[Dev]->current_patch_name = SP[Sw].Label; // Store current patch name
+        Device[Dev]->patch_select_pressed(pnumber, Sw);
         mute_all_but_me(Dev); // mute all the other devices
         update_page = RELOAD_PAGE;
         break;
@@ -549,7 +727,7 @@ void SCO_execute_command_press(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   if (Dev == COMMON) { // Check for common parameters
     switch (cmd->Type) {
       case MIDI_NOTE:
-        MIDI_send_note_on(cmd->Data1, cmd->Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
+        MIDI_send_note_on(cmd->Data1, cmd->Data2, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
         break;
     }
   }
@@ -567,28 +745,38 @@ void SCO_execute_command_release(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   if (Dev == COMMON) { // Check for common parameters
     switch (Type) {
       case MIDI_NOTE:
-        MIDI_send_note_off(Data1, cmd->Data2, cmd->Value1, SCO_MIDI_port(cmd->Value2));
+        MIDI_send_note_off(Data1, cmd->Data2, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
         break;
       case MIDI_CC:
-        if (first_cmd) SCO_CC_release(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (first_cmd) {
+          SCO_CC_release(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+          update_page = RELOAD_PAGE;
+        }
         break;
     }
   }
   if (Dev < NUMBER_OF_DEVICES) {
     switch (Type) {
       case PARAMETER:
-        if (first_cmd) SCO_update_released_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (first_cmd) SCO_update_released_parameter_state(Sw); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         Device[Dev]->parameter_release(Sw, cmd, Data1);
         break;
       case PAR_BANK:
-        if (first_cmd) SCO_update_released_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (first_cmd) SCO_update_released_parameter_state(Sw); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         Device[Dev]->parameter_release(Sw, cmd, SP[Sw].PP_number);
         break;
       case ASSIGN:
         if ((Data1 == SELECT) || (Data1 == BANKSELECT)) {
-          if (first_cmd) SCO_update_released_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+          if (first_cmd) SCO_update_released_parameter_state(Sw); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
           Device[Dev]->assign_release(Sw);
         }
+        break;
+      case SNAPSCENE:
+        if (first_cmd) Device[Dev]->release_snapscene(Sw, SP[Sw].PP_number);
+        else Device[Dev]->release_snapscene(Sw, Data1);  // When not the first command, the first snapshot value set in the command is sent.
+        update_page = REFRESH_PAGE;
+        update_main_lcd = true;
+        switch_controlled_by_master_exp_pedal = 0;
         break;
       case LOOPER:
         Device[Dev]->looper_release();
@@ -668,7 +856,7 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         menu_press_hold(Sw);
         break;
       case MIDI_CC:
-        if (first_cmd) SCO_CC_held(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, SCO_MIDI_port(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (first_cmd) SCO_CC_held(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         SC_skip_release_and_hold_until_next_press(SKIP_LONG_PRESS);
         break;
     }
@@ -679,6 +867,24 @@ void mute_all_but_me(uint8_t my_device) {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     if (d != my_device) Device[d]->mute();
   }
+}
+
+void SCO_midi_pc_up_down(signed int delta, uint8_t channel, uint8_t port) {
+  uint8_t New_pc = update_encoder_value(delta, Current_page, 0, 127);
+  MIDI_send_PC(New_pc, channel, MIDI_set_port_number_from_menu(port));
+  MIDI_update_PC_ledger(New_pc, channel, MIDI_set_port_number_from_menu(port), true);
+}
+
+void SC_midi_pc_bank_updown(signed int delta, uint8_t bank_size, uint8_t sw) {
+  uint8_t current_bank = MIDI_recall_PC(SP[sw].Value1, MIDI_set_port_number_from_menu(SP[sw].Value2)) / bank_size;
+  DEBUGMSG("MIDI PC: current bank:" + String(current_bank));
+  if (device_in_bank_selection != MIDI_PC_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = MIDI_PC_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
+    midi_pc_bank_select_number = current_bank; //Reset the bank to current patch
+  }
+  midi_pc_bank_select_number = update_encoder_value(delta, midi_pc_bank_select_number, 0, 127 / bank_size);
+
+  if (midi_pc_bank_select_number == current_bank) device_in_bank_selection = 0; //Check whether were back to the original bank
 }
 
 // ********************************* Section 3: Parameter State Control ********************************************
@@ -710,6 +916,7 @@ bool SCO_update_parameter_state_switch(uint8_t Sw, uint16_t _min, uint16_t _max,
   uint16_t val;
   switch (SP[Sw].Latch) {
     case MOMENTARY:
+    case ONE_SHOT:
       SP[Sw].State = 1; // Switch state on
       switch_controlled_by_master_exp_pedal = 0;
       break;
@@ -839,7 +1046,7 @@ bool SCO_update_parameter_state_exp_pedal(uint8_t Sw, uint16_t _min, uint16_t _m
   return true;
 }
 
-void SCO_update_released_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t Step) {
+void SCO_update_released_parameter_state(uint8_t Sw) {
   if ((SP[Sw].Latch == UPDOWN) && (updown_direction_can_change)) {
     SP[Sw].Direction ^= 1; // Toggle direction
     update_lcd = Sw;
@@ -926,10 +1133,12 @@ uint8_t SCO_find_parameter_state(uint8_t Sw, uint8_t value) {
 
 // ********************************* Section 4: MIDI CC Commands ********************************************
 
-uint8_t SCO_MIDI_port(uint8_t port) { // Converts the port number from the menu to the proper port number
-  if (port < NUMBER_OF_MIDI_PORTS) return port << 4;
+/*uint8_t SCO_MIDI_port(uint8_t port) { // Converts the port number from the menu to the proper port number
+  switch (port
+
+  if (port >= NUMBER_OF_MIDI_PORTS) return port << 4;
   else return ALL_MIDI_PORTS;
-}
+  }*/
 
 void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t value2, uint8_t channel, uint8_t port, uint8_t Sw, bool first_cmd) {
 
@@ -941,7 +1150,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
       val = map(Expr_ped_value, 0, 127, value2, value1);
       if (val != SP[Sw].Target_byte1) { // Check if we have a new value
         MIDI_send_CC(CC_number, val, channel, port); // Controller, Value, Channel, Port;
-        MIDI_remember_CC(CC_number, val, channel, port);
+        MIDI_update_CC_ledger(CC_number, val, channel, port, true);
         SP[Sw].Target_byte1 = val;
       }
       LCD_show_bar(0, Expr_ped_value, 0); // Show it on the main display
@@ -963,7 +1172,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
       case CC_ONE_SHOT:
       case CC_MOMENTARY:
         MIDI_send_CC(CC_number, value1, channel, port); // Controller, Value, Channel, Port
-        MIDI_remember_CC(CC_number, value1, channel, port);
+        MIDI_update_CC_ledger(CC_number, value1, channel, port, true);
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case CC_TOGGLE:
@@ -974,11 +1183,11 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
         }
         if (SP[Sw].State == 0) {
           MIDI_send_CC(CC_number, value1, channel, port); // Controller, Value, Channel, Port
-          MIDI_remember_CC(CC_number, value1, channel, port);
+          MIDI_update_CC_ledger(CC_number, value1, channel, port, true);
         }
         else {
           MIDI_send_CC(CC_number, value2, channel, port); // Controller, Value, Channel, Port
-          MIDI_remember_CC(CC_number, value2, channel, port);
+          MIDI_update_CC_ledger(CC_number, value2, channel, port, true);
         }
         switch_controlled_by_master_exp_pedal = 0;
         break;
@@ -989,7 +1198,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
         if (val > value1) val = value2; // Go from max to min value.
         SP[Sw].Target_byte1 = val;
         MIDI_send_CC(CC_number, val, channel, port); // Controller, Value, Channel, Port
-        MIDI_remember_CC(CC_number, val, channel, port);
+        MIDI_update_CC_ledger(CC_number, val, channel, port, true);
         switch_controlled_by_master_exp_pedal = Sw;
         break;
       case CC_UPDOWN:
@@ -1003,7 +1212,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
 void SCO_CC_release(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t value2, uint8_t channel, uint8_t port, uint8_t Sw, bool first_cmd) {
   if (CC_toggle == CC_MOMENTARY) {
     MIDI_send_CC(CC_number, value2, channel, port); // Controller, Value, Channel, Port
-    MIDI_remember_CC(CC_number, value2, channel, port);
+    MIDI_update_CC_ledger(CC_number, value2, channel, port, true);
   }
   if ((CC_toggle == CC_UPDOWN) && (updown_direction_can_change)) {
     SP[Sw].Direction ^= 1; // Toggle direction
@@ -1021,7 +1230,7 @@ void SCO_CC_held(uint8_t CC_number, uint8_t CC_toggle, uint8_t Max, uint8_t Min,
       if (SP[Sw].Target_byte1 > Min) SP[Sw].Target_byte1--;
     }
     MIDI_send_CC(CC_number, SP[Sw].Target_byte1, channel, port); // Controller, Value, Channel, Port
-    MIDI_remember_CC(CC_number, SP[Sw].Target_byte1, channel, port);
+    MIDI_update_CC_ledger(CC_number, SP[Sw].Target_byte1, channel, port, true);
     update_lcd = Sw;
     updown_direction_can_change = false;
   }
@@ -1031,13 +1240,13 @@ void SCO_CC_held(uint8_t CC_number, uint8_t CC_toggle, uint8_t Max, uint8_t Min,
 
 void SCO_select_page(uint8_t new_page) {
   if (SCO_valid_page(new_page)) {
-    Previous_page = Current_page; // Store the page we come from...
+    if (new_page == PAGE_MENU) menu_open(Current_page);
+    else if (Current_page != PAGE_MENU) Previous_page = Current_page; // Store the page we come from...
     Current_page = new_page;
     //prev_page_shown = 255; // Clear page number to be displayed on LEDS
     if ((Current_page != PAGE_MENU) && (Current_page != PAGE_CURRENT_DIRECT_SELECT)) {
       EEPROM_update_when_quiet();
     }
-    if (Current_page == PAGE_MENU) menu_open();
     if ((Current_page == PAGE_CURRENT_DIRECT_SELECT) && (Current_device < NUMBER_OF_DEVICES)) {
       Device[Current_device]->direct_select_start();
     }
@@ -1065,10 +1274,22 @@ void SCO_select_page(uint8_t new_page, uint8_t device) {
   SCO_select_page(new_page);
 }
 
-void SCO_toggle_page(uint8_t page1, uint8_t page2) {
-  Previous_page = Current_page; // Store the mode we come from...
-  if (Current_page == page1) SCO_select_page(page2);
-  else SCO_select_page(page1);
+uint8_t SCO_get_page_min() {
+  if (SCO_setlist_active(SETLIST_TARGET_PAGE)) return 0;
+  return LOWEST_USER_PAGE;
+}
+
+uint8_t SCO_get_page_max() {
+  if (SCO_setlist_active(SETLIST_TARGET_PAGE)) return Number_of_setlist_items - 1;
+  return Number_of_pages - 1;
+}
+
+uint8_t SCO_get_page_number(uint8_t number) {
+  uint8_t pg;
+  if (SCO_setlist_active(SETLIST_TARGET_PAGE)) pg = SCO_read_setlist_item(number);
+  else pg = number;
+  if (pg >= Number_of_pages) pg += FIRST_SELECTABLE_FIXED_CMD_PAGE - Number_of_pages; // Jump over the gap in the pages to reach the fixed ones
+  return pg;
 }
 
 void SCO_select_next_device() { // Will select the next device that is connected
@@ -1147,32 +1368,23 @@ void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page
 }
 
 void SCO_page_up_down(signed int delta) {
-  uint8_t New_page = update_encoder_value(delta, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
+  Current_page_setlist_item = update_encoder_value(delta, Current_page_setlist_item, SCO_get_page_min(), SCO_get_page_max());
+  uint8_t New_page = SCO_get_page_number(Current_page_setlist_item);
   SCO_trigger_default_page_cmds(New_page);
   SCO_select_page(New_page);
 }
 
 void SC_page_bank_updown(signed int delta, uint8_t bank_size) {
 
-  uint16_t page_max = Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
+  uint16_t page_max;
+  if (SCO_setlist_active(SETLIST_TARGET_PAGE)) page_max = Number_of_setlist_items - 1;
+  else page_max = Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
 
   if (device_in_bank_selection != PAGE_BANK_SELECTION_IN_PROGRESS) {
     device_in_bank_selection = PAGE_BANK_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
     page_bank_select_number = page_bank_number; //Reset the bank to current patch
   }
   // Perform bank up:
-  /*if (delta > 0) {
-    for (uint8_t i = 0; i < delta; i++) {
-      if (page_bank_select_number >= (page_max / bank_size)) page_bank_select_number = 0; // Check if we've reached the top
-      else page_bank_select_number ++;
-    }
-    }
-    if (delta < 0) {
-    for (uint8_t i = 0; i < abs(delta); i++) {
-      if (page_bank_select_number <= 0) page_bank_select_number = (page_max / bank_size); // Check if we've reached the bottom
-      else page_bank_select_number --;
-    }
-    }*/
   page_bank_select_number = update_encoder_value(delta, page_bank_select_number, 0, page_max / bank_size);
 
   if (page_bank_select_number == page_bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
@@ -1225,6 +1437,7 @@ bool tap_array_full = false;
 bool send_new_bpm_value = false;
 bool tap_tempo_pressed_once = false;
 #define SWITCH_TEMPO_FOLLOW_MODE_TIME 2000000 // Time before switching tap tempo follow mode
+bool tempo_edited = false;
 
 #define NUMBER_OF_MIDI_CLOCK_MEMS 10
 uint8_t do_not_tap_port = 255;
@@ -1323,7 +1536,7 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
 
     // Store new time in memory
     tap_time[tap_time_index] = new_time;
-    
+
     // Calculate the bpm
     uint16_t new_bpm = ((60000000 + (avg_time >> 1)) / avg_time); // Calculate the bpm
     SCO_update_bpm(new_bpm);
@@ -1336,7 +1549,7 @@ void SCO_global_tap_tempo_press(uint8_t sw) {
     }
     tap_tempo_pressed_once = false;
   }
-  if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
+  if (Setting.Main_display_show_top_right != MDT_CURRENT_TEMPO) LCD_show_popup_label("Tempo " + String(Setting.Bpm) + " bpm", ACTION_TIMER_LENGTH); // Show the tempo on the main display
   else update_main_lcd = true;
   if (sw > 0) update_lcd = sw; // Update the LCD of the display above the tap tempo button
   else update_page = REFRESH_PAGE; // Running tap tempo from CURNUM - update entire page
@@ -1358,6 +1571,7 @@ bool SCO_update_bpm(uint8_t new_bpm) {
   }
   if (VC_device_connected) MIDI_send_current_bpm();
   EEPROM_update_when_quiet();
+  tempo_edited = true;
   return true;
 }
 
@@ -1383,7 +1597,7 @@ void SCO_set_global_tempo_with_encoder(signed int delta) {
   if (delta > 15) delta = 15;
   uint8_t new_bpm = update_encoder_value(delta, Setting.Bpm, MIN_BPM, MAX_BPM);
   SCO_set_global_tempo_press(new_bpm);
-  if (Setting.Main_display_show_top_right != 1) LCD_show_popup_label("Set tempo: " + String(Setting.Bpm), ACTION_TIMER_LENGTH);
+  if (Setting.Main_display_show_top_right != MDT_CURRENT_TEMPO) LCD_show_popup_label("Set tempo: " + String(Setting.Bpm), ACTION_TIMER_LENGTH);
 }
 
 void SCO_receive_MIDI_clock_pulse(uint8_t port) {
@@ -1396,7 +1610,7 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
   }
 
   if (millis() < ignore_midi_clock_timer) return;
-    
+
 
   if (previous_midi_clock_time > 0) {
     if (current_time - previous_midi_clock_time < 9999) return; // time too short
@@ -1407,7 +1621,7 @@ void SCO_receive_MIDI_clock_pulse(uint8_t port) {
     if (MIDI_clock_bpm_mem_index >= NUMBER_OF_MIDI_CLOCK_MEMS) {
       MIDI_clock_bpm_mem_index = 0;
       uint16_t total = 0;
-      
+
       uint8_t bpm = MIDI_CLOCK_BPM_MEMS[0];
       total = bpm;
       uint8_t dev = bpm / 5;
@@ -1766,5 +1980,809 @@ bool SCO_change_menu_or_parameter_switch() { // Also used from touch menu
     return true;
   }
 
+  return false;
+}
+
+// ********************************* Section 11: Setlist Commands ********************************************
+
+// Setlist buffer structure:
+// byte 0 - 2:  Type and number
+// byte 3: T    Target
+// byte 4 - 19  Setlist name
+// byte 20      Number of items in list
+// byte 24 - 25 Item 1 setlist 1: (patch msb, patch lsb, tempo)
+// --
+// byte 167 - 170 Item 50 setlist 99: (patch msb, patch lsb, tempo)
+
+#define SETLIST_TARGET_INDEX 3
+#define SETLIST_NAME_INDEX 4
+#define SETLIST_NUMBER_OF_ITEMS_INDEX 20
+#define SETLIST_ITEM_BASE_INDEX 24
+
+void SCO_get_setlist_name(uint8_t number, String &name) {
+  if (number == 0) SCO_get_setlist_default_name(0, name);
+  else if (!EEPROM_read_setlist_name(EXT_SETLIST_TYPE, number, name)) SCO_get_setlist_default_name(number, name);
+}
+
+void SCO_get_setlist_default_name(uint8_t number, String &name) {
+  if (number == 0) name = "NO SETLIST";
+  else name = "SETLIST " + String(number);
+}
+
+void SCO_get_setlist_target_name(uint8_t number, String &name) {
+  if (number == 0) name = "SONG";
+  if (number == 1) name = "PAGE";
+  if ((number >= SETLIST_TARGET_FIRST_DEVICE) && (number < NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE)) name = Device[number - SETLIST_TARGET_FIRST_DEVICE]->full_device_name;
+  //update_page = REFRESH_PAGE;
+}
+
+void SCO_set_default_setlist_target() {
+  if (Current_mode == SONG_MODE) Current_setlist_target = SETLIST_TARGET_SONG;
+  if (Current_mode == PAGE_MODE) Current_setlist_target = SETLIST_TARGET_PAGE;
+  if (Current_mode == DEVICE_MODE) Current_setlist_target = Current_device + SETLIST_TARGET_FIRST_DEVICE;
+}
+
+void SCO_get_setlist_position_name(uint8_t number, String &name) {
+  if (number == 0) name = "START";
+  else if (number <= Number_of_setlist_items) {
+    SCO_get_setlist_short_item_name(SCO_read_setlist_item(number - 1), name);
+  }
+  else name = "END";
+  //update_page = REFRESH_PAGE;
+}
+
+void SCO_get_setlist_full_item_name(uint16_t item, String &name) {
+  if (Current_setlist_target == SETLIST_TARGET_SONG) SCO_get_song_number_and_name(item, name);
+  if (Current_setlist_target == SETLIST_TARGET_PAGE) EEPROM_read_title(item, 0, name);
+  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE))
+    Device[Current_setlist_target - SETLIST_TARGET_FIRST_DEVICE]->setlist_song_full_item_format(item, name);
+}
+
+void SCO_get_setlist_short_item_name(uint16_t item, String &name) {
+  if (Current_setlist_target == SETLIST_TARGET_SONG) SCO_get_song_number_name(item, name);
+  if (Current_setlist_target == SETLIST_TARGET_PAGE) name = "PG" + String(item);
+  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE))
+    Device[Current_setlist_target - SETLIST_TARGET_FIRST_DEVICE]->setlist_song_short_item_format(item, name);
+}
+
+void SCO_select_setlist(uint8_t number) {
+  Current_setlist = number;
+  update_page = REFRESH_PAGE;
+  String msg;
+  SCO_get_setlist_name(Current_setlist, msg);
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  SCO_load_current_setlist();
+  if (device_in_bank_selection == SETLIST_BANK_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = 0;
+    setlist_bank_number = setlist_bank_select_number;
+  }
+  tempo_edited = false;
+}
+
+void SCO_setlist_up_down(signed int delta) {
+  uint8_t New_setlist = update_encoder_value(delta, Current_setlist, 0, MAX_NUMBER_OF_SETLISTS);
+  SCO_select_setlist(New_setlist);
+}
+
+void SC_setlist_bank_updown(signed int delta, uint8_t bank_size) {
+
+  if (device_in_bank_selection != SETLIST_BANK_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = SETLIST_BANK_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
+    setlist_bank_number = Current_setlist / bank_size; //Reset the bank to current patch
+    setlist_bank_select_number = setlist_bank_number;
+  }
+  // Perform bank up:
+  setlist_bank_select_number = update_encoder_value(delta, setlist_bank_select_number, 0, MAX_NUMBER_OF_SETLISTS / bank_size);
+
+  if (setlist_bank_select_number == setlist_bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
+}
+
+void SCO_check_update_setlist_item(uint8_t dev, uint16_t patch_no) {
+  if (Current_page != PAGE_MENU) return;
+  if (current_menu != SETLIST_MENU) return;
+  if (Current_setlist_target != (dev + SETLIST_TARGET_FIRST_DEVICE)) return;
+  Selected_setlist_item = patch_no;
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_new_setlist_selected_in_menu() {
+  SCO_load_current_setlist();
+  Current_setlist_position = 1;
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_new_setlist_target_selected_in_menu() {
+  if (Number_of_setlist_items > 0) Current_setlist_target = Current_setlist_buffer[SETLIST_TARGET_INDEX]; // Do not allow the target to change once the setlist has items
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_new_setlist_position_selected_in_menu() {
+  if ((Current_setlist_position > 0) && (Current_setlist_position <= Number_of_setlist_items)) {
+    Selected_setlist_item = SCO_read_setlist_item(Current_setlist_position - 1);
+    Selected_setlist_tempo = SCO_read_setlist_tempo(Current_setlist_position - 1);
+    update_page = REFRESH_PAGE;
+  }
+}
+
+void SCO_load_current_setlist() {
+  bool loaded = EEPROM_load_device_patch(EXT_SETLIST_TYPE, Current_setlist, Current_setlist_buffer, VC_PATCH_SIZE);
+  if (!loaded) {
+    SCO_load_setlist_buffer_with_empty_setlist();
+  }
+  Number_of_setlist_items = Current_setlist_buffer[SETLIST_NUMBER_OF_ITEMS_INDEX];
+  if (Number_of_setlist_items > 0) {
+    Current_setlist_target = Current_setlist_buffer[SETLIST_TARGET_INDEX];
+    SCO_select_first_item_of_setlist();
+  }
+  else SCO_set_default_setlist_target();
+  SCO_new_setlist_position_selected_in_menu();
+}
+
+void SCO_enter_setlist_menu() {
+  SCO_load_current_setlist();
+}
+
+void SCO_select_first_item_of_setlist() {
+  if (Current_setlist_target == SETLIST_TARGET_SONG) SCO_select_song(0);
+  //if (Current_setlist_target == SETLIST_TARGET_PAGE) SCO_select_song(0);
+  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < (NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE)))
+    Device[Current_setlist_target - SETLIST_TARGET_FIRST_DEVICE]->patch_select_pressed(0, 0);
+}
+
+void SCO_load_setlist_buffer_with_empty_setlist() {
+  Current_setlist_buffer[SETLIST_TARGET_INDEX] = Current_setlist_target;
+  String name;
+  SCO_get_setlist_default_name(Current_setlist, name);
+  for (uint8_t i = 0; i < name.length(); i++) Current_setlist_buffer[SETLIST_NAME_INDEX + i] = (uint8_t) name[i];
+  for (uint8_t i = name.length(); i < 16; i++) Current_setlist_buffer[SETLIST_NAME_INDEX + i] = (uint8_t) ' ';
+  for (uint8_t i = SETLIST_NUMBER_OF_ITEMS_INDEX; i < VC_PATCH_SIZE; i++) Current_setlist_buffer[i] = 0;
+}
+
+void SCO_save_current_setlist() {
+  Current_setlist_buffer[SETLIST_TARGET_INDEX] = Current_setlist_target;
+  Current_setlist_buffer[SETLIST_NUMBER_OF_ITEMS_INDEX] = Number_of_setlist_items;
+  EEPROM_save_device_patch(EXT_SETLIST_TYPE, Current_setlist, Current_setlist_buffer, VC_PATCH_SIZE);
+}
+
+uint16_t SCO_read_setlist_item(uint16_t item) {
+  uint8_t index = SETLIST_ITEM_BASE_INDEX + (item * 3);
+  return (Current_setlist_buffer[index] << 8) + Current_setlist_buffer[index + 1];
+}
+
+uint8_t SCO_read_setlist_tempo(uint8_t item) {
+  uint8_t index = SETLIST_ITEM_BASE_INDEX + (item * 3) + 2;
+  return Current_setlist_buffer[index];
+}
+
+void SCO_setlist_set_tempo(uint16_t item) {
+  uint8_t tempo = SCO_read_setlist_tempo(item);
+  if (tempo > GLOBAL_TEMPO) SCO_set_global_tempo_press(tempo);
+}
+
+void SCO_save_setlist_item(uint8_t item) {
+  uint8_t index = SETLIST_ITEM_BASE_INDEX + (item * 3);
+  Current_setlist_buffer[index++] = Selected_setlist_item >> 8;
+  Current_setlist_buffer[index++] = Selected_setlist_item & 0xFF;
+  Current_setlist_buffer[index] = Selected_setlist_tempo; // Tempo
+}
+
+uint16_t SCO_get_patchnumber(uint8_t dev, uint16_t number) {
+  if (!SCO_setlist_active(dev + SETLIST_TARGET_FIRST_DEVICE)) return number;
+  else return SCO_read_setlist_item(number);
+}
+
+uint16_t SCO_find_number_in_setlist(uint8_t dev, uint16_t number) {
+  if (!SCO_setlist_active(dev + SETLIST_TARGET_FIRST_DEVICE)) return number;
+  for (uint8_t i = 0; i < Number_of_setlist_items; i++) {
+    if (SCO_read_setlist_item(i) == number) return i;
+  }
+  return Number_of_setlist_items;
+}
+
+void SCO_add_setlist_item() {
+  if (Current_setlist == 0) {
+    LCD_show_popup_label("Can't edit SL 0", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if (Number_of_setlist_items == 0) {
+    Current_setlist_buffer[SETLIST_TARGET_INDEX] = Current_setlist_target;
+  }
+  else if (Current_setlist_target != Current_setlist_buffer[SETLIST_TARGET_INDEX]) {
+    LCD_show_popup_label("Wrong target", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if (Number_of_setlist_items >= MAX_NUMBER_OF_SETLIST_ITEMS) {
+    LCD_show_popup_label("Setlist full", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  SCO_save_setlist_item(Number_of_setlist_items);
+  Number_of_setlist_items++;
+  Current_setlist_position = Number_of_setlist_items;
+
+  String msg = "";
+  SCO_get_setlist_order_string(Current_setlist_position, MAIN_LCD_DISPLAY_SIZE, msg);
+#ifdef IS_VCMINI
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH / 2);
+#else
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH * 2);
+#endif
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_insert_setlist_item() {
+  if (Current_setlist == 0) {
+    LCD_show_popup_label("Can't edit SL 0", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if (Number_of_setlist_items == 0) {
+    Current_setlist_buffer[SETLIST_TARGET_INDEX] = Current_setlist_target;
+  }
+  else if (Current_setlist_target != Current_setlist_buffer[SETLIST_TARGET_INDEX]) {
+    LCD_show_popup_label("Wrong target", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if (Number_of_setlist_items >= MAX_NUMBER_OF_SETLIST_ITEMS) {
+    LCD_show_popup_label("Setlist full", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  // Move exisiting items to the right
+  if (Current_setlist_position == 0) Current_setlist_position = 1;
+  for (uint8_t i = Number_of_setlist_items; i -- > (Current_setlist_position - 1);) {
+    uint8_t index = SETLIST_ITEM_BASE_INDEX + (i * 3);
+    Current_setlist_buffer[index + 3] = Current_setlist_buffer[index];
+    Current_setlist_buffer[index + 4] = Current_setlist_buffer[index + 1];
+    Current_setlist_buffer[index + 5] = Current_setlist_buffer[index + 2];
+  }
+
+  // Add new item
+  SCO_save_setlist_item(Current_setlist_position - 1);
+  Number_of_setlist_items++;
+
+  String msg = "";
+  SCO_get_setlist_order_string(Current_setlist_position, MAIN_LCD_DISPLAY_SIZE, msg);
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH * 2);
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_delete_setlist_item() {
+  if (Current_setlist == 0) {
+    LCD_show_popup_label("Can't edit SL 0", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if (Number_of_setlist_items == 0) {
+    LCD_show_popup_label("Setlist empty", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  if ((Current_setlist_position == 0) || (Current_setlist_position >= Number_of_setlist_items + 1)) {
+    LCD_show_popup_label("Select item", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+
+  // Move exisiting items to the left
+  for (uint8_t i = (Current_setlist_position - 1); i < Number_of_setlist_items; i++) {
+    uint8_t index = SETLIST_ITEM_BASE_INDEX + (i * 3);
+    Current_setlist_buffer[index] = Current_setlist_buffer[index + 3];
+    Current_setlist_buffer[index + 1] = Current_setlist_buffer[index + 4];
+    Current_setlist_buffer[index + 2] = Current_setlist_buffer[index + 5];
+  }
+
+  Number_of_setlist_items--;
+
+  String msg = "";
+  SCO_get_setlist_order_string(Current_setlist_position, MAIN_LCD_DISPLAY_SIZE, msg);
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH * 2);
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_get_setlist_order_string(uint8_t pos, uint8_t len, String &msg) {
+  String item;
+  if (pos > 0) {
+    item = "";
+    SCO_get_setlist_position_name(pos - 1, item);
+    msg += item + '>';
+  }
+  else {
+    msg += "      ";
+  }
+
+  item = "";
+  SCO_get_setlist_position_name(pos, item);
+  msg += item;
+
+  if (pos <= Number_of_setlist_items) {
+    item = "";
+    SCO_get_setlist_position_name(pos + 1, item);
+    msg += '>' + item;
+  }
+}
+
+void SCO_rename_current_setlist() {
+  if (Current_setlist == 0) {
+    LCD_show_popup_label("Can't edit SL 0", MESSAGE_TIMER_LENGTH);
+    return;
+  }
+
+  // Read patch name into Text_entry
+  Text_entry = "";
+  SCO_get_setlist_name(Current_setlist, Text_entry);
+  Text_entry_length = 16;
+  Main_menu_cursor = 1;
+
+  start_keyboard(SCO_rename_setlist_done);
+}
+
+void SCO_rename_setlist_done() {
+  for (uint8_t i = 0; i < Text_entry.length(); i++) Current_setlist_buffer[SETLIST_NAME_INDEX + i] = (uint8_t) Text_entry[i];
+  for (uint8_t i = Text_entry.length(); i < 16; i++) Current_setlist_buffer[SETLIST_NAME_INDEX + i] = (uint8_t) ' ';
+  SCO_save_current_setlist();
+}
+
+void SCO_clear_current_setlist() {
+  EEPROM_initialize_device_patch(EXT_SETLIST_TYPE, Current_setlist);
+  SCO_load_current_setlist();
+  update_page = REFRESH_PAGE;
+}
+
+bool SCO_setlist_active(uint8_t target) {
+  return ((Current_setlist > 0) && (Current_setlist_target == target) && (Number_of_setlist_items > 0));
+}
+
+// ********************************* Section 12: Song Commands ***********************************************
+
+// Song buffer structure:
+// byte 0 - 2:  Type and number
+// byte 3 - 18  Song name
+// byte 19      Part active byte
+// byte 20      Song tempo
+// byte 21      Target device #1
+// byte 22      Target device #2
+// byte 23      Target device #3
+// byte 24      Target device #4
+// byte 25      Target device #5
+// byte 26      Target #1 midi data
+// byte 27      Target #2 midi data
+// byte 28      Target #3 midi data
+// byte 29      Target #4 midi data
+// byte 30      Target #5 midi data
+// byte 31      Spare
+// byte 32 - 51 Part 1 (10 bytes name + 10 bytes for target data)
+// --
+// byte 172 - 191 Part 8
+
+#define SONG_NAME_INDEX 3
+#define SONG_NAME_SIZE 16
+#define SONG_PART_ACTIVE_INDEX 19
+#define SONG_TEMPO_INDEX 20
+#define SONG_TARGET_DEVICE1 21
+#define SONG_TARGET_DEVICE2 22
+#define SONG_TARGET_DEVICE3 23
+#define SONG_TARGET_DEVICE4 24
+#define SONG_TARGET_DEVICE5 25
+#define SONG_TARGET_MIDI_DATA1 26
+#define SONG_TARGET_MIDI_DATA2 27
+#define SONG_TARGET_MIDI_DATA3 28
+#define SONG_TARGET_MIDI_DATA4 29
+#define SONG_TARGET_MIDI_DATA5 30
+#define SONG_PART_BASE_INDEX 32
+#define SONG_PART_SIZE 20
+#define SONG_PART_NAME_SIZE 10
+
+void SCO_get_song_number_name(uint8_t number, String &name) {
+  name += "SNG";
+  LCD_add_2digit_number(number + 1, name);
+}
+
+void SCO_get_song_name(uint8_t number, String &name) {
+  if (!EEPROM_read_song_name(EXT_SONG_TYPE, number, name)) SCO_get_song_default_name(number, name);
+}
+
+void SCO_get_song_number_and_name(uint8_t number, String &name) {
+  LCD_add_2digit_number(number + 1, name);
+  name += ':';
+  SCO_get_song_name(number, name);
+}
+
+uint8_t SCO_get_song_max() {
+  if (SCO_setlist_active(SETLIST_TARGET_SONG)) return Number_of_setlist_items - 1;
+  return MAX_NUMBER_OF_SONGS - 1;
+}
+
+uint8_t SCO_get_song_number(uint8_t number) {
+  if (SCO_setlist_active(SETLIST_TARGET_SONG)) return SCO_read_setlist_item(number);
+  else return number;
+}
+
+void SCO_get_song_default_name(uint8_t number, String &name) {
+  name += "NEW SONG";
+}
+
+void SCO_get_part_number_name(uint8_t number, String &name) {
+  name += "PRT";
+  LCD_add_2digit_number(number + 1, name);
+}
+
+void SCO_get_default_part_name(uint8_t number, String &name) {
+  name += "PART " + String(number + 1);
+}
+
+void SCO_get_song_and_part_name(uint8_t song_number, uint8_t part_number, String &name) {
+  name += "SONG " + String(song_number + 1) + ", PART " + String(part_number + 1);
+}
+
+void SCO_get_song_target_name(uint8_t number, String &name) {
+  if (number == SONG_TARGET_OFF) name = "OFF";
+  if (number == SONG_TARGET_PC) name = "MIDI PC";
+  if (number == SONG_TARGET_CC) name = "MIDI CC";
+  if (number == SONG_TARGET_TEMPO) name = "TEMPO";
+  if ((number >= SONG_TARGET_FIRST_DEVICE) && (number < NUMBER_OF_DEVICES + SONG_TARGET_FIRST_DEVICE)) name = Device[number - SONG_TARGET_FIRST_DEVICE]->full_device_name;
+  //update_page = REFRESH_PAGE;
+}
+
+void SCO_get_song_item_name(uint8_t index, uint16_t item, String &name) {
+  if (index >= NUMBER_OF_SONG_TARGETS) return;
+  uint8_t target = Current_song_buffer[SONG_TARGET_DEVICE1 + index];
+  if (target == SONG_TARGET_OFF) name = "--";
+  if (target == SONG_TARGET_PC) name = "PC#" + String(item);
+  if (target == SONG_TARGET_CC) name = "CC#" + String(item >> 7) + " val:" + String(item & 0x7F);
+  if (target == SONG_TARGET_TEMPO) name = String(item + MIN_BPM) + " BPM";
+  if ((target >= SONG_TARGET_FIRST_DEVICE) && (target < NUMBER_OF_DEVICES + SONG_TARGET_FIRST_DEVICE)) Device[target - SONG_TARGET_FIRST_DEVICE]->setlist_song_full_item_format(item, name);
+}
+
+uint16_t SCO_get_song_item_max(uint8_t index) {
+  if (index >= NUMBER_OF_SONG_TARGETS) return 0;
+  uint8_t target = Current_song_buffer[SONG_TARGET_DEVICE1 + index];
+  if (target == SONG_TARGET_PC) return 127;
+  if (target == SONG_TARGET_CC) return 16383;
+  if (target == SONG_TARGET_TEMPO) return MAX_BPM - MIN_BPM;
+  if ((target >= SONG_TARGET_FIRST_DEVICE) && (target < NUMBER_OF_DEVICES + SONG_TARGET_FIRST_DEVICE)) return Device[target - SONG_TARGET_FIRST_DEVICE]->setlist_song_get_number_of_items();
+  return 0;
+}
+
+void SCO_check_update_song_item(uint8_t dev, uint16_t item) {
+  if (Current_page != PAGE_MENU) return;
+  if (current_menu != SONG_PART_EDIT_MENU) return;
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] == (dev + SONG_TARGET_FIRST_DEVICE)) {
+      Current_song_item[i] = item;
+      update_page = REFRESH_PAGE;
+    }
+  }
+}
+
+void SCO_select_song(uint8_t number) {
+  if (number == Current_song) return;
+  Current_song = number;
+  Current_part = 0;
+  SCO_load_current_song();
+  SCO_execute_current_part();
+  SCO_send_song_tempo();
+  String msg;
+  SCO_get_song_name(Current_song, msg);
+  //LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  if (device_in_bank_selection == SONG_BANK_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = 0;
+    song_bank_number = song_bank_select_number;
+  }
+  update_page = REFRESH_PAGE;
+  update_main_lcd = true;
+}
+
+void SCO_song_up_down(signed int delta) {
+  uint8_t New_song = update_encoder_value(delta, Current_song_setlist_item, 0, SCO_get_song_max());
+  Current_song_setlist_item = New_song;
+  SCO_select_song(SCO_get_song_number(New_song));
+}
+
+void SC_song_bank_updown(signed int delta, uint8_t bank_size) {
+
+  if (device_in_bank_selection != SONG_BANK_SELECTION_IN_PROGRESS) {
+    device_in_bank_selection = SONG_BANK_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
+    song_bank_number = Current_song_setlist_item / bank_size; //Reset the bank to current patch
+    song_bank_select_number = song_bank_number;
+  }
+  // Perform bank up:
+  song_bank_select_number = update_encoder_value(delta, song_bank_select_number, 0, SCO_get_song_max() / bank_size);
+
+  if (song_bank_select_number == song_bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
+}
+
+void SCO_select_part(uint8_t number) {
+  Current_part = number;
+  SCO_load_current_part();
+  SCO_execute_current_part();
+  update_page = REFRESH_PAGE;
+  String msg;
+  SCO_get_part_name(Current_part, msg);
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  device_in_bank_selection = 0;
+}
+
+void SCO_part_up_down(signed int delta) {
+  uint8_t New_part = update_encoder_value(delta, Current_part, 0, NUMBER_OF_PARTS - 1);
+  SCO_select_part(SCO_get_song_number(New_part));
+}
+
+void SCO_songpart_up_down(signed int delta) {
+  for (uint16_t i = 0; i < abs(delta); i++) {
+    uint8_t next_part = NOT_FOUND;
+    if (delta < 0) next_part = SCO_find_prev_active_part(Current_part);
+    if (delta > 0) next_part = SCO_find_next_active_part(Current_part);
+    if (next_part != NOT_FOUND) {
+      SCO_select_part(next_part);
+    }
+    else {
+      if (delta < 0) {
+        SCO_song_up_down(-1);
+        Current_part = SCO_find_prev_active_part(NUMBER_OF_PARTS);
+        if (Current_part == NOT_FOUND) Current_part = 0;
+      }
+      if (delta > 0) {
+        SCO_song_up_down(1);
+      }
+    }
+  }
+  String msg;
+  SCO_get_part_name(Current_part, msg);
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+}
+
+void SCO_rename_current_song() {
+  // Read patch name into Text_entry
+  Text_entry = "";
+  SCO_get_song_name(Current_song, Text_entry);
+  Text_entry_length = SONG_NAME_SIZE;
+  Main_menu_cursor = 1;
+
+  start_keyboard(SCO_rename_song_done);
+}
+
+void SCO_rename_song_done() {
+  for (uint8_t i = 0; i < Text_entry.length(); i++) Current_song_buffer[SONG_NAME_INDEX + i] = (uint8_t) Text_entry[i];
+  for (uint8_t i = Text_entry.length(); i < SONG_NAME_SIZE; i++) Current_song_buffer[SONG_NAME_INDEX + i] = (uint8_t) ' ';
+  //SCO_save_current_setlist();
+}
+
+void SCO_rename_current_part() {
+  // Read patch name into Text_entry
+  Text_entry = "";
+  SCO_get_part_name(Current_part, Text_entry);
+  Text_entry_length = SONG_PART_NAME_SIZE;
+  Main_menu_cursor = 1;
+
+  start_keyboard(SCO_rename_part_done);
+}
+
+void SCO_rename_part_done() {
+  SCO_set_part_name(Current_part, Text_entry);
+  SCO_save_current_song();
+}
+
+void SCO_save_current_song() {
+  SCO_save_current_part();
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    Current_song_buffer[SONG_TARGET_MIDI_DATA1 + i] = (Current_song_midi_port[i] << 4) + (Current_song_midi_channel[i] - 1);
+  }
+  EEPROM_save_device_patch(EXT_SONG_TYPE, Current_song, Current_song_buffer, VC_PATCH_SIZE);
+}
+
+void SCO_save_current_part() {
+  uint8_t part_index = SONG_PART_BASE_INDEX + SONG_PART_NAME_SIZE + (SONG_PART_SIZE * Current_part);
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    Current_song_buffer[part_index++] = Current_song_item[i] >> 8;
+    Current_song_buffer[part_index++] = Current_song_item[i] & 0xFF;
+  }
+  SCO_set_part_active(Current_part);
+}
+
+void SCO_load_current_song() {
+  bool loaded = EEPROM_load_device_patch(EXT_SONG_TYPE, Current_song, Current_song_buffer, VC_PATCH_SIZE);
+  if (!loaded) {
+    SCO_load_song_buffer_with_empty_song();
+  }
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    Current_song_midi_port[i] = (Current_song_buffer[SONG_TARGET_MIDI_DATA1 + i] >> 4);
+    Current_song_midi_channel[i] = (Current_song_buffer[SONG_TARGET_MIDI_DATA1 + i] & 0x0F) + 1;
+    DEBUGMSG("Target: " + String(i) + ": port " + String(Current_song_midi_port[i]) + " and channel " + String(Current_song_midi_channel[i]));
+  }
+  SCO_load_current_part();
+}
+
+void SCO_load_current_part() {
+  uint8_t part_index = SONG_PART_BASE_INDEX + SONG_PART_NAME_SIZE + (SONG_PART_SIZE * Current_part);
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    Current_song_item[i] = (Current_song_buffer[part_index] << 8) + Current_song_buffer[part_index + 1];
+    part_index += 2;
+  }
+}
+
+void SCO_load_song_buffer_with_empty_song() {
+  String name;
+  SCO_get_song_default_name(Current_song, name);
+  for (uint8_t i = 0; i < name.length(); i++) Current_song_buffer[SONG_NAME_INDEX + i] = (uint8_t) name[i];
+  for (uint8_t i = name.length(); i < SONG_NAME_SIZE; i++) Current_song_buffer[SONG_NAME_INDEX + i] = (uint8_t) ' ';
+  Current_song_buffer[SONG_PART_ACTIVE_INDEX] = 0;
+  Current_song_buffer[SONG_TEMPO_INDEX] = GLOBAL_TEMPO;
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    Current_song_buffer[SONG_TARGET_DEVICE1 + i] = 0;
+    Current_song_buffer[SONG_TARGET_MIDI_DATA1 + i] = 0;
+  }
+
+  for (uint8_t part = 0; part < NUMBER_OF_PARTS; part++) {
+    name = "";
+    SCO_get_default_part_name(part, name);
+    SCO_set_part_name(part, name);
+    uint8_t part_index = SONG_PART_BASE_INDEX + (SONG_PART_SIZE * part);
+    for (uint8_t i = SONG_NAME_SIZE; i < SONG_PART_SIZE; i++) Current_song_buffer[part_index + i] = 0;
+  }
+}
+
+void SCO_execute_current_part() {
+  if (!SCO_check_part_active(Current_part)) return;
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    uint8_t target = Current_song_buffer[SONG_TARGET_DEVICE1 + i];
+    if (target == SONG_TARGET_PC) {
+      MIDI_send_PC(Current_song_item[i], Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i])); // Program, Channel, Port
+      MIDI_update_PC_ledger(Current_song_item[i], Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i]), true);
+    }
+    if (target == SONG_TARGET_CC) {
+      MIDI_send_CC(Current_song_item[i] >> 7, Current_song_item[i] & 0x7F, Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i])); // Controller, Value, Channel, Port
+      MIDI_update_CC_ledger(Current_song_item[i] >> 7, Current_song_item[i] & 0x7F, Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i]), true);
+    }
+    if (target == SONG_TARGET_TEMPO) {
+      SCO_set_global_tempo_press(Current_song_item[i] + MIN_BPM);
+    }
+    if ((target >= SONG_TARGET_FIRST_DEVICE) && (target < (NUMBER_OF_DEVICES + SONG_TARGET_FIRST_DEVICE))) {
+      Device[target - SONG_TARGET_FIRST_DEVICE]->setlist_song_select(Current_song_item[i]);
+    }
+  }
+}
+
+void SCO_send_song_tempo() {
+  uint8_t tempo = Current_song_buffer[SONG_TEMPO_INDEX];
+  if (tempo > GLOBAL_TEMPO) SCO_set_global_tempo_press(tempo);
+}
+
+void SCO_load_current_device_state_in_song() {
+  // Check devices
+  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    if (Device[d]->connected) {
+      uint8_t index = SCO_find_target_index(d + SONG_TARGET_FIRST_DEVICE, true);
+      if (index != NOT_FOUND) Current_song_item[index] = Device[d]->setlist_song_get_current_item_state();
+    }
+  }
+
+  // Check PC
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] == SONG_TARGET_PC) {
+      uint8_t pc_value = MIDI_recall_PC(Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i]));
+      if (pc_value != NOT_FOUND) Current_song_item[i] = pc_value;
+    }
+  }
+
+  // Check CC
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] == SONG_TARGET_CC) {
+      uint8_t cc = SCO_find_CC_in_current_song(i);
+      if (cc != NOT_FOUND) {
+        uint8_t cc_value = MIDI_recall_CC(cc, Current_song_midi_channel[i], MIDI_set_port_number_from_menu(Current_song_midi_port[i]));
+        if (cc_value != NOT_FOUND) Current_song_item[i] = (cc << 7) + cc_value;
+      }
+    }
+  }
+
+  // Check tempo
+  uint8_t index = SCO_find_target_index(SONG_TARGET_TEMPO, false);
+  if (index != NOT_FOUND) {
+    Current_song_item[index] = Setting.Bpm - MIN_BPM;
+  }
+  else if (tempo_edited) {
+    Current_song_buffer[SONG_TEMPO_INDEX] = Setting.Bpm;
+  }
+  else Current_song_buffer[SONG_TEMPO_INDEX] = GLOBAL_TEMPO;
+
+  SCO_save_current_part();
+}
+
+uint8_t SCO_find_target_index(uint8_t target, bool add_new) {
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] == target) return i;
+  }
+  // Create new target if possible
+  if (add_new) {
+    for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+      if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] == 0) {
+        Current_song_buffer[SONG_TARGET_DEVICE1 + i] = target;
+        return i;
+      }
+    }
+  }
+  return NOT_FOUND;
+}
+
+uint8_t SCO_find_CC_in_current_song(uint8_t target) {
+  for (uint8_t part = 0; part < NUMBER_OF_PARTS; part++) {
+    uint8_t index = SONG_PART_BASE_INDEX + SONG_PART_NAME_SIZE + (SONG_PART_SIZE * part) + (target * 2);
+    uint16_t item = (Current_song_buffer[index] << 8) + Current_song_buffer[index + 1];
+    if (item > 0) return (item >> 7);
+  }
+  return NOT_FOUND;
+}
+
+void SCO_clear_current_song() {
+  EEPROM_initialize_device_patch(EXT_SONG_TYPE, Current_song);
+  SCO_load_current_song();
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_get_part_name(uint8_t part, String &name) {
+  if (part >= NUMBER_OF_PARTS) return;
+  uint8_t part_index = SONG_PART_BASE_INDEX + (SONG_PART_SIZE * part);
+  for (uint8_t i = 0; i < SONG_PART_NAME_SIZE; i++) name += (char)Current_song_buffer[part_index++];
+}
+
+void SCO_set_part_name(uint8_t part, String name) {
+  if (part >= NUMBER_OF_PARTS) return;
+  uint8_t len = name.length();
+  if (len > SONG_PART_NAME_SIZE) len = SONG_PART_NAME_SIZE;
+  uint8_t part_index = SONG_PART_BASE_INDEX + (SONG_PART_SIZE * part);
+  for (uint8_t i = 0; i < len; i++) Current_song_buffer[part_index++] = name[i];
+  for (uint8_t i = len; i < SONG_PART_NAME_SIZE; i++) Current_song_buffer[part_index++] = ' ';
+}
+
+void SCO_new_song_selected_in_menu() {
+  SCO_load_current_song();
+  Current_part = 0;
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_new_song_part_selected_in_menu() {
+  SCO_load_current_part();
+  update_page = REFRESH_PAGE;
+}
+
+void SCO_new_song_target_selected_in_menu() {
+  SCO_load_current_part();
+  update_page = REFRESH_PAGE;
+}
+
+bool SCO_check_part_active(uint8_t part) {
+  if (part >= NUMBER_OF_PARTS) return false;
+  return ((Current_song_buffer[SONG_PART_ACTIVE_INDEX] & (1 << part)) != 0);
+}
+
+void SCO_set_part_active(uint8_t part) {
+  if (part >= NUMBER_OF_PARTS) return;
+  bitSet(Current_song_buffer[SONG_PART_ACTIVE_INDEX], part);
+}
+
+uint8_t SCO_find_prev_active_part(uint8_t cur_part) {
+  if (cur_part == 0) return NOT_FOUND;
+  for (uint8_t part = cur_part; part -- > 0;) {
+    if (SCO_check_part_active(part)) return part;
+  }
+  return NOT_FOUND;
+}
+
+uint8_t SCO_find_next_active_part(uint8_t cur_part) {
+  if (cur_part >= (NUMBER_OF_PARTS - 1)) return NOT_FOUND;
+  for (uint8_t part = cur_part + 1; part < NUMBER_OF_PARTS; part++) {
+    if (SCO_check_part_active(part)) return part;
+  }
+  return NOT_FOUND;
+}
+
+bool SCO_check_song_target_set() {
+  for (uint8_t i = 0; i < NUMBER_OF_SONG_TARGETS; i++) {
+    if (Current_song_buffer[SONG_TARGET_DEVICE1 + i] > 0) return true;
+  }
   return false;
 }

@@ -3,12 +3,14 @@
 #ifndef HARDWARE_VCM_B_H
 #define HARDWARE_VCM_B_H
 
-// This file contains all the hardware settings for the VController Production Model version 1.
+// This file contains all the hardware settings for the VC-mini using the Teensy 3.6.
 // Make sure you include this file when updating to new firmware
 
 #define VC_NAME "VC-mini"
 
 #define IS_VCMINI // Will give the alternative configuration as defined in Config.ino
+#define HARDWARE_VERSION 3
+
 
 // Choose which configuration for the switches is chosen in Config.ino
 //#define CONFIG_VCONTROLLER
@@ -70,6 +72,8 @@
 #define ENCODER2_A_PIN 20
 #define ENCODER2_B_PIN 21
 #define ENCODER2_SWITCH_PIN 25
+
+#define ENCODER2_PRESS_SWITCH_NUMBER 7
 
 
 // *** Switches and expression pedals (external)
@@ -165,27 +169,37 @@
 // Names and numbers of ports
 #define PORT1_NAME "USB MIDI"
 #define PORT1_TYPE USBMIDI_PORT
+#define PORT1_NUMBER 0
 
 #define PORT2_NAME "USB MIDI HOST"
 #define PORT2_TYPE USBHMIDI_PORT
+#define PORT2_NUMBER 1
 
 #define PORT3_NAME "MIDI 1"
 #define PORT3_TYPE MIDI1_PORT
+#define PORT3_NUMBER 2
 
 #define PORT4_NAME "MIDI 2"
 #define PORT4_TYPE MIDI2_PORT
+#define PORT4_NUMBER 3
 
 #define PORT5_NAME "ALL MIDI PORTS"
 #define PORT5_TYPE ALL_MIDI_PORTS
+#define PORT5_NUMBER 4
+
 #define PORT6_NAME ""
 #define PORT6_TYPE USBMIDI_PORT
+#define PORT6_NUMBER 5
 
 #define PORT7_NAME ""
 #define PORT7_TYPE USBMIDI_PORT
+#define PORT7_NUMBER 6
 
 #define PORT8_NAME ""
 #define PORT8_TYPE USBMIDI_PORT
+#define PORT8_NUMBER 7
 
 #define PORT9_NAME ""
 #define PORT9_TYPE USBMIDI_PORT
+#define PORT9_NUMBER 8
 #endif

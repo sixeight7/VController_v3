@@ -7,6 +7,7 @@
 // Make sure you include this file when updating to new firmware
 
 #define VC_NAME "V-Controller"
+#define HARDWARE_VERSION 2
 
 // Choose which configuration for the switches is chosen in Config.ino
 #define CONFIG_VCONTROLLER
@@ -141,28 +142,37 @@
 // Names and numbers of ports
 #define PORT1_NAME "USB MIDI"
 #define PORT1_TYPE USBMIDI_PORT
+#define PORT1_NUMBER 0
 
 #define PORT2_NAME "MIDI 1"
 #define PORT2_TYPE MIDI1_PORT
+#define PORT2_NUMBER 1
 
 #define PORT3_NAME "MIDI 2"
 #define PORT3_TYPE MIDI2_PORT
+#define PORT3_NUMBER 2
 
 #define PORT4_NAME "INT RPI MIDI"
 #define PORT4_TYPE MIDI3_PORT
+#define PORT4_NUMBER 3
 
 #define PORT5_NAME "ALL MIDI PORTS"
 #define PORT5_TYPE ALL_MIDI_PORTS
+#define PORT5_NUMBER 4
 
 #define PORT6_NAME ""
 #define PORT6_TYPE USBMIDI_PORT
+#define PORT6_NUMBER 5
 
 #define PORT7_NAME ""
 #define PORT7_TYPE USBMIDI_PORT
+#define PORT7_NUMBER 6
 
 #define PORT8_NAME ""
 #define PORT8_TYPE USBMIDI_PORT
+#define PORT8_NUMBER 7
 
 #define PORT9_NAME ""
 #define PORT9_TYPE USBMIDI_PORT
+#define PORT9_NUMBER 8
 #endif

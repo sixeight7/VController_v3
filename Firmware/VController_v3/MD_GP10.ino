@@ -56,16 +56,21 @@ FLASHMEM void MD_GP10_class::init() { // Default values for variables
   MIDI_channel = GP10_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(GP10_MIDI_PORT); // Default value
   is_always_on = true; // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = GP10_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = GP10_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = GP10_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = GP10_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = GP10_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = GP10_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = GP10_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = GP10_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = GP10_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = GP10_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = GP10_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = GP10_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = GP10_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = GP10_DEFAULT_VC_PAGE2; // Default value
@@ -94,8 +99,7 @@ FLASHMEM void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short u
     // Check if it is the patch number
     if ((address == 0x00000000) && (checksum_ok)) {
       if (patch_number != sxdata[12]) { //Right after a patch change the patch number is sent again. So here we catch that message.
-        prev_patch_number = patch_number;
-        patch_number = sxdata[12];
+        set_patch_number(sxdata[12]);
         //page_check();
         do_after_patch_selection();
         update_page = REFRESH_PAGE;
@@ -181,8 +185,7 @@ FLASHMEM void MD_GP10_class::check_PC_in(uint8_t program, uint8_t channel, uint8
   // Check the source by checking the channel
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // GP10 sends a program change
     if (patch_number != program) {
-      prev_patch_number = patch_number;
-      patch_number = program;
+      set_patch_number(program);
       request_sysex(GP10_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
       do_after_patch_selection();

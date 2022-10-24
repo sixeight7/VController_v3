@@ -89,16 +89,21 @@ FLASHMEM void MD_KTN_class::init() { // Default values for variables
   my_LED_colour = 2; // Default value: red
   MIDI_channel = KTN_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(KTN_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = KTN_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = KTN_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = KTN_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = KTN_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = KTN_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = KTN_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = KTN_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = KTN_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = KTN_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = KTN_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = KTN_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = KTN_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = KTN_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = KTN_DEFAULT_VC_PAGE2; // Default value
@@ -255,7 +260,7 @@ FLASHMEM void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short un
 
     if ((address == KTN_CURRENT_PATCH_NUMBER_ADDRESS) && (checksum_ok)) { // check if we are reading the current patch number
       if (patch_number < 10) { // Check if we are not already on a VController patch
-        patch_number = sxdata[13];
+        set_patch_number(sxdata[13]);
         prev_patch_number = patch_number;
         do_after_patch_selection();
       }
@@ -301,8 +306,7 @@ FLASHMEM void MD_KTN_class::forward_MIDI_message(const unsigned char* sxdata, sh
     // Pull out the patch number
     if ((sxdata[7] == 0x12) && (sxdata[8] == 0x10) && (sxdata[10] == 0x00) && (sxdata[11] == 0x00)) {
       if (sxdata[9] < 8) {
-        prev_patch_number = patch_number;
-        patch_number = sxdata[9];
+        set_patch_number(sxdata[9]);
         do_after_patch_selection();
         update_page = REFRESH_PAGE;
       }
@@ -319,8 +323,7 @@ FLASHMEM void MD_KTN_class::check_PC_in(uint8_t program, uint8_t channel, uint8_
     else if (program < 4) new_patch_number = program + 1; // CH1 - CH4
     else new_patch_number = program; // CH5 - CH8
     if (patch_number != new_patch_number) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch_number;
+      set_patch_number(new_patch_number);
       request_current_patch_name();
       do_after_patch_selection();
       update_page = REFRESH_PAGE;
@@ -338,8 +341,7 @@ FLASHMEM void MD_KTN_class::forward_PC_message(uint8_t program, uint8_t channel)
     else if (program < 4) new_patch_number = program + 1; // CH1 - CH4
     else new_patch_number = program; // CH5 - CH8
     if (patch_number != new_patch_number) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch_number;
+      set_patch_number(new_patch_number);
       //request_current_patch_name();
       //do_after_patch_selection();
       if (!PAGE_check_on_page(my_device_number, patch_number)) { // Check if patch is on the page
@@ -476,8 +478,7 @@ FLASHMEM void MD_KTN_class::select_patch(uint16_t new_patch) {
   if (new_patch == patch_number) {
     unmute();
   }
-  prev_patch_number = patch_number;
-  patch_number = new_patch;
+  set_patch_number(new_patch);
   uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
   if (new_patch <= number_of_channels) {
     // Order of patches is not logical, so we have to fix it
@@ -586,7 +587,7 @@ FLASHMEM void MD_KTN_class::direct_select_format(uint16_t number, String &Output
 
 FLASHMEM bool MD_KTN_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
-  if (direct_select_state == 0) { // Show all switches on first digit
+  if (direct_select_state == 0) {
     result = ((number * KTN_BANK_SIZE) + (bank_select_number * KTN_BANK_SIZE * 10) <= (patch_max - patch_min));
   }
   else {
@@ -1068,9 +1069,8 @@ FLASHMEM void MD_KTN_class::read_patch_message(uint8_t number, const unsigned ch
       // Dump data (debug)
       MIDI_debug_sysex(KTN_patch_buffer, VC_PATCH_SIZE, 255, true);
 
-      open_menu_for_Katana_patch_save = true;
+      open_specific_menu = KTN + 1;
       SCO_select_page(PAGE_MENU); // Open the menu
-      open_menu_for_Katana_patch_save = false;
     }
   }
 }
@@ -1202,8 +1202,8 @@ const PROGMEM KTN_parameter_struct KTN_parameters[] = {
   {0xB003, 0xB003, 101, "PDL PAR 04", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB004, 0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB005, 0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-  {0x0030, 0x0010,   2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0031, 0x0011,  22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0030, 0x0010,   2, "BOOST", 302 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0031, 0x0011,  24, "BST TP", 302, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0032, 0x0012, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
   {0x0033, 0x0013, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0034, 0x0014, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
@@ -1634,7 +1634,7 @@ const PROGMEM KTN_fx_parameter_struct KTN_fx_parameters[] = {
 const uint16_t KTN_NUMBER_OF_FX_PARAMETERS = sizeof(KTN_fx_parameters) / sizeof(KTN_fx_parameters[0]);
 
 const PROGMEM char KTN_sublists[][9] = {
-  // Sublist 1 - 22: Booster types
+  // Sublist 1 - 24: Booster types - new booster types at the end of the list!!!
   "MILD B", "CLEAN B", "TREBLE B", "CRUNCH", "NAT OD", "WARM OD", "FAT DS", "LEAD DS", "METAL DS", "OCT.FUZZ",
   "BLUES OD", "OD-1", "TUBESCRM", "TURBO OD", "DIST", "RAT", "GUVNR DS", "DST+", "METAL ZN", "60s FUZZ",
   "MUFF FZ", "CUSTOM",
@@ -1770,6 +1770,11 @@ const PROGMEM char KTN_sublists[][9] = {
 
   // Sublist 293 - 301: EXP assign type
   "VOLUME", "FOOTVOL", "FV/WAH", "BOOSTER", "MOD", "DELAY1", "FX", "DELAY2", "REVERB",
+
+  // Sublist 302 - 325: New booster types
+  "MILD B", "CLEAN B", "TREBLE B", "CRUNCH", "NAT OD", "WARM OD", "FAT DS", "LEAD DS", "METAL DS", "OCT.FUZZ",
+  "BLUES OD", "OD-1", "TUBESCRM", "TURBO OD", "DIST", "RAT", "GUVNR DS", "DST+", "METAL ZN", "60s FUZZ",
+  "MUFF FZ", "HM-2", "MTL CORE", "CENTA OD",
 };
 
 #define KTN_FX_TYPE_SUBLIST 23
@@ -2337,7 +2342,7 @@ FLASHMEM uint16_t MD_KTN_class::get_parbank_parameter_id(uint16_t par_number) {
       active_fx_number++;
     }
   }
-  return 65535; // No parameters in this category
+  return NO_RESULT; // No parameters in this category
 }
 
 FLASHMEM uint8_t MD_KTN_class::number_of_values(uint16_t index) {

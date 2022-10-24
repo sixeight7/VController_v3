@@ -2,7 +2,7 @@
 **
 ** Copyright (C) 2015 Catrinus Feddema
 ** All rights reserved.
-** This file is part of "VController v2" teensy software.
+** This file is part of "VController v3" teensy software.
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License as published by
@@ -37,19 +37,23 @@
 
 // Hardware of production model
 //#include "hardware.h"
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
+// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII, disable debug!
 
-// Hardware of VC-mini rev. B
-#include "hardware_VCmini_b.h"
+// Hardware of VC-mini rev. B (Teensy 3.6)
+//#include "hardware_VCmini_b.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
 
 // Hardware of production model
-//#include "hardware_VCtouch.h"
+#include "hardware_VCtouch.h"
 // Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
 // Hardware of VController V1 model of sixeight
 //#include "hardware1.h"
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
+
+// Hardware of VC-mini rev. B (Teensy 4.1)
+//#include "hardware_VCmini_41.h"
+// Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
 // Hardware of VController model of Willem Smith
 //#include "hardware_WS.h"
@@ -64,6 +68,14 @@
 
 // ********************************* Section 2: Library declaration and main setup() and loop() ********************************************
 
+// Used libraries:
+// * https://github.com/sixeight7/ER-TFTM0784-1
+// * https://github.com/sixeight7/arduino-goodix
+// * https://github.com/sixeight7/extEEPROM
+// * https://github.com/sixeight7/MIDI4.3 
+// * https://github.com/sixeight7/encoder
+// * https://github.com/sixeight7/LiquidCrystal
+
 #if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
 #include <i2c_t3.h>
 #else
@@ -76,11 +88,12 @@
 #include <Goodix.h> // Must be declared on first page, otherwise sketch will not compile
 #endif
 
+#define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 10
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
+
 #include "debug.h"
 #include "globals.h"
-#define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 9
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 void setup() {
   SCO_switch_power_on();
@@ -106,6 +119,7 @@ void setup() {
   setup_page();
   setup_MIDI_common();
   check_all_devices_for_manual_connection();
+  DEBUGMAIN("Setup finished");
 }
 
 void loop() {
@@ -358,4 +372,24 @@ void loop() {
   28-02-2022 VC-touch: Titles and labels of switches now contain 16 characters. Text is compressed slightly by eating one pixel of the width of each character.
   01-03-2022 A VC-device can now be extended with another VC-device, by connecting them together. Patches, scenes, tempo, tuner and looper status are synced between the devices. (work in progress)
   12-03-2022 Release of firmware 3.9.0
+  14-03-2022 Added menu item firmware/sync patches to pull all patches from another VC device that is connected bi-directionally 
+  21-03-2022 Made new hardware file for the VC-mini based upon the Teensy 4.1
+  11-04-2022 KPA: fixed not connecting to firmware 3.9.0
+  16-04-2022 KPA: fixed tap tempo and allowed for larger rig names on VC-touch.
+  29-04-2022 VC-touch: fixed wireless module not connecting to WIDI-master. Also implemented slower connection to editor, so VC-edit can connect wirelessly.
+  02-05-2022 MIDI PC: Added PREV, NEXT and BANK select options for it.
+  09-05-2022 VC-touch: fixed expression pedal freezing the switches occasionally.
+  14-05-2022 MIDI PC/CC/NOTE ON/OFF: New port numbering system was not properly implemented, leading to errors. This has been fixed.
+  16-05-2022 VC-touch: centered text is now perfectly centered on display.
+  27-05-2022 VC-touch: added menu icon to touch screen
+  28-05-2022 KPA: slots are now controlled via snapscenes. Support for morphing through snapscenes. Also performance names are stored in EEPROM for easy browsing.
+  13-06-2022 Setlist/song: command structure built for both
+  21-09-2022 Added SONG mode, PAGE mode and DEVICE mode to make it clearer that the VC can be used in three ways.
+  29-07-2022 Setlist/song: further implemented for VC-touch.
+  17-08-2022 Setlist/song: implementation for VC-mini
+  02-09-2022 Fixed bug in MENU - PROGRAM SWITCHES where PATCH SELECT was not showing the correct number of patches for certain devices (Katana) both on the unit and in VC-edit.
+  03-09-2022 Fixed incorrect cursor position in text entry on VC-mini
+  05-09-2022 VC-touch now uses both memory chips (24LC512) and can store 3225 commands, 300 patches and 64 sequences.
+  05-09-2022 Added MIDI more command with option to send MIDI start and stop or toggle them.
+  21-10-2022 SY-1000: Fixed the normal input not restoring properly from scenes when Quiet scene change was active. Thanks Brad for pointing it out.
   */

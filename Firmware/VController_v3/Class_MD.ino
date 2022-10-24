@@ -49,6 +49,7 @@ class MD_base_class
     virtual void forward_PC_message(uint8_t  program, uint8_t  channel);
     virtual void check_CC_in(uint8_t  control, uint8_t  value, uint8_t  channel, uint8_t  port);
     virtual void check_active_sense_in(uint8_t  port);
+    void set_patch_number(uint16_t number);
 
     // Device connection procedures
     virtual void check_still_connected();
@@ -76,17 +77,25 @@ class MD_base_class
     virtual bool  request_patch_name(uint8_t  sw, uint16_t  number);
     virtual void request_current_patch_name();
     uint16_t  calculate_patch_number(uint8_t  bank_position, uint8_t  bank_size);
-    bool  patch_select_pressed(uint16_t  new_patch);
-    uint16_t  calculate_prev_patch_number();
-    uint16_t  calculate_next_patch_number();
+    bool  patch_select_pressed(uint16_t  new_patch, uint8_t sw);
+    uint16_t calculate_prev_next_patch_number(signed int delta);
     void bank_updown(signed int delta, uint8_t  my_bank_size);
     bool  bank_selection_active();
     void update_bank_number(uint16_t  number);
     void update_bank_size(uint8_t  b_size);
-    virtual void request_bank_name(signed int delta, uint16_t  number);
     virtual bool  flash_LEDs_for_patch_bank_switch(uint8_t  sw);
     void display_patch_number_string();
     virtual void number_format(uint16_t  number, String &Output);
+    uint16_t get_patch_min();
+    uint16_t get_patch_max();
+
+    // Setlist/song select
+    virtual void setlist_song_select(uint16_t item);
+    virtual uint16_t setlist_song_get_current_item_state();
+    virtual uint16_t setlist_song_get_number_of_items();
+    virtual void setlist_song_full_item_format(uint16_t item, String &Output);
+    virtual void setlist_song_short_item_format(uint16_t item, String &Output);
+    uint16_t patch_number_in_current_setlist(uint16_t number);
 
     // Direct select procedures
     virtual void direct_select_format(uint16_t  number, String &Output);
@@ -145,9 +154,11 @@ class MD_base_class
 
     // Snapshot/sceme selection procedures
     virtual void get_snapscene_title(uint8_t  number, String &Output);
+    virtual void get_snapscene_title_short(uint8_t  number, String &Output);
     virtual void get_snapscene_label(uint8_t  number, String &Output);
     virtual bool  request_snapscene_name(uint8_t  sw, uint8_t sw1, uint8_t sw2, uint8_t sw3);
     virtual void set_snapscene(uint8_t  sw, uint8_t  number);
+    virtual void release_snapscene(uint8_t  sw, uint8_t  number);
     virtual void show_snapscene(uint8_t  number);
     virtual void snapscene_number_format(String &Output);
     virtual bool  check_snapscene_active(uint8_t  scene);
@@ -169,11 +180,13 @@ class MD_base_class
     char device_name[8];
     char full_device_name[17];
     uint8_t  my_LED_colour;  // Variable no.1
+    uint8_t my_snapscene_colour = 2;
     uint8_t  MIDI_channel;  // Variable no.2
     uint8_t  MIDI_in_port = 0;
     uint8_t MIDI_out_port = 0;
     uint8_t  MIDI_port_manual = 0; // Variable no.4
     uint8_t  MIDI_device_id; // Variable no.3
+    uint16_t setlist_item_number = 0;
     uint16_t  patch_number = 0;
     uint16_t  prev_patch_number = 0;
     uint8_t  patch_number_offset = 1; // Is the first patch numbered one or zero?
@@ -261,6 +274,9 @@ class MD_base_class
 
 uint8_t  device_in_bank_selection = 0; // One global variable for all devices to keep track of bank selection
 #define PAGE_BANK_SELECTION_IN_PROGRESS 255
+#define MIDI_PC_SELECTION_IN_PROGRESS 254
+#define SETLIST_BANK_SELECTION_IN_PROGRESS 253
+#define SONG_BANK_SELECTION_IN_PROGRESS 252
 
 // ********************************* Section 2: MD_GP10_class declaration (derived) ********************************************
 
@@ -543,7 +559,7 @@ class MD_VG99_class : public MD_base_class
     uint8_t  FC300_device_id;
     bool  edit_mode = false;
     uint32_t  edit_mode_return_timer = 0;
-    #define VG99_EDIT_MODE_RETURN_TIME 100
+#define VG99_EDIT_MODE_RETURN_TIME 100
     bool edit_return_timer_running = false;
 };
 
@@ -775,6 +791,13 @@ class MD_HLX_class : public MD_base_class
     virtual bool  flash_LEDs_for_patch_bank_switch(uint8_t  sw);
     virtual void number_format(uint16_t  number, String &Output);
 
+    // Setlist/song select
+    virtual void setlist_song_select(uint16_t item);
+    virtual uint16_t setlist_song_get_current_item_state();
+    virtual uint16_t setlist_song_get_number_of_items();
+    virtual void setlist_song_full_item_format(uint16_t item, String &Output);
+    virtual void setlist_song_short_item_format(uint16_t item, String &Output);
+    
     // Direct select procedures
     virtual void direct_select_format(uint16_t  number, String &Output);
     virtual bool  valid_direct_select_switch(uint8_t  number);
@@ -1034,7 +1057,7 @@ class MD_KTN_class : public MD_base_class
     uint8_t  current_pedal_type = 0;
     uint8_t  current_midi_message; // Used for reading the patch from the Katana
     uint32_t  current_midi_message_address;
-    uint8_t  save_patch_number = 0;
+    uint16_t  save_patch_number = 0;
     uint32_t  midi_timer;
     uint8_t  prev_channel_number = 255;
     bool  editor_connected = false;
@@ -1056,7 +1079,7 @@ class MD_KPA_class : public MD_base_class
     // Midi in procedures
     virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t  port);
     virtual void check_PC_in(uint8_t  program, uint8_t  channel, uint8_t  port);
-    //virtual void check_CC_in(uint8_t  control, uint8_t  value, uint8_t  channel, uint8_t  port);
+    virtual void check_CC_in(uint8_t  control, uint8_t  value, uint8_t  channel, uint8_t  port);
 
     // Device connection procedures
     virtual void check_active_sense_in(uint8_t  port);
@@ -1082,20 +1105,35 @@ class MD_KPA_class : public MD_base_class
     //void preselect_performance(uint16_t  number);
     virtual bool  request_patch_name(uint8_t  sw, uint16_t  number);
     virtual void request_current_patch_name();
-    virtual void request_bank_name(signed int delta, uint16_t  number);
     virtual void number_format(uint16_t  number, String &Output);
+    void page_update_timer_check();
+    void check_write_performance_name(uint16_t number, String pname);
+    void clear_performance_name(uint16_t number);
+    bool read_performance_name(uint16_t number, String &pname);
+    void check_after_editor_patch_dump();
 
+    // Setlist/song select
+    /*virtual void setlist_song_select(uint16_t item);
+    virtual uint16_t setlist_song_get_current_item_state();
+    virtual uint16_t setlist_song_get_number_of_items();
+    virtual void setlist_song_full_item_format(uint16_t item, String &Output);
+    virtual void setlist_song_short_item_format(uint16_t item, String &Output);*/
+    
     // Direct select procedures
     virtual void direct_select_format(uint16_t  number, String &Output);
-    virtual bool  valid_direct_select_switch(uint8_t  number);
+    virtual bool valid_direct_select_switch(uint8_t  number);
     virtual void direct_select_start();
     virtual void direct_select_press(uint8_t  number);
 
     // Snapshot/sceme selection procedures
-    //virtual void get_snapscene_title(uint8_t  number, String &Output);
-    //virtual bool  request_snapscene_name(uint8_t  sw, uint8_t sw1, uint8_t sw2, uint8_t sw3);
-    //virtual void set_snapscene(uint8_t  sw, uint8_t  number);
-    //virtual bool  flash_LEDs_for_patch_bank_switch(uint8_t  sw);
+    virtual void get_snapscene_title(uint8_t  number, String &Output);
+    virtual void get_snapscene_title_short(uint8_t  number, String &Output);
+    virtual bool request_snapscene_name(uint8_t  sw, uint8_t sw1, uint8_t sw2, uint8_t sw3);
+    virtual void get_snapscene_label(uint8_t  number, String &Output);
+    virtual void set_snapscene(uint8_t  sw, uint8_t  number);
+    virtual void release_snapscene(uint8_t  sw, uint8_t  number);
+    virtual void show_snapscene(uint8_t  number);
+    virtual void snapscene_number_format(String &Output);
 
     // Parameter control procedures
     virtual void read_parameter_title(uint16_t  number, String &Output);
@@ -1103,6 +1141,7 @@ class MD_KPA_class : public MD_base_class
     virtual void read_parameter_value_name(uint16_t  number, uint16_t  value, String &Output);
     void clear_FX_states();
     void set_FX_state(uint8_t  index, bool  state);
+    void set_mode(uint8_t mode);
     virtual void parameter_press(uint8_t  Sw, Cmd_struct *cmd, uint16_t  number);
     virtual void parameter_release(uint8_t  Sw, Cmd_struct *cmd, uint16_t  number);
     virtual bool  request_parameter(uint8_t  sw, uint16_t  number);
@@ -1133,8 +1172,21 @@ class MD_KPA_class : public MD_base_class
 #define KPA_NUMBER_OF_FX 18
     uint8_t  effect_state[KPA_NUMBER_OF_FX];
     uint8_t  last_looper_cmd;
-    bool  performance_name_requested = false;
-    //uint8_t  flash_bank_of_five;
+    String current_snapscene_label;
+    bool send_morph_message;
+    uint32_t page_update_timer;
+#define KPA_PAGE_UPDATE_TIME 500
+    uint8_t KPA_name_buffer[VC_PATCH_SIZE];
+    uint16_t current_buffer_number = 0;
+#define KPA_SLOT_COLOUR LED_BLUE
+    uint32_t pc_change_timeout = 0;
+#define PC_CHANGE_TIME 1500
+    uint8_t performance_on_kpa = 255;
+    bool ready_to_read_rig_name = false;
+    String last_read_rig_name = "";
+    uint8_t last_checked_rig_number = 255;
+#define KPA_RIG_BASE_NUMBER 200
+    bool rig_browsing = false;
 };
 
 // ********************************* Section 12: MD_SVL_class declaration (derived) ********************************************
@@ -1418,7 +1470,7 @@ class MD_SY1000_class : public MD_base_class
     //uint32_t  slow_gear_timer = 0;
     //uint8_t  slow_gear_string_level[6] = { 0 };
     //bool  slow_gear_string_updown[6] = { true };
-    #define SY1000_IDENTITY_MESSAGE_SIZE 15
+#define SY1000_IDENTITY_MESSAGE_SIZE 15
     uint8_t  identity_message[SY1000_IDENTITY_MESSAGE_SIZE];
 };
 

@@ -9,7 +9,7 @@ void StartFreeTimer();
 #define DEBUG_NORMAL
 
 // Enable debugging of main events (put // in front of the next line to disable it
-//#define DEBUG_MAIN
+#define DEBUG_MAIN
 
 // Midi debugging
 #define DEBUG_MIDI
@@ -30,7 +30,8 @@ void setup_debug() {
   Serial.begin(115200);
   serial_timer = millis();
   while ((!Serial) && (serial_timer - millis() < SERIAL_STARTUP_TIMER_LENGTH)) {}; // Wait while the serial communication is not ready or while the SERIAL_START_UP time has not elapsed.
-  Serial.println("VController v2 debugging started...");
+  String msg = VC_NAME;
+  Serial.println(msg + " version " + String(VCONTROLLER_FIRMWARE_VERSION_MAJOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_MINOR) + "." + String(VCONTROLLER_FIRMWARE_VERSION_BUILD) + " debugging started...");
   Serial.println("Arduino version: " + String(ARDUINO));
   StartFreeTimer();
 #endif

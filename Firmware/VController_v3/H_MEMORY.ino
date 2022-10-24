@@ -10,6 +10,7 @@
 // Section 7: HELIX forward messaging storage
 // Section 8: MG300 effect type storage
 // Section 9: Sequencer patterns storage
+// Section 10: Memory test
 
 #include "globals.h"
 
@@ -25,7 +26,7 @@
 extRAM_t4 eep_t4;
 #else
 #include <extEEPROM.h> // https://github.com/JChristensen/extEEPROM
-extEEPROM eep(kbits_512, 1, 128);         //device size, number of devices, page size
+extEEPROM eep(kbits_512, 2, 128);
 #endif
 #endif
 
@@ -43,9 +44,10 @@ extEEPROM eep(kbits_512, 1, 128);         //device size, number of devices, page
 #define EEPROM_VERSION_ADDR 0x00 // Address!!! Version update must be done above!!!
 #define EEPROM_CURRENT_PAGE_ADDR 0x02
 #define EEPROM_CURRENT_DEVICE_ADDR 0x03
+#define EEPROM_CURRENT_MODE_ADDR 0x04
 
 // Settings data (max 112 bytes)
-#define EEPROM_GENERAL_SETTINGS_BASE_ADDRESS 16 // Number of settings determined by size of settings array (see globals.h) - currently 34.
+#define EEPROM_GENERAL_SETTINGS_BASE_ADDRESS 16 // Number of settings determined by size of settings array (see globals.h) - currently 64.
 
 // MIDI settings (max 320 bytes)
 #define EEPROM_MIDI_SWITCH_SETTINGS_BASE 128 // MIDI settings contain type, port, channel and number for max 32 switches (128 bytes)
@@ -70,19 +72,27 @@ extEEPROM eep(kbits_512, 1, 128);         //device size, number of devices, page
 
 // 24LC512 has 64 kByte of memory
 // These are writable in pages of 128 bytes = 500 pages
-// Page 0 - 249:  Commands
-// Page 250 - 369 Patch presets
+// Page 0 - 144:  Commands (1737)
+// Page 145 - 369 Patch presets (150 * 192 = 28800 => 225 pages)
 // Page 370 - 374 MG-300 FX data
 // Page 375 - 390 Helix messages
 // Page 391 - 399 Sequencer patterns
+// Page 400 - 499 Spare
+
+// Vc-touch has two chips = 1000 pages
+// Page 0 - 269:  Commands (3225)
+// Page 270 - 719 Patch presets (300 * 192 = 57600 => 450 pages)
+// Page 720 - 724 MG-300 FX data
+// Page 725 - 740 Helix messages
+// Page 741 - 759 Sequencer patterns
+// Page 760 - 999 Spare
 
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
 #define EEPROM_DELAY_LENGTH 5  // time between EEPROM writes (usually 5 ms is OK)
 unsigned long WriteDelay = 0;
 
 // Addressing of programmed commands for switches
-#define EXT_EEP_CMD_BASE_ADDRESS 32    // Commands are stored from address 32 - 31999
-#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 1737
+// First 32 bytes are reserved for variables
 #define EXT_EEP_NUMBER_OF_COMMANDS_MSB_ADDR 0
 #define EXT_EEP_NUMBER_OF_COMMANDS_LSB_ADDR 1
 #define EXT_EEP_PATCH_DATA_VERSION_ADDR 2
@@ -93,8 +103,15 @@ unsigned long WriteDelay = 0;
 #define EXP_EEP_SEQ_PATTERNS_ADDR 7
 #define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
 
+#ifndef IS_VCTOUCH
+// ****** 24LC512 memory structure for VController and VC-mini ***********
+
+// Commands are stored from address 32 - 18559 (32 bytes store 3 commands - 1737 commands of 10 bytes + 1158 unused bytes)
+#define EXT_EEP_CMD_BASE_ADDRESS 32
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 1737
+#define MAX_NUMBER_OF_PAGES 256
+
 #define EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS 18560 // Patch presets are stored from address 18560 - 47359 (150 presets of 192 bytes)
-//#define EXT_MAX_NUMBER_OF_KATANA_PRESETS 150
 #define EXT_MAX_NUMBER_OF_PATCH_PRESETS 150
 #define EXT_PATCH_PRESET_SIZE 192
 
@@ -108,10 +125,34 @@ unsigned long WriteDelay = 0;
 #define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 50048 // Patterns are stored from 50048 - 51199 (32 patterns of 36 bytes = 1152 bytes)
 #define EXT_MAX_NUMBER_OF_SEQ_PATTERNS 32
 
-// RAM indexes
+#else // IS_VCTOUCH
+// ****** Dual 24LC512 memory structure for VC-touch - double memory chip ***********
+
+// Commands are stored from address 32 - 39807 (32 bytes store 3 commands - 3729 commands of 10 bytes + 2486 unused bytes)
+#define EXT_EEP_CMD_BASE_ADDRESS 32
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 3225
 #define MAX_NUMBER_OF_PAGES 256
 
-// We will create a number of indexes to quickly find the commands that are assigned to a switch of the VController
+#define EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS 39808 // Patch presets are stored from address 39808 - 97407 (300 presets of 192 bytes)
+#define EXT_MAX_NUMBER_OF_PATCH_PRESETS 300
+#define EXT_PATCH_PRESET_SIZE 192
+
+#define EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS 97408 // MG-300 effect types are stored from address 97408 - 97983 (36 presets of 16 bytes = 576 bytes)
+#define EXT_MAX_NUMBER_OF_MG300_PRESETS 36
+
+#define EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS 98048 // Helix MIDI messages are stored from address 98048 - 100095 (128 messages of 16 bytes = 2048 bytes)
+#define EXT_MAX_NUMBER_OF_HELIX_MESSAGES 128
+#define MIDI_HLX_MESSAGES 5 // number of messages per patch that are stored
+
+#define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 100096 // Patterns are stored from 100096 - 102399 (64 patterns of 36 bytes = 2304 bytes)
+#define EXT_MAX_NUMBER_OF_SEQ_PATTERNS 64
+
+#endif
+
+#define EXT_SETLIST_TYPE 254
+#define EXT_SONG_TYPE 253
+
+// We will create a number of indexes to quickly find the commands that are assigned to a switch
 DMAMEM uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; // Gives the index number of every first command for every dwitch on every page
 DMAMEM uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS]; // Gives the number of the next command that needs to be read from EEPROM
 DMAMEM uint16_t Next_internal_cmd_index[NUMBER_OF_INTERNAL_COMMANDS]; // Gives the index of the next command that needs to be read from Fixed_commands[]
@@ -119,6 +160,7 @@ DMAMEM uint16_t Title_index[MAX_NUMBER_OF_PAGES][TOTAL_NUMBER_OF_SWITCHES + 1]; 
 uint16_t number_of_cmds; // Contains the total number of commands stored in EEPROM.
 
 #define INTERNAL_CMD 0x8000 // MSB of an index set indicates the command is an internal command
+#define CMD_MASK 0x7FFF
 
 uint8_t HLX_messages[MIDI_HLX_MESSAGES][3]; // Space to store Helix forwarding messages
 uint8_t HLX_message_setlist;
@@ -140,6 +182,7 @@ patch_data_index_struct patch_data_index[EXT_MAX_NUMBER_OF_PATCH_PRESETS];
 
 void setup_eeprom()
 {
+  DEBUGMAIN("Starting EEPROM");
 #if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
 #ifdef USE_SPI_MEMORY_CHIP
   eep_t4.begin(1);
@@ -154,16 +197,22 @@ void setup_eeprom()
   if (read_ext_EEPROM(EXT_EEP_PATCH_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_PATCH_DATA_VERSION) EEP_initialize_patch_data();
   if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEP_initialize_Helix_data();
   if (read_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_MG300_DATA_VERSION) EEP_initialize_MG300_data();
-  if (read_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR) != CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION) EEPROM_EEP_initialize_seq_patterns_data();
-  //if (read_ext_EEPROM(EXT_EEP_SY1000_PRESETS_INITIALIZED_ADDR) != CURRENT_SY1000_MEMORY_VERSION) EEP_initialize_SY1000_data();
-
+  if (read_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR) != CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION) EEP_initialize_seq_patterns_data();
+  
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
   Current_page = EEPROM.read(EEPROM_CURRENT_PAGE_ADDR);
   set_current_device(EEPROM.read(EEPROM_CURRENT_DEVICE_ADDR));
+  Current_mode = EEPROM.read(EEPROM_CURRENT_MODE_ADDR);
 
   EEPROM_create_command_indexes();
   EEPROM_create_patch_data_index();
+}
+
+void EEPROM_init_misc() {
+  EEP_initialize_Helix_data();
+  EEP_initialize_MG300_data();
+  EEP_initialize_seq_patterns_data();
 }
 
 void main_eeprom()
@@ -179,6 +228,7 @@ void EEPROM_update() {
   EEPROM_update_timer = 0;
   EEPROM.write(EEPROM_CURRENT_PAGE_ADDR, Current_page);
   EEPROM.write(EEPROM_CURRENT_DEVICE_ADDR, Current_device);
+  EEPROM.write(EEPROM_CURRENT_MODE_ADDR, Current_mode);
 }
 
 // ********************************* Section 2: Internal EEPROM functions ********************************************
@@ -247,6 +297,7 @@ void EEP_initialize_internal_eeprom_data() {
   EEPROM_write(EEPROM_VERSION_ADDR, CURRENT_EEPROM_VERSION); // Save the current eeprom version
   EEPROM_write(EEPROM_CURRENT_PAGE_ADDR, DEFAULT_PAGE);
   EEPROM_write(EEPROM_CURRENT_DEVICE_ADDR, 0); // Select first device
+  EEPROM_write(EEPROM_CURRENT_MODE_ADDR, DEFAULT_MODE);
 
   EEP_check_internal_eeprom_data(true);
 }
@@ -316,21 +367,21 @@ uint8_t EEPROM_read_brightness() {
 
 // Low level read/write of the 24LC512
 
-void write_ext_EEPROM(unsigned int eeaddress, byte data )
+void write_ext_EEPROM(uint32_t eeaddress, uint8_t data )
 // Write a single byte to 24LC512 chip
 {
   if (data != read_ext_EEPROM(eeaddress)) {
-    EEPROM_EEP_write_ext_data(eeaddress, &data, 1);
+    EEP_write_ext_data(eeaddress, &data, 1);
   }
 }
 
-byte read_ext_EEPROM(unsigned int eeaddress )
+byte read_ext_EEPROM(uint32_t eeaddress )
 // Reads a single byte from 24LC512 chip
 {
   EEPROM_wait_ready();
   byte rdata = 0xFF;
 
-  EEPROM_EEP_read_ext_data(eeaddress, &rdata, 1);
+  EEP_read_ext_data(eeaddress, &rdata, 1);
 
   return rdata;
 }
@@ -339,7 +390,7 @@ void write_cmd_EEPROM(uint16_t memloc, const Cmd_struct* cmd ) // Write a comman
 {
   if (memloc < EXT_EEP_MAX_NUMBER_OF_COMMANDS) {
     uint8_t cmdsize = sizeof(*cmd);
-    uint16_t eeaddress = EXT_EEP_CMD_BASE_ADDRESS + ((memloc / 3) * 32) + ((memloc % 3) * 10);  // We write three commands in one block of 32 bytes, to stay within the page size of the memory chip
+    uint32_t eeaddress = EXT_EEP_CMD_BASE_ADDRESS + ((memloc / 3) * 32) + ((memloc % 3) * 10);  // We write three commands in one block of 32 bytes, to stay within the page size of the memory chip
     const byte* cmdbytes = (const byte*)cmd;
 
     // First check if the command we write is different from the existing data
@@ -355,24 +406,24 @@ void write_cmd_EEPROM(uint16_t memloc, const Cmd_struct* cmd ) // Write a comman
 
     if (changed) {
       cmdbytes = (const byte*)cmd; // Reset the pointer
-      EEPROM_EEP_write_ext_data(eeaddress, cmdbytes, cmdsize);
+      EEP_write_ext_data(eeaddress, cmdbytes, cmdsize);
     }
   }
 }
 
 void read_cmd_EEPROM(uint16_t memloc, Cmd_struct* cmd)
-// Read a command (11 bytes) from the 24LC512 chip
+// Read a command from the 24LC512 chip
 {
   if (memloc & INTERNAL_CMD) { // Copy from Fixed_commands[] array
-    copy_cmd(&Fixed_commands[memloc & 0x7FFF], cmd);
-    //DEBUGMSG("Copy internal cmd no:" + String(memloc &0x7FFF) + " Type:" + String(cmd->Type));
+    copy_cmd(&Fixed_commands[memloc & CMD_MASK], cmd);
+    //DEBUGMSG("Copy internal cmd no:" + String(memloc &CMD_MASK) + " Type:" + String(cmd->Type));
   }
   else { // Read from EEPROM
-    uint16_t eeaddress = EXT_EEP_CMD_BASE_ADDRESS + ((memloc / 3) * 32) + ((memloc % 3) * 10);  // We write three commands in one block of 32 bytes, to stay within the page size of the memory chip
+    uint32_t eeaddress = EXT_EEP_CMD_BASE_ADDRESS + ((memloc / 3) * 32) + ((memloc % 3) * 10);  // We write three commands in one block of 32 bytes, to stay within the page size of the memory chip
     byte* cmdbytes = (byte*)cmd;
     uint8_t cmdsize = sizeof(*cmd);
 
-    EEPROM_EEP_read_ext_data(eeaddress, cmdbytes, cmdsize);
+    EEP_read_ext_data(eeaddress, cmdbytes, cmdsize);
   }
 }
 
@@ -406,10 +457,16 @@ void EEP_initialize_command_data() {
   // Write commands to external EEPROM
   for (uint16_t c = 0; c < NUMBER_OF_INIT_COMMANDS; c++) {
     write_cmd_EEPROM(c, &Default_commands[c]);
-    LCD_show_bar(0, map(c, 0, NUMBER_OF_INIT_COMMANDS, 0, 127), 0);
+    LCD_show_bar(0, map(c, 0, EXT_EEP_MAX_NUMBER_OF_COMMANDS, 0, 127), 0);
   }
   EEP_write_number_of_commands(NUMBER_OF_INIT_COMMANDS);
-  //delay(30); // Delay 30 ms to allow the data om the EEPROM to settle
+
+  // Clear the rest
+  const Cmd_struct Empty_command = { 0 };
+  for (uint16_t c = NUMBER_OF_INIT_COMMANDS; c < EXT_EEP_MAX_NUMBER_OF_COMMANDS; c++) {
+    write_cmd_EEPROM(c, &Empty_command);
+    LCD_show_bar(0, map(c, 0, EXT_EEP_MAX_NUMBER_OF_COMMANDS, 0, 127), 0);
+  }
 
   EEPROM_create_command_indexes();
   LED_turn_all_off();
@@ -540,11 +597,12 @@ uint8_t EEPROM_count_cmds(uint8_t pg, uint8_t sw) { // Counts the number of comm
 
   if (i == 0) return 0; // No command for this switch
 
-  uint8_t number = 1;
+  uint16_t number = 1;
   while (Next_cmd_index[i] != 0) {
     i = Next_cmd_index[i];
     number++;
   }
+  if (number > 255) number = 255;
 
   return number;
 }
@@ -563,7 +621,7 @@ uint16_t EEPROM_first_cmd(uint8_t pg, uint8_t sw) { // Find the first command - 
 }
 
 uint16_t EEPROM_next_cmd(uint16_t cmd) { // Find the next command - called when the next command is executed
-  if (cmd & INTERNAL_CMD) return Next_internal_cmd_index[cmd - INTERNAL_CMD];
+  if (cmd & INTERNAL_CMD) return Next_internal_cmd_index[cmd & CMD_MASK];
   else return Next_cmd_index[cmd];
 }
 
@@ -575,13 +633,13 @@ bool EEPROM_read_cmd(uint8_t pg, uint8_t sw, uint8_t number, Cmd_struct *cmd) { 
 
   if (i & INTERNAL_CMD) { // Read internal cmd
     for (uint8_t n = 0; n < number; n++) {
-      i = Next_internal_cmd_index[i - INTERNAL_CMD]; // Find the right command
+      i = Next_internal_cmd_index[i & CMD_MASK]; // Find the right command
       if (i == 0) i = prev_i; // Oh dear, command is empty - revert to the previous command
       else prev_i = i;
     }
     read_cmd_EEPROM(i, cmd); // Read this command from EEPROM
 
-    return (Next_internal_cmd_index[i - INTERNAL_CMD] != 0); // Return true if next command exists
+    return (Next_internal_cmd_index[i & CMD_MASK] != 0); // Return true if next command exists
   }
 
   else { // Read external cmd
@@ -672,7 +730,7 @@ void EEPROM_read_title(uint8_t pg, uint8_t sw, String &title) {
     title += static_cast<char>(cmd.Value3);
     title += static_cast<char>(cmd.Value4);
 
-    if (i & INTERNAL_CMD) i = Next_internal_cmd_index[i - INTERNAL_CMD];
+    if (i & INTERNAL_CMD) i = Next_internal_cmd_index[i & CMD_MASK];
     else i = Next_cmd_index[i];
 
     if (i != 0) { // Read second part of title
@@ -754,7 +812,7 @@ void EEP_initialize_patch_data() {
   memset(empty_buffer, 0, VC_PATCH_SIZE);
   LCD_show_popup_label("Init patches...", MESSAGE_TIMER_LENGTH);
 
-  for (uint8_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
     LCD_show_bar(0, map(i, 0, EXT_MAX_NUMBER_OF_PATCH_PRESETS, 0, 127), 0);
     EEPROM_save_device_patch_by_index(i, empty_buffer, VC_PATCH_SIZE);
     delay(20);
@@ -769,9 +827,11 @@ void EEPROM_initialize_device_patch(uint8_t type, uint16_t number) {
   EEPROM_initialize_device_patch_by_index(index);
 }
 
-void EEPROM_initialize_device_patch_by_index(uint16_t index) {
+void EEPROM_initialize_device_patch_by_index(uint32_t index) {
   uint8_t empty_buffer[VC_PATCH_SIZE] = { 0 };
   EEPROM_save_device_patch_by_index(index, empty_buffer, VC_PATCH_SIZE);
+  patch_data_index[index].Type = 0;
+  patch_data_index[index].Patch_number = 0;
 }
 
 void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
@@ -783,13 +843,13 @@ void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
   // The patch name is stored in the first 16 bytes of a patch.
-  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((index % 2) * 128) + 7; // Point to the first or second page
+  uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint32_t part1_address = base_address + ((index % 2) * 128) + 7; // Point to the first or second page
 
   DEBUGMSG("Reading patch name for number " + String(number) + " at Addr1:" + String(part1_address));
 
   uint8_t data[16] = { 0 };
-  EEPROM_EEP_read_ext_data(part1_address, data, 16);
+  EEP_read_ext_data(part1_address, data, 16);
 
   for (uint8_t c = 0; c < 16; c++) {
     uint8_t newbyte = data[c];
@@ -799,12 +859,58 @@ void EEPROM_read_KTN_title(uint8_t type, uint16_t number, String &title) {
   DEBUGMSG("Read title from memory: " + String(title));
 }
 
+bool EEPROM_read_setlist_name(uint8_t type, uint16_t number, String &title) {
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) return false;
+
+  // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
+  // Page 1 contains the first 128 bytes of patch 1
+  // Page 2 contains the first 128 bytes of patch 2
+  // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
+  // The patch name is stored in the first 16 bytes of a patch.
+  uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint32_t part1_address = base_address + ((index % 2) * 128) + 4; // Point to the first or second page
+
+  uint8_t data[16] = { 0 };
+  EEP_read_ext_data(part1_address, data, 16);
+
+  for (uint8_t c = 0; c < 16; c++) {
+    uint8_t newbyte = data[c];
+    if ((newbyte > 31) && (newbyte < 128)) title += static_cast<char>(newbyte);
+    else title += ' ';
+  }
+  return true;
+}
+
+bool EEPROM_read_song_name(uint8_t type, uint16_t number, String &title) {
+  uint16_t index = EEPROM_find_patch_data_index(type, number);
+  if (index == PATCH_INDEX_NOT_FOUND) return false;
+
+  // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
+  // Page 1 contains the first 128 bytes of patch 1
+  // Page 2 contains the first 128 bytes of patch 2
+  // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
+  // The patch name is stored in the first 16 bytes of a patch.
+  uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint32_t part1_address = base_address + ((index % 2) * 128) + 3; // Point to the first or second page
+
+  uint8_t data[16] = { 0 };
+  EEP_read_ext_data(part1_address, data, 16);
+
+  for (uint8_t c = 0; c < 16; c++) {
+    uint8_t newbyte = data[c];
+    if ((newbyte > 31) && (newbyte < 128)) title += static_cast<char>(newbyte);
+    else title += ' ';
+  }
+  return true;
+}
+
 void EEPROM_create_patch_data_index() {
   for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
-    uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((i / 2) * 384); // Point to the base address of 2 patches
-    uint16_t part1_address = base_address + ((i % 2) * 128); // Point to the first or second page
+    uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((i / 2) * 384); // Point to the base address of 2 patches
+    uint32_t part1_address = base_address + ((i % 2) * 128); // Point to the first or second page
     uint8_t data[3] = { 0 };
-    EEPROM_EEP_read_ext_data(part1_address, data, 3);
+    EEP_read_ext_data(part1_address, data, 3);
 
     patch_data_index[i].Type = data[0];
     patch_data_index[i].Patch_number = (data[1] << 8) + data[2];
@@ -818,7 +924,7 @@ uint16_t EEPROM_find_patch_data_index(uint8_t type, uint16_t number) {
   return PATCH_INDEX_NOT_FOUND;
 }
 
-uint16_t EEPROM_create_new_patch_data_index() {
+uint16_t EEPROM_find_empty_patch_location() {
   for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
     if (patch_data_index[i].Type == 0) return i;
   }
@@ -841,21 +947,21 @@ void EEPROM_load_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint
   // Page 1 contains the first 128 bytes of patch 1
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
-  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
-  uint16_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
+  uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint32_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
+  uint32_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
 
   DEBUGMSG("Reading patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
-  EEPROM_EEP_read_ext_data(part1_address, patch_data, 128);
-  EEPROM_EEP_read_ext_data(part2_address, &patch_data[128], data_length - 128);
+  EEP_read_ext_data(part1_address, patch_data, 128);
+  EEP_read_ext_data(part2_address, &patch_data[128], data_length - 128);
 }
 
 bool EEPROM_save_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data, uint8_t data_length) {
   // Look for index
   uint16_t index = EEPROM_find_patch_data_index(type, number);
   if (index == PATCH_INDEX_NOT_FOUND) {
-    index = EEPROM_create_new_patch_data_index();
+    index = EEPROM_find_empty_patch_location();
     if (index == PATCH_INDEX_NOT_FOUND) return false; // Out of storage space!
   }
 
@@ -872,21 +978,21 @@ bool EEPROM_save_device_patch(uint8_t type, uint16_t number, uint8_t *patch_data
   return true;
 }
 
-void EEPROM_save_device_patch_by_index(uint16_t index, uint8_t *patch_data, uint8_t data_length) {
+void EEPROM_save_device_patch_by_index(uint32_t index, uint8_t *patch_data, uint8_t data_length) {
 
   // Data is stored on pages of 128 bytes. We use 3 pages for 2 patches.
   // Page 1 contains the first 128 bytes of patch 1
   // Page 2 contains the first 128 bytes of patch 2
   // Page 3 contains 64 bytes of patch 1 and 64 bytes of patch 2
 
-  uint16_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
-  uint16_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
-  uint16_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
+  uint32_t base_address = EXT_EEP_PATCH_DATA_PRESETS_BASE_ADDRESS + ((index / 2) * 384); // Point to the base address of 2 patches
+  uint32_t part1_address = base_address + ((index % 2) * 128); // Point to the first or second page
+  uint32_t part2_address = base_address + 256 + ((index % 2) * 64); // Point to the first or second half of the third page
 
   DEBUGMSG("Storing patch index " + String(index) + " at Addr1:" + String(part1_address) + ", Addr2:" + String(part2_address));
 
-  EEPROM_EEP_write_ext_data(part1_address, patch_data, 128);  
-  EEPROM_EEP_write_ext_data(part2_address, &patch_data[128], data_length - 128);
+  EEP_write_ext_data(part1_address, patch_data, 128);
+  EEP_write_ext_data(part2_address, &patch_data[128], data_length - 128);
 }
 
 void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2, uint8_t patch_size) {
@@ -917,7 +1023,7 @@ void EEPROM_exchange_device_patch(uint8_t type, uint16_t patch1, uint16_t patch2
 
 void EEPROM_store_HELIX_message(uint8_t number, uint8_t setlist) { // Store HLX_messages[5][3] array to location number.
   if (number >= EXT_MAX_NUMBER_OF_HELIX_MESSAGES) return; // Exit if number is too large
-  uint16_t eeaddress = EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS + (number * 16);
+  uint32_t eeaddress = EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS + (number * 16);
   const uint8_t* msg_ptr = (const uint8_t*)HLX_messages;
   uint8_t msgsize = sizeof(HLX_messages);
 
@@ -927,20 +1033,20 @@ void EEPROM_store_HELIX_message(uint8_t number, uint8_t setlist) { // Store HLX_
   for (uint8_t c = 0; c < msgsize; c++) {
     buf[c + 1] = *msg_ptr++;
   }
-  EEPROM_EEP_write_ext_data(eeaddress, buf, msgsize + 1);
+  EEP_write_ext_data(eeaddress, buf, msgsize + 1);
 
   DEBUGMSG("EEPROM: Wrote Helix program " + String(number) + ", setlist " + String(setlist) + ", size: " + String(msgsize));
 }
 
 void EEPROM_load_HELIX_message(uint8_t number) { // Read HLX_messages[5][3] array from location number.
   if (number >= EXT_MAX_NUMBER_OF_HELIX_MESSAGES) return; // Exit if number is too large
-  uint16_t eeaddress = EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS + (number * 16);
+  uint32_t eeaddress = EXT_EEP_HELIX_MESSAGE_BASE_ADDRESS + (number * 16);
   uint8_t* msg_ptr = (uint8_t*)HLX_messages;
   uint8_t msgsize = sizeof(HLX_messages) + 1;
 
   uint8_t buf[msgsize + 1];
 
-  EEPROM_EEP_read_ext_data(eeaddress, buf, msgsize + 1);
+  EEP_read_ext_data(eeaddress, buf, msgsize + 1);
   HLX_message_setlist = buf[0];
   for (uint8_t c = 0; c < msgsize; c++) {
     *msg_ptr++ = buf[c + 1];
@@ -968,7 +1074,7 @@ void EEPROM_clear_HLX_message_array() {
 
 void EEPROM_store_MG300_effect_types(uint8_t number, uint16_t checksum) { // Store MG300 effect types array to location number.
   if (number >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return; // Exit if number is too large
-  uint16_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
+  uint32_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
   const uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
   uint8_t msgsize = MG300_NUMBER_OF_FX;
 
@@ -978,19 +1084,19 @@ void EEPROM_store_MG300_effect_types(uint8_t number, uint16_t checksum) { // Sto
   for (uint8_t c = 0; c < msgsize; c++) {
     buf[c + 2] = *msg_ptr++;
   }
-  EEPROM_EEP_write_ext_data(eeaddress, buf, msgsize + 2);
+  EEP_write_ext_data(eeaddress, buf, msgsize + 2);
 
   DEBUGMSG("EEPROM: Wrote MG300 program " + String(number) + ", size: " + String(msgsize) + ", checksum: " + String(checksum));
 }
 
 bool EEPROM_load_MG300_effect_types(uint8_t number, uint16_t checksum) {
   if (number >= EXT_MAX_NUMBER_OF_MG300_PRESETS) return false; // Exit if number is too large
-  uint16_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
+  uint32_t eeaddress = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (number * 16);
   uint8_t* msg_ptr = (uint8_t*)My_MG300.fx_type;
   uint8_t msgsize = MG300_NUMBER_OF_FX;
   uint8_t buf[msgsize + 2];
 
-  EEPROM_EEP_read_ext_data(eeaddress, buf, msgsize + 2);
+  EEP_read_ext_data(eeaddress, buf, msgsize + 2);
   if (checksum != ((buf[0] << 8) | buf[1])) return false; // exit when checksum does not match.
   for (uint8_t c = 0; c < msgsize; c++) {
     *msg_ptr++ = buf[c + 2];
@@ -1005,24 +1111,24 @@ void EEPROM_exchange_MG300_patches(uint8_t patch1, uint8_t patch2) {
 
   uint8_t msgsize = MG300_NUMBER_OF_FX + 2;
   uint8_t temp1[msgsize];
-  uint16_t eeaddress1 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch1 * 16);
+  uint32_t eeaddress1 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch1 * 16);
   uint8_t* msg_ptr1 = (uint8_t*)temp1;
 
   // Read patch 1 into temp1
-  EEPROM_EEP_read_ext_data(eeaddress1, msg_ptr1, msgsize);
+  EEP_read_ext_data(eeaddress1, msg_ptr1, msgsize);
 
   uint8_t temp2[msgsize];
-  uint16_t eeaddress2 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch2 * 16);
+  uint32_t eeaddress2 = EXT_EEP_MG300_EFFECT_TYPE_BASE_ADDRESS + (patch2 * 16);
   uint8_t* msg_ptr2 = (uint8_t*)temp2;
 
   // Read patch 2 into temp2
-  EEPROM_EEP_read_ext_data(eeaddress2, msg_ptr2, msgsize);
+  EEP_read_ext_data(eeaddress2, msg_ptr2, msgsize);
 
   // Write temp2 into patch 1
-  EEPROM_EEP_write_ext_data(eeaddress1, msg_ptr2, msgsize);
+  EEP_write_ext_data(eeaddress1, msg_ptr2, msgsize);
 
   // Write temp1 into patch 2
-  EEPROM_EEP_write_ext_data(eeaddress2, msg_ptr1, msgsize);
+  EEP_write_ext_data(eeaddress2, msg_ptr1, msgsize);
 }
 
 void EEP_initialize_MG300_data() {
@@ -1046,13 +1152,13 @@ void EEPROM_store_seq_pattern(uint8_t number, uint8_t * data) { // Store MG300 e
   if (number >= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return; // Exit if number is too large
   //const uint8_t* msg_ptr = (uint8_t*)EEPROM_seq_pattern;
 
-  // Store first four bytes on first page.
-  uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
-  EEPROM_EEP_write_ext_data(eeaddress, data, 4);
+  // Store first four bytes on first page(s).
+  uint32_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
+  EEP_write_ext_data(eeaddress, data, 4);
 
-  // Store the rest on page 2 - 9
-  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
-  EEPROM_EEP_write_ext_data(eeaddress, data + 4, 32);
+  // Store the rest on page 2 - 9 (VC-mini) or page 3 - 18 (VC-touch)
+  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (EXT_MAX_NUMBER_OF_SEQ_PATTERNS * 4) + (number * 32);
+  EEP_write_ext_data(eeaddress, data + 4, 32);
 
   DEBUGMSG("EEPROM: Wrote sequencer pattern " + String(number));
 }
@@ -1061,20 +1167,20 @@ bool EEPROM_load_seq_pattern(uint8_t number, uint8_t *data) {
   if (number >= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return false; // Exit if number is too large
   //uint8_t* msg_ptr = (uint8_t*)EEPROM_seq_pattern;
 
-  // Read first four bytes from first page.
-  uint16_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
-  EEPROM_EEP_read_ext_data(eeaddress, data, 4);
+  // Read first four bytes from first page(s).
+  uint32_t eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (number * 4);
+  EEP_read_ext_data(eeaddress, data, 4);
 
-  // Read the rest from page 2 - 9
-  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + 128 + (number * 32);
-  EEPROM_EEP_read_ext_data(eeaddress, data + 4, 32);
+  // Read the rest from page 2 - 9 (VC-mini) or page 3 - 18 (VC-touch)
+  eeaddress = EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS + (EXT_MAX_NUMBER_OF_SEQ_PATTERNS * 4) + (number * 32);
+  EEP_read_ext_data(eeaddress, data + 4, 32);
 
   DEBUGMSG("EEPROM: Read sequencer pattern " + String(number));
   return true;
 }
 
 
-void EEPROM_EEP_initialize_seq_patterns_data() {
+void EEP_initialize_seq_patterns_data() {
   LED_show_initializing_data();
   LCD_show_popup_label("Init seq data...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR, CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION); // Save the current eeprom version
@@ -1091,7 +1197,7 @@ void EEPROM_initialize_seq_patterns_message_array() {
   memcpy(EEPROM_seq_pattern, EEPROM_default_seq_pattern, 36);
 }
 
-void EEPROM_EEP_read_ext_data(uint16_t address, uint8_t *data, uint16_t data_size) {
+void EEP_read_ext_data(uint32_t address, uint8_t *data, uint16_t data_size) {
 #ifdef USE_SPI_MEMORY_CHIP
   eep_t4.writeArrayDMA(address, data_size, data);
 #elif defined(__IMXRT1062__) // Teensy 4.0 and 4.1
@@ -1110,7 +1216,7 @@ void EEPROM_EEP_read_ext_data(uint16_t address, uint8_t *data, uint16_t data_siz
 #endif
 }
 
-inline void EEPROM_EEP_write_ext_data(uint16_t address, const uint8_t *data, uint16_t data_size) {
+inline void EEP_write_ext_data(uint32_t address, const uint8_t *data, uint16_t data_size) {
 #ifdef USE_SPI_MEMORY_CHIP
   eep_t4.readArrayDMA(address, data_size, (byte *) data);
 #elif defined(__IMXRT1062__) // Teensy 4.0 and 4.1
@@ -1143,4 +1249,53 @@ inline void EEPROM_EEP_write_ext_data(uint16_t address, const uint8_t *data, uin
     delay(30); // Time for the data to settle
   }
 #endif
+}
+
+// ********************************* Section 10: memory test ********************************************
+void EEPROM_memory_test() {
+  // Test memory chip #1
+  const uint32_t addr1 = 65535;
+  uint8_t data = 0;
+  bool mem1 = true;
+  EEP_write_ext_data(addr1, &data, 1);
+  data = 255;
+  EEP_read_ext_data(addr1, &data, 1);
+  if (data != 0) mem1 = false;
+  data = 255;
+  EEP_write_ext_data(addr1, &data, 1);
+  data = 0;
+  EEP_read_ext_data(addr1, &data, 1);
+  if (data != 255) mem1 = false;
+
+  // Test memory chip #2
+  const uint32_t addr2 = 131071;
+  bool mem2 = true;
+  data = 0;
+  EEP_write_ext_data(addr2, &data, 1);
+  data = 255;
+  EEP_read_ext_data(addr2, &data, 1);
+  if (data != 0) mem2 = false;
+  data = 255;
+  EEP_write_ext_data(addr2, &data, 1);
+  data = 0;
+  EEP_read_ext_data(addr2, &data, 1);
+  if (data != 255) mem2 = false;
+
+  // Give results
+  String msg = "M1:";
+  if (mem1) msg += "OK";
+  else msg += "--";
+
+  msg += " M2:";
+  if (mem2) msg += "OK";
+  else msg += "--";
+
+#ifdef IS_VCTOUCH
+/*  // Test TFT memory chip
+  msg += " TFT:";
+  if (TFT_check_mem_chip()) msg += "OK";
+  else msg += "--";*/
+#endif
+
+  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
 }

@@ -34,16 +34,21 @@ FLASHMEM void MD_MG300_class::init() { // Default values for variables
   my_LED_colour = 6; // Default value: white
   MIDI_channel = MG300_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(MG300_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = MG300_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = MG300_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = MG300_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = MG300_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = MG300_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = MG300_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = MG300_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = MG300_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = MG300_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = MG300_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = MG300_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = MG300_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = MG300_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = MG300_DEFAULT_VC_PAGE2; // Default value
@@ -118,8 +123,7 @@ FLASHMEM void MD_MG300_class::check_SYSEX_in(const unsigned char* sxdata, short 
 
       if (sxdata[7] == 0x18) { // Receiving device state
         if (patch_number != sxdata[8]) { // Set current patch
-          prev_patch_number = patch_number;
-          patch_number = sxdata[8];
+          set_patch_number(sxdata[8]);
           do_after_patch_selection();
           update_page = REFRESH_PAGE;
         }
@@ -198,8 +202,7 @@ FLASHMEM void MD_MG300_class::check_CC_in(uint8_t control, uint8_t value, uint8_
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) {
     if (control == 60) { // patch change from MG300
       if (patch_number != value) {
-        prev_patch_number = patch_number;
-        patch_number = value;
+        set_patch_number(value);
         do_after_patch_selection();
         //update_page = REFRESH_PAGE;
       }

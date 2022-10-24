@@ -33,6 +33,7 @@ uint8_t last_main_menu_selection = 1;
 uint8_t Last_set_switch = 0; // The last switch that has been set.
 uint8_t Last_cmd_switch = 0; // The current cmdbyte switch we are editing
 uint8_t Last_cmd_number = 0; // The current cmdbyte we are editing
+uint8_t current_page_when_menu_was_opened = DEFAULT_PAGE;
 uint8_t current_device_when_menu_was_opened = 0;
 uint8_t dummy;
 char menu_title[LCD_DISPLAY_SIZE + 1];
@@ -53,8 +54,8 @@ struct menu_struct {
   char Label[17];
   uint8_t Type;
   uint8_t Sublist;
-  uint8_t Min;
-  uint8_t Max;
+  uint16_t Min;
+  uint16_t Max;
   void *Target; // Pointer to target, which can be a variable or a function
 };
 
@@ -74,8 +75,12 @@ struct menu_struct {
 #define MIDI_ADV_MENU 13
 #define MIDI_FORWARDING_MENU 14
 #define WIRELESS_MENU 15
-#define KATANA_MENU 16
-#define SY1000_MENU 17
+#define SETLIST_MENU 16
+#define SONG_MENU 17
+#define SONG_PART_EDIT_MENU 18
+#define SONG_PART_MIDI_MENU 19
+#define KATANA_MENU 20
+#define SY1000_MENU 21
 
 #define DEVICE_SUBLIST 255
 #define PAGE_SUBLIST 254
@@ -83,8 +88,21 @@ struct menu_struct {
 #define KTN_NUMBER_SUBLIST 252
 #define SY1000_NUMBER_SUBLIST 251
 #define WIFI_SSID_SUBLIST 250
+#define SETLIST_SUBLIST 249
+#define SETLIST_TARGET_SUBLIST 248
+#define SETLIST_POSITION_SUBLIST 247
+#define SETLIST_ITEM_SUBLIST 246
+#define SETLIST_TEMPO_SUBLIST 245
+#define SONG_SUBLIST 244
+#define SONG_PART_SUBLIST 243
+#define SONG_TARGET_SUBLIST 242
+#define SONG_ITEM1_SUBLIST 241
+#define SONG_ITEM2_SUBLIST 240
+#define SONG_ITEM3_SUBLIST 239
+#define SONG_ITEM4_SUBLIST 238
+#define SONG_ITEM5_SUBLIST 237
 
-// The table below has an edited copy in VC-eit/Headers/vcsettings.h
+// The table below has an edited copy in VC-edit/Headers/vcsettings.h
 // Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty.
 
 const PROGMEM menu_struct menu[][15] = {
@@ -112,15 +130,15 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 1 - Global settings
     { "GLOBAL SETTINGS ", NONE }, // Menu title
-    { "Main disp mode", SET, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-    { "Main disp shows", SET, 50, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
-    { "CURNUM action", SET, 53, 0, 5, &Setting.CURNUM_action }, // Switch 3
-    { "MEP also cntrols", SET, 37, 0, 2, &Setting.MEP_control }, // Switch 4
-    { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
-    { "Hide tempo LED", SET, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
-    { "Backlight Type", SET, 48, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 7
-    { "Katana type", SET, 83, 0, 1, &Setting.Is_katana50 }, // Switch 8
-    { "", NONE }, // Switch 9
+    { "Main disp top", SET, 19, 0, 5, &Setting.Main_display_top_line_mode },// Switch 1
+    { "Main disp top+", SET, 53, 0, 5, &Setting.Main_display_show_top_right }, // Switch 2
+    { "Main disp bottom", SET, 19, 0, 5, &Setting.Main_display_bottom_line_mode },// Switch 3
+    { "CURNUM action", SET, 60, 0, 5, &Setting.CURNUM_action }, // Switch 4
+    { "MEP also cntrols", SET, 40, 0, 2, &Setting.MEP_control }, // Switch 5
+    { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 6
+    { "Hide tempo LED", SET, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 7
+    { "Backlight Type", SET, 51, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 8
+    { "Katana type", SET, 90, 0, 1, &Setting.Is_katana50 }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
@@ -133,7 +151,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "Select device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Current_device }, // Switch 1
     { "Enabled", DEVICE_SET, 1, 0, 2, (void*) 10 }, // Switch 2
     { "Midi channel", DEVICE_SET, 0, 1, 16, (void*) 1 }, // Switch 3
-    { "Midi port", DEVICE_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 4
+    { "Midi port", DEVICE_SET, 27, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 4
     { "Page #1", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 6 },// Switch 5
     { "Page #2", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 7 }, // Switch 6
     { "Page #3", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 8 }, // Switch 7
@@ -296,10 +314,10 @@ const PROGMEM menu_struct menu[][15] = {
     { "Init Settings",  EXECUTE, 0, 0, 0, (void*)initialize_settings }, // Switch 1
     { "Init Commands",  EXECUTE, 0, 0, 0, (void*)initialize_commands }, // Switch 2
     { "Init ALL patches",  EXECUTE, 0, 0, 0, (void*)initialize_device_patches },// Switch 3
-    { "", NONE  }, // Switch 4
+    { "Sync patches", EXECUTE, 0, 0, 0, (void*)MIDI_request_device_patches }, // Switch 4
     { "Program Mode",  EXECUTE, 0, 0, 0, (void*)reboot_program_mode }, // Switch 5
     { "Reboot",  EXECUTE, 0, 0, 0, (void*)reboot }, // Switch 6
-    { "", NONE }, // Switch 7
+    { "Memory test", EXECUTE, 0, 0, 0, (void*)EEPROM_memory_test }, // Switch 7
     { "", NONE }, // Switch 8
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
@@ -311,7 +329,7 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 11 - Calibration menu
     { "CALIBRATION MENU", NONE }, // Menu title
-    { "Select exp pedal", SET_NO_EXP, 33, 0, NUMBER_OF_CTL_JACKS - 1, &calibrate_exp_pedal }, // Switch 1
+    { "Select exp pedal", SET_NO_EXP, 36, 0, NUMBER_OF_CTL_JACKS - 1, &calibrate_exp_pedal }, // Switch 1
     { "Set Max (Toe)",  EXECUTE, 0, 0, 0, (void*)SC_set_expr_max }, // Switch 2
     { "Set Min (Heel)",  EXECUTE, 0, 0, 0, (void*)SC_set_expr_min },// Switch 3
     { "Auto Calibrate  ",  EXECUTE, 0, 0, 0, (void*)SC_set_auto_calibrate }, // Switch 4
@@ -331,8 +349,8 @@ const PROGMEM menu_struct menu[][15] = {
   { // Menu 12 - MIDI switch
     { "MIDI SWITCH MENU", NONE }, // Menu title
     { "Select switch", SET, SWITCH_SUBLIST, 1, TOTAL_NUMBER_OF_SWITCHES, &Current_MIDI_switch }, // Switch 1
-    { "Type",  MIDI_SWITCH_SET, 40, 0, 4, (void*) 1 }, // Switch 2
-    { "Midi port", MIDI_SWITCH_SET, 24, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
+    { "Type",  MIDI_SWITCH_SET, 43, 0, 4, (void*) 1 }, // Switch 2
+    { "Midi port", MIDI_SWITCH_SET, 27, 0, NUMBER_OF_MIDI_PORTS, (void*) 2 }, // Switch 3
     { "Midi channel", MIDI_SWITCH_SET, 0, 1, 16, (void*) 3 }, // Switch 4
     { "CC",  MIDI_SWITCH_SET, 0, 0, 127, (void*) 4 }, // Switch 5
     { "MIDI learn",  EXECUTE, 0, 0, 0, (void*)midi_learn_mode }, // Switch 6
@@ -348,16 +366,16 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 13 - Midi advanced settings
     { "MIDI ADVNCD MENU", NONE }, // Menu title
-    { "Read MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
-    { "Send MIDI clock", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
-    { "", NONE }, // Switch 3
+    { "Read MIDI clock", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
+    { "Send MIDI clock", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
+    { "Block detct msg", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Block_identity_messages }, // Switch 3
     { "", NONE }, // Switch 4
     { "Bass mode G2M ch", SET, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
     { "Bass mode device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
     { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
     { "Bass mode min vl", SET, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
     { "HighNotePriotyCC", SET, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
-    { "Follow tempo G2M", SET, 72, 0, 2, &Setting.Follow_tempo_from_G2M }, // Switch 10
+    { "Follow tempo G2M", SET, 79, 0, 2, &Setting.Follow_tempo_from_G2M }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
@@ -366,16 +384,16 @@ const PROGMEM menu_struct menu[][15] = {
 
   { // Menu 14 - Midi forwarding
     { "MIDI FORWRD MENU", NONE }, // Menu title
-    { "1: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[0] }, // Switch 1
-    { "1: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[0] }, // Switch 2
-    { "1: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
-    { "2: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[1] }, // Switch 4
-    { "2: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[1] }, // Switch 5
-    { "2: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
-    { "3: Source port", SET, 23, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[2] }, // Switch 7
-    { "3: Dest port", SET, 23, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[2] }, // Switch 8
-    { "3: MIDI filter", SET, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
-    { "Bi-directional", SET, 75, 0, 7, &Setting.MIDI_forward_bidirectional }, // Switch 10
+    { "1: Source port", SET, 26, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[0] }, // Switch 1
+    { "1: Dest port", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[0] }, // Switch 2
+    { "1: MIDI filter", SET, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
+    { "2: Source port", SET, 26, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[1] }, // Switch 4
+    { "2: Dest port", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[1] }, // Switch 5
+    { "2: MIDI filter", SET, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
+    { "3: Source port", SET, 26, 0, NUMBER_OF_MIDI_PORTS, &Setting.MIDI_forward_source_port[2] }, // Switch 7
+    { "3: Dest port", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.MIDI_forward_dest_port[2] }, // Switch 8
+    { "3: MIDI filter", SET, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
+    { "Bi-directional", SET, 82, 0, 7, &Setting.MIDI_forward_bidirectional }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
@@ -385,7 +403,7 @@ const PROGMEM menu_struct menu[][15] = {
   { // Menu 15 - Wireless menu
     { "WIRELESS MENU", NONE }, // Menu title
     { "Bluetooth", SET, 1, 0, 1, &Setting.BLE_mode }, // Switch 1
-    { "WIFI mode", SET, 68, 0, 2, &Setting.WIFI_mode }, // Switch 2
+    { "WIFI mode", SET, 75, 0, 2, &Setting.WIFI_mode }, // Switch 2
     { "Set WIFI SSID", SET, WIFI_SSID_SUBLIST, 0, 1, &selected_ssid }, // Switch 3
     { "Set WIFI passwd",  EXECUTE, 0, 0, 0, (void*)Set_WIFI_passwd },// Switch 4
     { "Rescan WIFI",  EXECUTE, 0, 0, 0, (void*)MIDIWL_request_WIFI_scan },// Switch 5
@@ -401,9 +419,81 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 16 - Katana menu
+  { // Menu 16 - Setlist menu
+    { "SETLIST MENU", NONE }, // Menu title
+    { "Select setlist", SET, SETLIST_SUBLIST, 0, MAX_NUMBER_OF_SETLISTS - 1, &Current_setlist }, // Switch 1
+    { "Select target",  SET, SETLIST_TARGET_SUBLIST, 0, MAX_NUMBER_OF_SETLIST_TARGETS - 1, &Current_setlist_target },// Switch 2
+    { "Select position",  SET, SETLIST_POSITION_SUBLIST, 0, MAX_NUMBER_OF_SETLIST_ITEMS + 2, &Current_setlist_position }, // Switch 3
+    { "Select item",  SET, SETLIST_ITEM_SUBLIST, 0, 255, &Selected_setlist_item }, // Switch 4
+    { "Select tempo", SET, SETLIST_TEMPO_SUBLIST, 39, 250, &Selected_setlist_tempo }, // Switch 5
+    { "Rename setlist", EXECUTE, 0, 0, 0, (void*)SCO_rename_current_setlist }, // Switch 6
+    { "Clear setlist", EXECUTE, 0, 0, 0, (void*)SCO_clear_current_setlist }, // Switch 7
+    { "Add item", EXECUTE, 0, 0, 0, (void*)SCO_add_setlist_item }, // Switch 8
+    { "Insert item", EXECUTE, 0, 0, 0, (void*)SCO_insert_setlist_item }, // Switch 9
+    { "Delete item", EXECUTE, 0, 0, 0, (void*)SCO_delete_setlist_item }, // Switch 10
+    { "Save setlist", EXECUTE, 0, 0, 0, (void*)setlist_save }, // Switch 11
+    { "Exit", EXECUTE, 0, 0, 0, (void*)menu_exit }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 17 - Song menu
+    { "SONG MENU", NONE }, // Menu title
+    { "Select song", SET, SONG_SUBLIST, 0, MAX_NUMBER_OF_SONGS - 1, &Current_song }, // Switch 1
+    { "Select part",  SET, SONG_PART_SUBLIST, 0, 7, &Current_part },// Switch 2
+    { "Detect state",  EXECUTE, 0, 0, 0, (void*)SCO_load_current_device_state_in_song }, // Switch 3
+    { "Edit part", OPEN_MENU, SONG_PART_EDIT_MENU }, // Switch 4
+    { "Select tempo", SET, SETLIST_TEMPO_SUBLIST, 39, 250, &Current_song_buffer[20] }, // Switch 5
+    { "Rename song", EXECUTE, 0, 0, 0, (void*)SCO_rename_current_song }, // Switch 6
+    { "Rename part", EXECUTE, 0, 0, 0, (void*)SCO_rename_current_part }, // Switch 7
+    { "", NONE }, // Switch 8
+    { "Edit part midi", OPEN_MENU, SONG_PART_MIDI_MENU }, // Switch 9
+    { "Clear song", EXECUTE, 0, 0, 0, (void*)SCO_clear_current_song }, // Switch 10
+    { "Save song", EXECUTE, 0, 0, 0, (void*)song_save }, // Switch 11
+    { "Exit", EXECUTE, 0, 0, 0, (void*)menu_exit }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 18 - Part edit menu
+    { "PART EDIT", NONE }, // Menu title
+    { "Target #1", SET, SONG_TARGET_SUBLIST, 0, NUMBER_OF_DEVICES + 3, &Current_song_buffer[21] }, // Switch 1
+    { "Target #2", SET, SONG_TARGET_SUBLIST, 0, NUMBER_OF_DEVICES + 3, &Current_song_buffer[22] }, // Switch 2
+    { "Target #3", SET, SONG_TARGET_SUBLIST, 0, NUMBER_OF_DEVICES + 3, &Current_song_buffer[23] }, // Switch 3
+    { "Target #4", SET, SONG_TARGET_SUBLIST, 0, NUMBER_OF_DEVICES + 3, &Current_song_buffer[24] }, // Switch 4
+    { "Target #5", SET, SONG_TARGET_SUBLIST, 0, NUMBER_OF_DEVICES + 3, &Current_song_buffer[25] }, // Switch 5
+    { "Select item #1",  SET, SONG_ITEM1_SUBLIST, 0, 255, &Current_song_item[0] }, // Switch 6
+    { "Select item #2",  SET, SONG_ITEM2_SUBLIST, 0, 255, &Current_song_item[1] }, // Switch 7
+    { "Select item #3",  SET, SONG_ITEM3_SUBLIST, 0, 255, &Current_song_item[2] }, // Switch 8
+    { "Select item #4",  SET, SONG_ITEM4_SUBLIST, 0, 255, &Current_song_item[3] }, // Switch 9
+    { "Select item #5",  SET, SONG_ITEM5_SUBLIST, 0, 255, &Current_song_item[4] }, // Switch 10
+    { "Save part", EXECUTE, 0, 0, 0, (void*)SCO_save_current_part }, // Switch 11
+    { "Return", OPEN_MENU, SONG_MENU }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 19 - Part edit midi menu
+    { "PART EDIT", NONE }, // Menu title
+    { "MIDI port #1", SET, 27, 0, NUMBER_OF_MIDI_PORTS - 1, &Current_song_midi_port[0] }, // Switch 1
+    { "MIDI port #2", SET, 27, 0, NUMBER_OF_MIDI_PORTS - 1, &Current_song_midi_port[1] }, // Switch 2
+    { "MIDI port #3", SET, 27, 0, NUMBER_OF_MIDI_PORTS - 1, &Current_song_midi_port[2] }, // Switch 3
+    { "MIDI port #4", SET, 27, 0, NUMBER_OF_MIDI_PORTS - 1, &Current_song_midi_port[3] }, // Switch 4
+    { "MIDI port #5", SET, 27, 0, NUMBER_OF_MIDI_PORTS - 1, &Current_song_midi_port[4] }, // Switch 5
+    { "MIDI channel #1",  SET, 0, 1, 16, &Current_song_midi_channel[0] }, // Switch 6
+    { "MIDI channel #2",  SET, 0, 1, 16, &Current_song_midi_channel[1] }, // Switch 7
+    { "MIDI channel #3",  SET, 0, 1, 16, &Current_song_midi_channel[2] }, // Switch 8
+    { "MIDI channel #4",  SET, 0, 1, 16, &Current_song_midi_channel[3] }, // Switch 9
+    { "MIDI channel #5",  SET, 0, 1, 16, &Current_song_midi_channel[4] }, // Switch 10
+    { "Save part", EXECUTE, 0, 0, 0, (void*)SCO_save_current_part }, // Switch 11
+    { "Return", OPEN_MENU, SONG_MENU }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
+
+  { // Menu 20 - Katana menu
     { "KATANA SAVE", NONE }, // Menu title
-    { "Write to:", SET, KTN_NUMBER_SUBLIST, 0, 80, &My_KTN.save_patch_number }, // Switch 1
+    { "Write to:", SET, KTN_NUMBER_SUBLIST, 0, 150, &My_KTN.save_patch_number }, // Switch 1
     { "Write",  EXECUTE, 0, 0, 0, (void*)KTN_save },// Switch 2
     { "Rename",  EXECUTE, 0, 0, 0, (void*)KTN_rename }, // Switch 3
     { "Exchange",  EXECUTE, 0, 0, 0, (void*)KTN_exchange }, // Switch 4
@@ -414,12 +504,12 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "Cancel", EXECUTE, 0, 0, 0, (void*)KTN_exit }, // Switch 12 (should not be of type NONE)
+    { "Cancel", EXECUTE, 0, 0, 0, (void*)menu_exit }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
 
-  { // Menu 17 - SY1000 menu
+  { // Menu 21 - SY1000 menu
     { "SY1000 SCENE MNU", NONE }, // Menu title
     { "Select scene:", SET, SY1000_NUMBER_SUBLIST, 1, 8, &My_SY1000.save_scene_number }, // Switch 1
     { "Read scene",  EXECUTE, 0, 0, 0, (void*)SY1000_save },// Switch 2
@@ -432,7 +522,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "Add bass assigns", EXECUTE, 0, 0, 0, (void*)SY1000_add_bass_string_assigns }, // Switch 9
     { "", NONE }, // Switch 10
     { "", NONE }, // Switch 11
-    { "Cancel", EXECUTE, 0, 0, 0, (void*)SY1000_exit }, // Switch 12 (should not be of type NONE)
+    { "Cancel", EXECUTE, 0, 0, 0, (void*)menu_exit }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
@@ -449,43 +539,43 @@ const PROGMEM char menu_sublist[][17] = {
   "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "LIGHT BLUE", "", "", "",
 
   // Sublist 19 - 22: Main display modes
-  "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
+  "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS", "SCENE NAME", "ALL PATCH NUMBRS", "",
 
-  // Sublist 23 - 32: MIDI ports
+  // Sublist 26 - 35: MIDI ports
   "OFF", PORT1_NAME, PORT2_NAME, PORT3_NAME, PORT4_NAME, PORT5_NAME, PORT6_NAME, PORT7_NAME, PORT8_NAME, PORT9_NAME,
 
-  // Sublist 33 - 36: Expression pedals
+  // Sublist 36 - 39: Expression pedals
   "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-  // Sublist 37 - 39: MEP control options
+  // Sublist 40 - 42: MEP control options
   "NONE", "UP/DOWN", "UP/DN + STEP",
 
-  // Sublist 40 - 47: MIDI switch types
+  // Sublist 43 - 50: MIDI switch types
   "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
 
-  // Sublist 48 - 49: RGB Display colour schemes
+  // Sublist 51 - 52: RGB Display colour schemes
   "ADAFRUIT", "BUYDISPLAY",
 
-  // Sublist 50 - 53: Main display top right types
-  "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
+  // Sublist 53 - 59: Main display top right types
+  "OFF", "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME", "PATCH NUMBER", "SCENE NUMBER", "",
 
-  // Sublist 53 - 59: Current number actions
+  // Sublist 60 - 66: Current number actions
   "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
 
-  // Sublist 60 - 67: MIDI forward filters
+  // Sublist 67 - 74: MIDI forward filters
   "BLOCK ALL MIDI", "FORWARD ALL MIDI", "ALL BUT SYSEX", "FWD PC ONLY", "FORWARD CC ONLY", "FWD NOTES ONLY", "FWD SYSEX ONLY", "",
 
-  // Sublist 68 - 71: WIFI modes
+  // Sublist 75 - 78: WIFI modes
   "OFF", "Client", "Access point", "Client + AP",
 
-  // Sublist 72 - 74: Tempo follow modes
+  // Sublist 79 - 81: Tempo follow modes
   "DISABLED", "OFF", "ON",
 
-  // Sublist 75 - 82: MIDI forwarding bidirectional settings
+  // Sublist 82 - 89: MIDI forwarding bidirectional settings
   "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
 
-  // Sublist 83 - 84: Katana type
-  "Katana100 (8 CH)", "Katana50 (4 CH)", 
+  // Sublist 90 - 91: Katana type
+  "Katana100 (8 CH)", "Katana50 (4 CH)",
 };
 
 #define SUBLIST_COLOUR 4
@@ -495,6 +585,7 @@ void initialize_settings() {
   if (menu_are_you_sure("Reset settings?", "Sure?")) {
     EEP_initialize_internal_eeprom_data();
     EEP_read_eeprom_common_data();
+    EEPROM_init_misc();
   }
 }
 
@@ -594,9 +685,19 @@ void Write_OTA_passwd() {
 #endif
 }
 
+void song_save() {
+  SCO_save_current_song();
+  menu_exit();
+}
+
+void setlist_save() {
+  SCO_save_current_setlist();
+  menu_exit();
+}
+
 void KTN_save() {
   My_KTN.store_patch();
-  KTN_exit();
+  menu_exit();
 }
 
 void KTN_rename() {
@@ -612,26 +713,19 @@ void KTN_rename_done() {
   My_KTN.store_patch_name_to_buffer(Text_entry);
 }
 
-void KTN_exit() {
-  SC_set_enc1_acceleration(true);
-  //SCO_select_next_page_of_device(Current_device);
-  SCO_select_page(Previous_page);
-  update_page = RELOAD_PAGE;
-}
-
 void KTN_exchange() {
   bool swapped = My_KTN.exchange_patch();
-  if (swapped) KTN_exit();
+  if (swapped) menu_exit();
 }
 
 void SY1000_save() {
   My_SY1000.store_scene();
-  SY1000_exit();
+  menu_exit();
 }
 
 void SY1000_change_to_all_scenes() {
   My_SY1000.update_change_on_all_scenes();
-  SY1000_exit();
+  menu_exit();
 }
 
 void SY1000_rename() {
@@ -652,59 +746,64 @@ void SY1000_rename_done() {
 
 void SY1000_exchange() {
   My_SY1000.exchange_scene(My_SY1000.save_scene_number, My_SY1000.current_snapscene);
-  SY1000_exit();
+  menu_exit();
 }
 
 void SY1000_clear() {
   My_SY1000.initialize_scene(My_SY1000.save_scene_number);
-  SY1000_exit();
+  menu_exit();
 }
 
 void SY1000_clear_all() {
   My_SY1000.initialize_patch_space();
-  SY1000_exit();
+  menu_exit();
 }
 
 void SY1000_add_bass_string_assigns() {
   My_SY1000.add_bass_string_assigns();
-  SY1000_exit();
+  menu_exit();
 }
-
-void SY1000_exit() {
-  SC_set_enc1_acceleration(true);
-  //SCO_select_next_page_of_device(Current_device);
-  SCO_select_page(Previous_page);
-  update_page = RELOAD_PAGE;
-}
-
 
 // ********************************* Section 3: Functions that make the menu work ********************************************
-void SCO_toggle_menu() { // Will open or close the menu
-  if (Current_page != PAGE_MENU) { // Open the menu
-    SCO_select_page(PAGE_MENU);
-  }
-  else { // close the menu
-    if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
-    set_current_device(current_device_when_menu_was_opened);
-    SCO_select_page(Previous_page);
-  }
-}
-
-void menu_open() { // Called when the menu is started the first time
+void menu_open(uint8_t prev_page) { // Called when the menu is started the first time
   SC_set_enc1_acceleration(false);
-  if (open_menu_for_Katana_patch_save) current_menu = KATANA_MENU;
-  else if (open_menu_for_SY1000_scene_save) current_menu = SY1000_MENU;
-  else {
-    current_menu = SELECT_MENU; // Go to top menu
-#ifdef IS_VCMINI
-    LCD_show_popup_title(" E1:SEL  E2:SET ", MESSAGE_TIMER_LENGTH);
-    LCD_show_popup_label("PREV  NEXT   SET", MESSAGE_TIMER_LENGTH);
-#endif
+  switch (open_specific_menu) {
+    case KTN + 1:
+      current_menu = KATANA_MENU;
+      break;
+    case SY1000 + 1:
+      current_menu = SY1000_MENU;
+      break;
+    case SETLIST_ID:
+      current_menu = SETLIST_MENU;
+      SCO_enter_setlist_menu();
+      break;
+    case SONG_ID:
+      current_menu = SONG_MENU;
+      break;
+    default:
+      current_menu = SELECT_MENU; // Go to top menu
+      break;
   }
+  open_specific_menu = 0;
+#ifdef IS_VCMINI
+  // Show encoder/knob information
+  LCD_show_popup_title(" E1:SEL  E2:SET ", MESSAGE_TIMER_LENGTH);
+  LCD_show_popup_label("PREV  NEXT   SET", MESSAGE_TIMER_LENGTH);
+#endif
+
   current_menu_switch = 1;
+  current_page_when_menu_was_opened = prev_page;
   current_device_when_menu_was_opened = Current_device;
   //show_menu_item = false;
   no_hold = true;
+}
+
+void menu_exit() {
+  SC_set_enc1_acceleration(true);
+  //if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
+  if (Current_mode == DEVICE_MODE) set_current_device(current_device_when_menu_was_opened);
+  SCO_select_page(current_page_when_menu_was_opened);
 }
 
 void menu_load(uint8_t Sw) {
@@ -730,9 +829,9 @@ void menu_load(uint8_t Sw) {
   }
 #endif
 
-  uint8_t *val;
+  uint16_t *val;
   uint8_t vnumber;
-  uint8_t value;
+  uint16_t value;
   uint8_t index;
   String msg;
   uint8_t colour;
@@ -762,30 +861,8 @@ void menu_load(uint8_t Sw) {
     case SET:
     case SET_NO_EXP:
       strcpy(menu_title, menu[current_menu][number].Label);
-      val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-      if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) {
-        if (*val < NUMBER_OF_DEVICES) strcpy(menu_label, Device[*val]->full_device_name);
-      }
-      else if (menu[current_menu][number].Sublist == SWITCH_SUBLIST) {
-        read_cmd_sublist(25, *val, msg); // 25 = TYPE_SWITCH
-        //LCD_set_SP_label(Sw, msg);
-        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
-      }
-      else if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) {
-#ifdef IS_VCTOUCH
-        MIDIWL_read_wifi_ssid_sublist(*val, msg);
-        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
-#endif
-      }
-      else if (menu[current_menu][number].Sublist == KTN_NUMBER_SUBLIST) {
-        My_KTN.number_format(My_KTN.save_patch_number + 9 , msg);
-        msg += ':';
-        EEPROM_read_KTN_title(My_KTN.my_device_number + 1, My_KTN.save_patch_number, msg);
-        //LCD_set_SP_label(Sw, msg);
-        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
-      }
-      else if (menu[current_menu][number].Sublist == SY1000_NUMBER_SUBLIST) {
-        My_SY1000.get_snapscene_title(My_SY1000.save_scene_number, msg);
+      val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
+      if (menu_find_custom_sublist_label(menu[current_menu][number].Sublist, *val, msg)) { // Show custom sublist
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
       else if (menu[current_menu][number].Sublist > 0) { // Show sublist if neccesary
@@ -795,7 +872,7 @@ void menu_load(uint8_t Sw) {
         strcpy(menu_label, menu_sublist[index - 1]);  // Copy to the label
       }
       else { // just show the value
-        msg = String(*val);
+        msg = String(*val & 0xFF);
         //LCD_set_SP_label(Sw, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
@@ -811,7 +888,7 @@ void menu_load(uint8_t Sw) {
       break;
     case MIDI_SWITCH_SET:
       strcpy(menu_title, menu[current_menu][number].Label);
-      val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+      val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
       vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
       if (Current_MIDI_switch <= TOTAL_NUMBER_OF_SWITCHES) {
         switch (vnumber) {
@@ -847,7 +924,7 @@ void menu_load(uint8_t Sw) {
       break;
     case DEVICE_SET:
       strcpy(menu_title, menu[current_menu][number].Label);
-      val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+      val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
       vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
       if (Current_device < NUMBER_OF_DEVICES) value = Device[Current_device]->get_setting(vnumber);
       else value = 0;
@@ -925,6 +1002,75 @@ void menu_load(uint8_t Sw) {
 #endif
 }
 
+bool menu_find_custom_sublist_label(uint8_t sublist, uint16_t value, String &label) {
+  switch (sublist) {
+    case DEVICE_SUBLIST:
+      if (value < NUMBER_OF_DEVICES) label = Device[value]->full_device_name;
+      return true;
+    case SWITCH_SUBLIST:
+      read_cmd_sublist(25, value, label); // 25 = TYPE_SWITCH
+      //LCD_set_SP_label(Sw, label);
+      return true;
+    case WIFI_SSID_SUBLIST:
+#ifdef IS_VCTOUCH
+      MIDIWL_read_wifi_ssid_sublist(value, label);
+#endif
+      return true;
+    case KTN_NUMBER_SUBLIST:
+      My_KTN.number_format(My_KTN.save_patch_number + 9 , label);
+      label += ':';
+      EEPROM_read_KTN_title(My_KTN.my_device_number + 1, My_KTN.save_patch_number, label);
+      //LCD_set_SP_label(Sw, label);
+      return true;
+    case SY1000_NUMBER_SUBLIST:
+      My_SY1000.get_snapscene_title(My_SY1000.save_scene_number, label);
+      return true;
+    case SETLIST_SUBLIST:
+      SCO_get_setlist_name(value, label);
+      return true;
+    case SETLIST_TARGET_SUBLIST:
+      SCO_get_setlist_target_name(value, label);
+      return true;
+    case SETLIST_POSITION_SUBLIST:
+      label = "";
+      SCO_get_setlist_order_string(value, LCD_DISPLAY_SIZE, label);
+      return true;
+    case SETLIST_ITEM_SUBLIST:
+      SCO_get_setlist_full_item_name(value, label);
+      return true;
+    case SETLIST_TEMPO_SUBLIST:
+      if (value == GLOBAL_TEMPO) label = "GLOBAL";
+      else label = String(value);
+      return true;
+    case SONG_SUBLIST:
+      SCO_get_song_name(value, label);
+      return true;
+    case SONG_PART_SUBLIST:
+      SCO_get_part_name(value, label);
+      return true;
+    case SONG_TARGET_SUBLIST:
+      SCO_get_song_target_name(value, label);
+      return true;
+    case SONG_ITEM1_SUBLIST:
+      SCO_get_song_item_name(0, value, label);
+      return true;
+    case SONG_ITEM2_SUBLIST:
+      SCO_get_song_item_name(1, value, label);
+      return true;
+    case SONG_ITEM3_SUBLIST:
+      SCO_get_song_item_name(2, value, label);
+      return true;
+    case SONG_ITEM4_SUBLIST:
+      SCO_get_song_item_name(3, value, label);
+      return true;
+    case SONG_ITEM5_SUBLIST:
+      SCO_get_song_item_name(4, value, label);
+      return true;
+    default:
+      return false;
+  }
+}
+
 void menu_set_menu_label(String & lbl) { // Will set the Label string in the SP array
   // Check length does not exceed LABEL_SIZE
   uint8_t len = lbl.length();
@@ -946,9 +1092,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
     }
     if (current_menu == SELECT_MENU) {
       // Exit menu
-      if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
-      set_current_device(current_device_when_menu_was_opened);
-      SCO_select_page(Previous_page);
+      menu_exit();
       return;
     }
     if (current_menu == COMMAND_EDIT_MENU) {
@@ -956,14 +1100,28 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       go_save_cmd();
       return;
     }
+    if (current_menu == SETLIST_MENU) {
+      SCO_save_current_setlist();
+      menu_exit();
+      return;
+    }
+    if (current_menu == SONG_MENU) {
+      SCO_save_current_song();
+      menu_exit();
+      return;
+    }
+    if ((current_menu == SONG_PART_EDIT_MENU) || (current_menu == SONG_PART_MIDI_MENU)) {
+      menu_select(SONG_MENU);
+      return;
+    }
     if (current_menu == KATANA_MENU) {
       if (current_menu_switch == 1) KTN_save();
-      else KTN_exit();
+      else menu_exit();
       return;
     }
     if (current_menu == SY1000_MENU) {
       if (current_menu_switch == 1) SY1000_save();
-      else SY1000_exit();
+      else menu_exit();
       return;
     }
     number = current_menu_switch;
@@ -976,6 +1134,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       return;
     }
   }
+  
   if (number == MENU_SET_VALUE) {
     if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
@@ -1015,11 +1174,10 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
   }
 
   uint8_t cmd_byte_no;
-  uint8_t *val;
+  uint16_t *val;
   uint8_t vnumber;
   uint8_t value;
   signed int delta;
-  uint8_t my_max;
   if (go_up) delta = 1;
   else delta = -1;
   no_hold = true;
@@ -1046,28 +1204,24 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       break;
     case SET:
     case SET_NO_EXP:
+#ifdef IS_VCMINI
+      if ((menu[current_menu][number].Sublist == SETLIST_ITEM_SUBLIST) && (Sw == ENCODER2_PRESS_SWITCH_NUMBER)) { // Shortcut: pressing encoder 2 on Select item in the setlist menu adds the item
+        SCO_add_setlist_item();
+      }
+#endif
       Last_set_switch = Sw;
-      val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-      /*if (go_up) {
-        if (*val < menu[current_menu][number].Max)*val = *val + 1;
-        else *val = menu[current_menu][number].Min;
-        }
-        else {
-        if (*val > menu[current_menu][number].Min)*val = *val - 1;
-        else *val = menu[current_menu][number].Max;
-        }*/
-      my_max = menu[current_menu][number].Max;
-      if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
-      *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, my_max);
-      DEBUGMSG("Menu target " + String(number) + " set to value " + String (*val));
+      val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
+      DEBUGMSG("Value before " + String (*val));
+      *val = update_encoder_value(delta, *val, menu[current_menu][number].Min, menu_get_max_value(number));
+      DEBUGMSG("Menu target " + String(number) + " set to value " + String (*val) + ". Max is " + String(menu_get_max_value(number)));
       menu_load(Sw); // Will update the label
-      if ((menu[current_menu][number].Sublist == DEVICE_SUBLIST) || (menu[current_menu][number].Sublist == SWITCH_SUBLIST)) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
+      menu_do_after_item_update(number);
       no_hold = false;
       break;
     case DEVICE_SET:
       if (Current_device < NUMBER_OF_DEVICES) {
         Last_set_switch = Sw;
-        val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+        val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         value = Device[Current_device]->get_setting(vnumber);
         /*if (go_up) {
@@ -1093,7 +1247,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
     case MIDI_SWITCH_SET:
       if (Current_device < NUMBER_OF_DEVICES) {
         Last_set_switch = Sw;
-        val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+        val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         uint8_t *p = NULL;
         if (Current_MIDI_switch <= TOTAL_NUMBER_OF_SWITCHES) {
@@ -1150,10 +1304,7 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       menu_select(SELECT_MENU);
       break;
     case EXIT_MENU:
-      SC_set_enc1_acceleration(true);
-      if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
-      set_current_device(current_device_when_menu_was_opened);
-      SCO_select_page(Previous_page);
+      menu_exit();
       break;
     case NONE:
       break;
@@ -1170,10 +1321,9 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
     number = current_menu_switch;
   }
   uint8_t cmd_byte_no;
-  uint8_t *val;
+  uint16_t *val;
   uint8_t vnumber;
   uint8_t value;
-  uint8_t my_max;
 
   if (!no_hold) {
     switch (menu[current_menu][number].Type) {
@@ -1191,16 +1341,15 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
         break;
       case SET:
       case SET_NO_EXP:
-        val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-        my_max = menu[current_menu][number].Max;
-        if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
-        *val = update_encoder_value(1, *val, menu[current_menu][number].Min, my_max);
+        val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
+        *val = update_encoder_value(1, *val, menu[current_menu][number].Min, menu_get_max_value(number));
         menu_load(Sw); // Will update the label
-        if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
+        //if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) update_page = REFRESH_PAGE; // So the device menu updates when another device is selected
+        menu_do_after_item_update(number);
         break;
       case DEVICE_SET:
         if (Current_device < NUMBER_OF_DEVICES) {
-          val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+          val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
           vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
           value = Device[Current_device]->get_setting(vnumber);
           if (value < menu[current_menu][number].Max) value = value + 1;
@@ -1211,7 +1360,7 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
         break;
       case MIDI_SWITCH_SET:
         if (Current_device < NUMBER_OF_DEVICES) {
-          val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+          val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
           vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
           uint8_t *p = NULL;
           if (Current_MIDI_switch < TOTAL_NUMBER_OF_SWITCHES) {
@@ -1240,6 +1389,23 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
   }
 }
 
+uint16_t menu_get_max_value(uint8_t number) {
+  switch (menu[current_menu][number].Sublist) {
+    case WIFI_SSID_SUBLIST: return number_of_scanned_ssids;
+    case SETLIST_POSITION_SUBLIST: return Number_of_setlist_items + 1;
+    case SETLIST_ITEM_SUBLIST:
+      if (Current_setlist_target == 0) return MAX_NUMBER_OF_SONGS;
+      if (Current_setlist_target == 1) return Number_of_pages - 1;
+      if (Current_setlist_target < NUMBER_OF_DEVICES + 2) return Device[Current_setlist_target - 2]->setlist_song_get_number_of_items();
+    case SONG_ITEM1_SUBLIST: return SCO_get_song_item_max(0);
+    case SONG_ITEM2_SUBLIST: return SCO_get_song_item_max(1);
+    case SONG_ITEM3_SUBLIST: return SCO_get_song_item_max(2);
+    case SONG_ITEM4_SUBLIST: return SCO_get_song_item_max(3);
+    case SONG_ITEM5_SUBLIST: return SCO_get_song_item_max(4);
+  }
+  return menu[current_menu][number].Max;
+}
+
 void menu_move_expr_pedal(uint8_t value) { // Called when the master expression pedal is moved
 
   if (current_menu == CALIBRATION_MENU) {
@@ -1260,11 +1426,10 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
   if (Last_set_switch == 0) return; // Exit when last switch moved is zero
 #endif
 
-  uint8_t *val;
+  uint16_t *val;
   uint8_t vnumber;
   uint8_t setting;
   uint8_t no_of_pages;
-  uint8_t my_max;
 
   no_hold = true;
   switch (menu[current_menu][number].Type) {
@@ -1274,11 +1439,10 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
     case SET:
       LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       //LCD_show_popup_label(menu[current_menu][number].Label);
-      val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
-      my_max = menu[current_menu][number].Max;
-      if (menu[current_menu][number].Sublist == WIFI_SSID_SUBLIST) my_max = number_of_scanned_ssids;
-      *val = map (value, 0, 127, menu[current_menu][number].Min, my_max);
-      if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) reload_menus(10); // So the device menu updates when another device is selected
+      val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
+      *val = map (value, 0, 127, menu[current_menu][number].Min, menu_get_max_value(number));
+      //if (menu[current_menu][number].Sublist == DEVICE_SUBLIST) reload_menus(10); // So the device menu updates when another device is selected
+      menu_do_after_item_update(number);
       menu_load(lcd_for_update); // Will update the label
       no_hold = false;
       break;
@@ -1286,7 +1450,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
       LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       //LCD_show_popup_label(menu[current_menu][number].Label);
       if (Current_device < NUMBER_OF_DEVICES) {
-        val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+        val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         setting = Device[Current_device]->get_setting(vnumber);
         if (menu[current_menu][number].Sublist != PAGE_SUBLIST) {
@@ -1305,7 +1469,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
     case MIDI_SWITCH_SET:
       LCD_show_bar(lcd_for_bar, value, 0); // Show it on the switch display
       if (Current_device < NUMBER_OF_DEVICES) {
-        val = reinterpret_cast<uint8_t*>(menu[current_menu][number].Target);
+        val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         uint8_t *p = NULL;
         if (Current_MIDI_switch < TOTAL_NUMBER_OF_SWITCHES) {
@@ -1366,6 +1530,33 @@ void menu_encoder_turn(uint8_t Sw, signed int value) {
   }
 }
 
+void menu_do_after_item_update(uint8_t number) {
+  switch (menu[current_menu][number].Sublist) {
+    case DEVICE_SUBLIST:
+    case SWITCH_SUBLIST:
+      update_page = REFRESH_PAGE;
+      break;
+    case SETLIST_SUBLIST:
+      SCO_new_setlist_selected_in_menu();
+      break;
+    case SETLIST_TARGET_SUBLIST:
+      SCO_new_setlist_target_selected_in_menu();
+      break;
+    case SETLIST_POSITION_SUBLIST:
+      SCO_new_setlist_position_selected_in_menu();
+      break;
+    case SONG_SUBLIST:
+      SCO_new_song_selected_in_menu();
+      break;
+    case SONG_PART_SUBLIST:
+      SCO_new_song_part_selected_in_menu();
+      break;
+    case SONG_TARGET_SUBLIST:
+      SCO_new_song_target_selected_in_menu();
+      break;
+  };
+}
+
 void menu_select_prev() {
   do { // Skip menu items of type NONE
     if (current_menu_switch <= 1) current_menu_switch = 12;
@@ -1397,6 +1588,9 @@ void menu_select(uint8_t _menu) {
   }
   else {
     current_menu_switch = 1;
+#ifdef IS_VCMINI
+    if ((_menu == SONG_PART_EDIT_MENU) && (SCO_check_song_target_set())) current_menu_switch = 6;
+#endif
   }
   //show_menu_item = false;
   update_page = REFRESH_PAGE;
@@ -1484,6 +1678,14 @@ struct cmdtype_struct {
 #define TYPE_LOOPER 31
 #define TYPE_EXP_PEDAL 32
 #define TYPE_CMDTYPE_ASSIGN 33
+#define TYPE_SETLIST 34
+#define TYPE_SETLIST_TYPE 35
+#define TYPE_SONG 36
+#define TYPE_SONG_TYPE 37
+#define TYPE_SONGPART 38
+#define TYPE_SONGPREVNEXT 39
+#define TYPE_MODE 40
+#define TYPE_MIDI_MORE 41
 
 // Some of the data for the sublists below is not fixed, but must be read from a Device class or from EEPROM
 // Here we define these sublists
@@ -1496,6 +1698,8 @@ struct cmdtype_struct {
 #define SUBLIST_CMD 249 // To show the selected command
 #define SUBLIST_DEVICES 248 // To show the devices + Current and Common
 #define SUBLIST_PATCH_BANK 247 // To show the bank number
+#define SUBLIST_SETLIST 246 // To show the setlist name
+#define SUBLIST_SONG 245 // To show the song name
 
 const PROGMEM cmdtype_struct cmdtype[] = {
   { "", 0, 0, 0 }, // TYPE_OFF 0
@@ -1503,7 +1707,7 @@ const PROGMEM cmdtype_struct cmdtype[] = {
   { "COMMAND", 1, 0, NUMBER_OF_COMMON_TYPES - 1 }, // TYPE_COMMON_COMMANDS 2
   { "COMMAND", 18, 0, NUMBER_OF_DEVICE_TYPES - 1 }, // TYPE_DEVICE_COMMANDS 3
   { "PAGE", SUBLIST_PAGE, 0, LAST_FIXED_CMD_PAGE }, // TYPE_PAGE 4
-  { "SELECT TYPE", 117, 0, NUMBER_OF_SELECT_TYPES - 1 }, // TYPE_CMDTYPE 5
+  { "SELECT TYPE", 118, 0, NUMBER_OF_SELECT_TYPES - 1 }, // TYPE_CMDTYPE 5
   { "MIDI PORT", 40, 0, NUMBER_OF_MIDI_PORTS }, // TYPE_MIDI_PORT 6
   { "MIDI CHANNEL", 0, 1, 16 }, // TYPE_MIDI_CHANNEL 7
   { "CC NUMBER", 0, 0, 127 }, // TYPE_CC_NUMBER 8
@@ -1520,36 +1724,44 @@ const PROGMEM cmdtype_struct cmdtype[] = {
   { "VALUE", SUBLIST_PAR_VALUE, 0, 255 }, // TYPE_PAR_VALUE 19
   { "ASSIGN", SUBLIST_ASSIGN, 0, 255 }, // TYPE_ASSIGN 20
   { "TRIGGER", SUBLIST_TRIGGER, 1, 127 }, // TYPE_ASSIGN 21
-  { "TOGGLE TYPE", 48, 0, 6 }, // TYPE_TOGGLE 22
+  { "TOGGLE TYPE", 49, 0, 7 }, // TYPE_TOGGLE 22
   { "STEP", 0, 1, 127 }, // TYPE_STEP 24
-  { "SWITCH TRIGGER", 109, 0, 5 }, // TYPE_SWITCH_TRIGGER 24
-  { "SWITCH", 58, 0, 24 }, // TYPE_SWITCH 25
+  { "SWITCH TRIGGER", 110, 0, 5 }, // TYPE_SWITCH_TRIGGER 24
+  { "SWITCH", 59, 0, 24 }, // TYPE_SWITCH 25
   { "COMMAND", SUBLIST_CMD, 0, 255 }, // TYPE_CMD 26
   { "BPM", 0, 40, 250 }, // TYPE_BPM 27
   { "MIN", 0, 0, 127 }, // TYPE_MIN 28
   { "MAX", 0, 0, 127 }, // TYPE_MAX 29
   { "SNAPSHOT/SCENE", 0, 0, 8 }, // TYPE_SNAPSCENE 30
-  { "LOOPER", 90, 0, 10 }, // TYPE_LOOPER 31
-  { "EXP.PEDAL", 101, 0, 3 }, // TYPE_EXP_PEDAL 32
-  { "SELECT TYPE", 117, 0, 3 }, // TYPE_CMDTYPE_ASSIGN 33
+  { "LOOPER", 91, 0, 10 }, // TYPE_LOOPER 31
+  { "EXP.PEDAL", 102, 0, 3 }, // TYPE_EXP_PEDAL 32
+  { "SELECT TYPE", 118, 0, 3 }, // TYPE_CMDTYPE_ASSIGN 33
+  { "SETLIST", SUBLIST_SETLIST, 0, MAX_NUMBER_OF_SETLISTS }, // TYPE_SETLIST 34
+  { "SELECT TYPE", 126, 0, 6 }, // TYPE_SETLIST_TYPE 35
+  { "SONG", SUBLIST_SONG, 0, MAX_NUMBER_OF_SONGS }, // TYPE_SONG 36
+  { "SELECT TYPE", 134, 0, 7 }, // TYPE_SONG_TYPE 37
+  { "SONG PART", 0, 0, 7 }, // TYPE_SONGPART 38
+  { "INC/DEC TYPE", 143, 0, 2 }, // TYPE_SONGPREVNEXT 39
+  { "MODE", 146, 0, 2 }, // TYPE_MODE
+  { "COMMAND", 149, 0, 2 }, // TYPE_MIDI_MORE
 };
 
 const PROGMEM char cmd_sublist[][17] = {
 
   // Sublist 1 - 17: Common Command Types
-  "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "MENU", "", "", "", "", "", "", "",
+  "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "SETLIST", "SONG", "MODE", "MIDI MORE", "MENU", "", "", "",
 
   // Sublist 18 - 39: Device Command Types
   "PATCH", "PARAMETER", "ASSIGN", "SNAPSHOT/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "MASTER EXP PEDAL", "TOGGL MASTER EXP",
   "DIR.SELECT", "PAR BANK", "PAR BANK UP", "PAR BANK DOWN", "PARBANK_CATEGORY", "SAVE PATCH", "", "", "", "", "", "",
 
-  // Sublist 40 - 47: MIDI ports
-  "USB MIDI", "MIDI 1", "MIDI2/RRC", "MIDI 3", "USBH MIDI", "MIDI 4", "ALL PORTS", "",
+  // Sublist 40 - 48: MIDI ports
+  PORT1_NAME, PORT2_NAME, PORT3_NAME, PORT4_NAME, PORT5_NAME, PORT6_NAME, PORT7_NAME, PORT8_NAME, PORT9_NAME,
 
-  // Sublist 48 - 57: Toggle types
-  "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "", "", "",
+  // Sublist 49 - 58: Toggle types
+  "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "ONE SHOT", "", "",
 
-  // Sublist 58 - 82: Switch types
+  // Sublist 59 - 83: Switch types
 #ifdef IS_VCTOUCH
   "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Switch 4", "Switch 5", "Switch 6", "Switch 7", "Switch 8",
   "Switch 9", "Switch 10", "Switch 11", "Switch 12", "Switch 13", "Switch 14", "Switch 15",
@@ -1566,20 +1778,35 @@ const PROGMEM char cmd_sublist[][17] = {
 #endif
 #endif
 
-  // Sublist 83 - 89: CC toggle types
+  // Sublist 84 - 90: CC toggle types
   "ONE SHOT", "MOMENTARY", "TOGGLE", "TOGGLE ON", "RANGE", "STEP", "UPDOWN",
 
-  // Sublist 90 - 100: CC toggle types
+  // Sublist 91 - 101: CC toggle types
   "OFF", "ON/OFF", "PLAY/STOP", "REC/OVERDUB", "UNDO/REDO", "HALF SPEED", "REVERSE", "PLAY ONCE", "PRE/POST", "REC/PLAY/OVERDUB", "STOP/ERASE",
 
-  // Sublist 101 - 108: EXP pedal types
+  // Sublist 102 - 109: EXP pedal types
   "TOGGLE", "EXP1", "EXP2", "EXP3", "", "", "", "",
 
-  // Sublist 109 - 116: Command switch trigger types
+  // Sublist 110 - 117: Command switch trigger types
   "ON PRESS", "ON RELEASE", "ON LONG PRESS", "ON DUAL PRESS", "ON DUAL RELEASE", "ON DUAL LONG PRS", "", "",
 
-  // Sublist 117 - 124: Page/ patch select types
+  // Sublist 118 - 125: Page/ patch select types
   "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "", "",
+
+  // Sublist 126 - 133: Setlist select types
+  "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "EDIT", "",
+
+  // Sublist 134 - 142: Song select types
+  "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "PARTSEL", "EDIT", "",
+
+  // Sublist 143 - 145: Song inc/dec types
+  "SONG", "PART", "SONG+PART",
+
+  // Sublist 146 - 148: Mode types
+  "SONG", "PAGE", "DEVICE",
+
+  // Sublist 149 - 151: Midi more types
+  "START", "STOP", "START/STOP",
 };
 
 #define SUBLIST_DEVICE_COMMAND_NUMBER 18
@@ -1901,6 +2128,12 @@ void read_cmd_sublist(uint8_t cmd_type, uint8_t value, String & msg) {
       if (dev == NUMBER_OF_DEVICES) msg = "Current Device";
       if (dev == NUMBER_OF_DEVICES + 1) msg = "Common Functions";
       break;
+    case SUBLIST_SETLIST:
+      SCO_get_setlist_name(value, msg);
+      break;
+    case SUBLIST_SONG:
+      SCO_get_song_name(value, msg);
+      break;
     default: // Static sublist - read it from the cmd_sublist array
       index = value + cmdtype[cmd_type].Sublist;
       msg = cmd_sublist[index - 1];
@@ -1979,10 +2212,11 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
           break;
         case MIDI_PC:
           // Command: COMMON, MIDI_PC, NUMBER, CHANNEL, PORT
-          set_type_and_value(CB_DATA1, TYPE_PC, 0, in_edit_mode);
-          set_type_and_value(CB_DATA2, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
-          set_type_and_value(CB_VAL1, TYPE_MIDI_PORT, 0, in_edit_mode);
-          clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
+          set_type_and_value(CB_DATA1, TYPE_CMDTYPE, 0, in_edit_mode);
+          set_type_and_value(CB_DATA2, TYPE_PC, 0, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+          set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
           break;
         case MIDI_CC:
           // Command: COMMON, CC_number, CC_TOGGLE_TYPE, Value1, Value2, Channel, Port
@@ -2005,6 +2239,29 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
           // Command: COMMON, SET_TEMPO, number
           set_type_and_value(CB_DATA1, TYPE_BPM, Setting.Bpm, in_edit_mode);
           clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+          break;
+        case SETLIST:
+          // Command: COMMON, SETLIST, 0
+          set_type_and_value(CB_DATA1, TYPE_SETLIST_TYPE, 0, in_edit_mode);
+          set_type_and_value(CB_DATA2, TYPE_SETLIST, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+          break;
+        case SONG:
+          // Command: COMMON, SONG, 0
+          set_type_and_value(CB_DATA1, TYPE_SONG_TYPE, 0, in_edit_mode);
+          set_type_and_value(CB_DATA2, TYPE_SONG, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+          break;
+        case MODE:
+          // Command: COMMON, MODE, number
+          set_type_and_value(CB_DATA1, TYPE_MODE, Current_mode, in_edit_mode);
+          clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+          break;
+        case MIDI_MORE:
+          // Command: COMMON, MODE, number
+          set_type_and_value(CB_DATA1, TYPE_MIDI_MORE, 0, in_edit_mode);
+          set_type_and_value(CB_DATA2, TYPE_MIDI_PORT, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
           break;
         default:
           // For all two byte commands
@@ -2129,6 +2386,12 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
             set_type_and_value(CB_DATA2, TYPE_PAGE, 0, in_edit_mode);
             clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
           }
+          if (current_cmd_function() == MIDI_PC) {
+            set_type_and_value(CB_DATA2, TYPE_PC, 0, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
+          }
           if (current_cmd_function() == PATCH) {
             uint8_t dev = cmdbyte[CB_DEVICE].Value;
             uint16_t patch_no = 0;
@@ -2148,17 +2411,103 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
           break;
         case NEXT:
         case PREV:
-          clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+          if (current_cmd_function() == MIDI_PC) {
+            set_type_and_value(CB_DATA2, TYPE_MAX, 127, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
+          }
+          else {
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+          }
           break;
         case BANKSELECT:
-          set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
-          set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
-          clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+          if (current_cmd_function() == MIDI_PC) {
+            set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL3, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL4, in_edit_mode); // Clear bytes 7
+          }
+          else {
+            set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+          }
           break;
         case BANKUP:
         case BANKDOWN:
+          if (current_cmd_function() == MIDI_PC) {
+            set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL3, in_edit_mode);
+          }
+          else {
+            set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          }
+          break;
+      }
+    }
+
+    // *****************************************
+    // * BYTE3: Setlist command type updated   *
+    // *****************************************
+    if (cmd_type == TYPE_SETLIST_TYPE) {
+      switch (cmdbyte[cmd_byte_no].Value) {
+        case SL_SELECT:
+          set_type_and_value(CB_DATA2, TYPE_SETLIST, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SL_BANKSELECT:
+          set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL2, in_edit_mode);
+          break;
+        case SL_BANKUP:
+        case SL_BANKDOWN:
           set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
-          clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SL_NEXT:
+        case SL_PREV:
+        case SL_EDIT:
+          clear_cmd_bytes(CB_DATA2, in_edit_mode);
+          break;
+      }
+    }
+
+    // *****************************************
+    // * BYTE3: Song command type updated      *
+    // *****************************************
+    if (cmd_type == TYPE_SONG_TYPE) {
+      switch (cmdbyte[cmd_byte_no].Value) {
+        case SONG_SELECT:
+          set_type_and_value(CB_DATA2, TYPE_SONG, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_PARTSEL:
+          set_type_and_value(CB_DATA2, TYPE_SONGPART, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_BANKSELECT:
+          set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL2, in_edit_mode);
+          break;
+        case SONG_BANKUP:
+        case SONG_BANKDOWN:
+          set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_NEXT:
+        case SONG_PREV:
+          set_type_and_value(CB_DATA2, TYPE_SONGPREVNEXT, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_EDIT:
+          clear_cmd_bytes(CB_DATA2, in_edit_mode);
           break;
       }
     }
@@ -2232,6 +2581,9 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
         if (patch_no < Device[Dev]->patch_min) {
           cmdbyte[CB_VAL1].Value = Device[Dev]->patch_max / 100;
         }
+
+        if (cmdbyte[CB_VAL1].Value == 0) cmdbyte[CB_DATA2].Value = Device[Dev]->patch_min % 100; // Reset the minimum value
+        else cmdbyte[CB_DATA2].Value = 0;
       }
     }
 
@@ -2291,7 +2643,8 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
     }
   }
 
-  if (in_edit_mode) reload_menus(8);
+  //if (in_edit_mode) reload_menus(8);
+  if (in_edit_mode) update_page = RELOAD_PAGE;
 }
 
 uint8_t current_cmd_function() {
@@ -2334,6 +2687,7 @@ void set_default_parameter_values(bool in_edit_mode) {
       break;
     case TOGGLE:
     case MOMENTARY:
+    case ONE_SHOT:
       cmdbyte[CB_VAL1].Value = max;
       cmdbyte[CB_VAL2].Value = 0;
       break;
@@ -2345,20 +2699,22 @@ void set_default_parameter_values(bool in_edit_mode) {
 
 void cmdbyte_increase(uint8_t cmd_byte_no) { // Will increase the value of a command byte
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
-  if (cmdtype[cmd_type].Max > 0) {
+  uint8_t _max = find_cmd_byte_max(cmd_byte_no);
+  if (_max > 0) {
     /*cmdbyte[cmd_byte_no].Value++;
       if (cmdbyte[cmd_byte_no].Value > cmdtype[cmd_type].Max) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Min;*/
-    cmdbyte[cmd_byte_no].Value = update_encoder_value(1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
+    cmdbyte[cmd_byte_no].Value = update_encoder_value(1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, _max);
     build_command_structure(cmd_byte_no, cmd_type, true);
   }
 }
 
 void cmdbyte_decrease(uint8_t cmd_byte_no) { // Will decrease the value of a command byte
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
-  if (cmdtype[cmd_type].Max > 0) {
+  uint8_t _max = find_cmd_byte_max(cmd_byte_no);
+  if (_max > 0) {
     //if (cmdbyte[cmd_byte_no].Value <= cmdtype[cmd_type].Min) cmdbyte[cmd_byte_no].Value = cmdtype[cmd_type].Max;
     //else cmdbyte[cmd_byte_no].Value--;
-    cmdbyte[cmd_byte_no].Value = update_encoder_value(-1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
+    cmdbyte[cmd_byte_no].Value = update_encoder_value(-1, cmdbyte[cmd_byte_no].Value, cmdtype[cmd_type].Min, _max);
     build_command_structure(cmd_byte_no, cmd_type, true);
   }
 }
@@ -2370,13 +2726,26 @@ void cmdbyte_from_exp_pedal(uint8_t value, uint8_t lcd_for_bar, uint8_t lcd_for_
   uint8_t cmd_byte_no = menu[current_menu][Last_cmd_number].Sublist; // Command number is in the Sublist variable
 #endif
   uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
-  if (cmdtype[cmd_type].Max > 0) {
-    cmdbyte[cmd_byte_no].Value = map(value, 0, 127, cmdtype[cmd_type].Min, cmdtype[cmd_type].Max);
+  uint8_t _max = find_cmd_byte_max(cmd_byte_no);
+  if (_max > 0) {
+    cmdbyte[cmd_byte_no].Value = map(value, 0, 127, cmdtype[cmd_type].Min, _max);
     //LCD_show_popup_label(cmdtype[cmd_type].Title);
     build_command_structure(cmd_byte_no, cmd_type, true);
     menu_load(lcd_for_update); // So the correct text shows below the display
     LCD_show_bar(lcd_for_bar, value, 0); // Show it on the Sw display
   }
+}
+
+uint8_t find_cmd_byte_max(uint8_t cmd_byte_no) {
+  uint8_t dev = cmdbyte[CB_DEVICE].Value;
+  uint8_t cmd_type = cmdbyte[cmd_byte_no].Type;
+  if (cmd_type == TYPE_PATCH_NUMBER) {
+    if (dev < NUMBER_OF_DEVICES) {
+      if (cmdbyte[CB_VAL1].Value != (Device[dev]->patch_max / 100)) return 99;
+      else return Device[dev]->patch_max % 100;
+    }
+  }
+  return cmdtype[cmd_type].Max;
 }
 
 void menu_set_main_title() { // Called from main_LCD_control() when the main display is updated and it the page is the menu page
@@ -2590,6 +2959,8 @@ void key_encoder_edit_character(bool dir_up) {
     }
   }
   Text_entry[Main_menu_cursor - 1] = my_char;
+  //keyboard_timer = millis(); // Restart timer
+  //keyboard_timer_running = true;
   update_main_lcd = true;
 }
 

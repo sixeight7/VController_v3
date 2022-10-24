@@ -143,7 +143,7 @@ uint16_t TFT_colours[NUMBER_OF_COLOURS] = {
   0xE700 ,   // Colour 7 is Yellow
   0x881F ,   // Colour 8 is Purple
   0xFB15 ,   // Colour 9 is Pink
-  0x7FA2 ,   // Colour 10 is Soft Green
+  0x454A ,   // Colour 10 is Soft Green
   0x0519 ,   // Colour 11 is Light Blue
   0x0000 ,   // Colour 12 is spare
   0x0000 ,   // Colour 13 is spare
@@ -155,11 +155,11 @@ uint16_t TFT_colours[NUMBER_OF_COLOURS] = {
   0x0010 ,  // Colour 19 is Blue dimmed
   0xC240 ,  // Colour 20 is Orange dimmed
   0x04D3 ,  // Colour 21 is Cyan dimmed
-  0x94B2 ,  // Colour 22 is White dimmed
+  0x630C ,  // Colour 22 is White dimmed
   0xF5E0 ,   // Colour 23 is Yellow dimmed
   0x400E ,   // Colour 24 is Purple dimmed
   0x994B ,   // Colour 25 is Pink dimmed
-  0x4C81 ,   // Colour 26 is Soft green dimmed
+  0x2B65 ,   // Colour 26 is Soft green dimmed
   0x030F ,   // Colour 27 is Light Blue dimmed
   0x0000 ,   // Colour 28 is spare dimmed
   0x0000 ,   // Colour 29 is spare dimmed
@@ -177,7 +177,12 @@ unsigned long startupTimer = 0;
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
+
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+Adafruit_NeoPixel LEDs = Adafruit_NeoPixel(NUMBER_OF_LEDS, NEOPIXELLEDPIN, NEO_RGB + NEO_KHZ400);
+#else
 Adafruit_NeoPixel LEDs = Adafruit_NeoPixel(NUMBER_OF_LEDS, NEOPIXELLEDPIN, NEO_RGB + NEO_KHZ800);
+#endif
 uint8_t LED_order[NUMBER_OF_LEDS] = {LED_ORDER};
 
 #ifdef BACKLIGHTNEOPIXELPIN
@@ -287,7 +292,7 @@ void LED_update() {
               LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
             }
             else {
-              if (Device[Dev]->patch_number == SP[sw].PP_number) {
+              if (Device[Dev]->setlist_item_number == SP[sw].PP_number) {
                 if (Device[Dev]->is_on) LED_show_colour(s, SP[sw].Colour);
                 else LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show dimmed colour for devices that are not connected
               }
@@ -329,7 +334,7 @@ void LED_update() {
             if (SP[sw].State == 2) LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour)); // LED dimmed
             if (SP[sw].State == 0) LED_show_colour(s, LED_OFF); // LED off
           }
-          else { // For the TRI/FOUR/STEP/RANGE/UPDOWN only light up when pressed.
+          else { // For the TRI/FOUR/STEP/RANGE/UPDOWN/ONE_SHOT only light up when pressed.
             if (SP[sw].Pressed) LED_show_colour(s, LED_FX_type_colour(SP[sw].Colour));
             else LED_show_dimmed(s, LED_FX_type_colour(SP[sw].Colour));
           }
@@ -372,12 +377,13 @@ void LED_update() {
           break;
         case SNAPSCENE:
           cs = Device[Dev]->current_snapscene;
-          if ((cs == SP[sw].PP_number) || (SP[sw].Pressed)) LED_show_colour(s, SP[sw].Colour);
+          if (cs == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
           else if (cs != 0) {
             if (cs == SP[sw].Value1) LED_show_colour(s, SP[sw].Colour); // First scene under switch
             else if (cs == SP[sw].Value2) LED_show_colour(s, LED_WHITE); // Second scene under switch
             else if (cs == SP[sw].Value3) LED_show_colour(s, LED_PURPLE); // Third scene under switch
-            else if (Device[Dev]->check_snapscene_active(SP[sw].PP_number)) LED_show_colour(s, LED_BLUE | LED_DIMMED); // Show blue LEDs for active scenes SY1000
+            else if (Device[Dev]->check_snapscene_active(SP[sw].PP_number)) LED_show_colour(s, SP[sw].Colour | LED_DIMMED); // Show blue LEDs for active scenes SY1000
+            else if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
             else LED_show_colour(s, LED_OFF);
           }
           else LED_show_colour(s, LED_OFF);
@@ -405,12 +411,28 @@ void LED_update() {
           Backlight_show_colour(s, Setting.LED_bpm_colour);
           break;
         case MIDI_PC:
-          if (SP[sw].PP_number == MIDI_recall_PC(SP[sw].Value1, SP[sw].Value2)) LED_show_colour(s, SP[sw].Colour); // Value1 stores MIDI channel, value2 stores MIDI port
-          else LED_show_colour(s, LED_OFF);
+          if (SP[sw].Sel_type == SELECT) {
+            if (SP[sw].PP_number == MIDI_recall_PC(SP[sw].Value1, MIDI_set_port_number_from_menu(SP[sw].Value2))) LED_show_colour(s, SP[sw].Colour); // Value2 stores MIDI channel, value3 stores MIDI port
+            else LED_show_colour(s, LED_OFF);
+          }
+          else if (SP[sw].Sel_type == BANKSELECT) {
+            if (device_in_bank_selection == MIDI_PC_SELECTION_IN_PROGRESS) {
+              LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
+            }
+            else {
+              if (SP[sw].PP_number == MIDI_recall_PC(SP[sw].Value2, MIDI_set_port_number_from_menu(SP[sw].Value3))) LED_show_colour(s, SP[sw].Colour); // Value2 stores MIDI channel, value3 stores MIDI port
+              else LED_show_colour(s, LED_OFF);
+            }
+          }
+          else {
+            if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
+            else LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
+          }
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case MIDI_NOTE:
         case MENU:
+        case MIDI_MORE:
           if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
           else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, SP[sw].Colour);
@@ -446,6 +468,51 @@ void LED_update() {
           if (global_tuner_active) LED_show_colour(s, Setting.LED_global_colour);
           else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, Setting.LED_global_colour);
+          break;
+        case SETLIST:
+          if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
+          else if (SP[sw].Sel_type == SL_SELECT) {
+            if (Current_setlist == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+            else LED_show_colour(s, LED_OFF);
+          }
+          else if (SP[sw].Sel_type == SL_BANKSELECT) {
+            if (device_in_bank_selection == SETLIST_BANK_SELECTION_IN_PROGRESS) {
+              LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
+            }
+            else {
+              if (Current_setlist == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+              else LED_show_colour(s, LED_OFF);
+            }
+          }
+          else LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
+          Backlight_show_colour(s, SP[sw].Colour);
+          break;
+        case SONG:
+          if (SP[sw].Pressed) LED_show_colour(s, SP[sw].Colour);
+          else if (SP[sw].Sel_type == SONG_SELECT) {
+            if (Current_song == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+            else LED_show_colour(s, LED_OFF);
+          }
+          else if (SP[sw].Sel_type == SONG_BANKSELECT) {
+            if (device_in_bank_selection == SONG_BANK_SELECTION_IN_PROGRESS) {
+              LED_show_colour(s, SP[sw].Colour | LED_FLASHING); //Flash the devices PATCH LEDs
+            }
+            else {
+              if (Current_song_setlist_item == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+              else LED_show_colour(s, LED_OFF);
+            }
+          }
+          else if (SP[sw].Sel_type == SONG_PARTSEL) {
+            if (Current_part == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+            else if (SCO_check_part_active(SP[sw].PP_number)) LED_show_dimmed(s, SP[sw].Colour);
+            else LED_show_colour(s, LED_OFF);
+          }
+          else LED_show_colour(s, SP[sw].Colour | LED_DIMMED);
+          Backlight_show_colour(s, SP[sw].Colour);
+          break;
+        case MODE:
+          if (Current_mode == SP[sw].PP_number) LED_show_colour(s, SP[sw].Colour);
+          else LED_show_colour(s, LED_OFF);
           break;
         default:
           LED_show_colour(s, LED_OFF); // Show nothing with undefined LED

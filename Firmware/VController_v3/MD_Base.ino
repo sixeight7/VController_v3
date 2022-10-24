@@ -33,7 +33,7 @@ void MD_base_class::init() { // Default values for variables
   my_device_page3 = 0;
   my_device_page4 = 0;
 
-  current_patch_name.reserve(17);
+  current_patch_name.reserve(MAIN_LCD_DISPLAY_SIZE + 1);
   current_patch_name = "                ";
   is_always_on = true; // Default value
 }
@@ -86,8 +86,7 @@ void MD_base_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) 
   // Check the source by checking the channel
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // Device sends a program change
     if (patch_number != program) {
-      prev_patch_number = patch_number;
-      patch_number = program;
+      set_patch_number(program);
       //update_page = REFRESH_PAGE;
       //page_check();
       do_after_patch_selection();
@@ -166,6 +165,13 @@ void MD_base_class::disconnect() {
   update_main_lcd = true;
 }
 
+void MD_base_class::set_patch_number(uint16_t number) {
+  if (number == patch_number) return;
+  prev_patch_number = patch_number;
+  patch_number = number;
+  setlist_item_number = SCO_find_number_in_setlist(my_device_number, number);
+}
+
 // ********************************* Section 3: Device common MIDI out functions ********************************************
 
 void MD_base_class::check_sysex_delay() { // Will delay if last message was within sysex_delay_length (10 ms)
@@ -207,6 +213,8 @@ void MD_base_class::do_after_patch_selection() {
   else {
     update_page = REFRESH_FX_ONLY;
   }
+  SCO_check_update_setlist_item(my_device_number, setlist_song_get_current_item_state());
+  SCO_check_update_song_item(my_device_number, setlist_song_get_current_item_state());
 }
 
 bool MD_base_class::request_patch_name(uint8_t sw, uint16_t number) {
@@ -220,19 +228,20 @@ uint16_t MD_base_class::calculate_patch_number(uint8_t bank_position, uint8_t ba
   uint16_t new_patch;
   if (bank_selection_active()) new_patch = (bank_select_number * bank_size) + bank_position;
   else new_patch = (bank_number * bank_size) + bank_position;
-  if (new_patch > patch_max) new_patch = new_patch - patch_max - 1;
+  if (new_patch == (get_patch_max() + 1)) new_patch = NEW_PATCH;
+  if (new_patch > (get_patch_max() + 1)) new_patch = NO_RESULT;
   return new_patch;
 }
 
-bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
+bool MD_base_class::patch_select_pressed(uint16_t new_patch, uint8_t sw) {
   // Check whether the current patch needs to be switched on or whether a new patch is chosen
-  if (new_patch > patch_max) new_patch = patch_max;
-  if (new_patch == patch_number) { // Check if curnum needs to be executed.
+  if (new_patch > get_patch_max()) new_patch = get_patch_max();
+  if ((new_patch == setlist_item_number) && (!SC_switch_is_encoder())) { // Check if curnum needs to be executed.
     DEBUGMSG("Executing curnum action");
     set_current_device(my_device_number);
     switch (Setting.CURNUM_action) {
       case CN_PREV_PATCH:
-        if (prev_patch_number != patch_number) patch_select_pressed(prev_patch_number);
+        if (prev_patch_number != patch_number) patch_select_pressed(prev_patch_number, sw);
         return true;
       case CN_TAP_TEMPO:
         SCO_global_tap_tempo_press(0);
@@ -250,54 +259,50 @@ bool MD_base_class::patch_select_pressed(uint16_t new_patch) {
     return false;
   }
   else {
-    DEBUGMSG("Selecting patch " + String (new_patch));
-    select_patch(new_patch); //New patch - send program change
+    DEBUGMSG("Selecting patch item " + String (new_patch));
+    current_patch_name = SP[sw].Label;
+    if (SCO_setlist_active(my_device_number + SETLIST_TARGET_FIRST_DEVICE)) {
+      if (new_patch < Number_of_setlist_items) {
+        setlist_song_select(SCO_read_setlist_item(new_patch));
+        SCO_setlist_set_tempo(new_patch);
+      }
+    }
+    else select_patch(new_patch);
+    setlist_item_number = new_patch;
     set_current_device(my_device_number);
     PC_ignore_timer = millis();
-    popup_patch_name = true;
+    popup_patch_name = !LCD_check_main_display_show_patchname();
   }
   bank_number = bank_select_number; // Update the real bank number with the selected number
   device_in_bank_selection = 0; // Switch off bank selection mode
   return true;
 }
 
-uint16_t MD_base_class::calculate_prev_patch_number() {
-  if (patch_number > patch_min) return (patch_number - 1);
-  else return (patch_max);
-}
-
-uint16_t MD_base_class::calculate_next_patch_number() {
-  if (patch_number < patch_max) return (patch_number + 1);
-  else return (patch_min);
+uint16_t MD_base_class::calculate_prev_next_patch_number(signed int delta) {
+  return update_encoder_value(delta, setlist_item_number, get_patch_min(), get_patch_max());
 }
 
 void MD_base_class::bank_updown(signed int delta, uint8_t my_bank_size) {
 
-  //uint16_t rel_patch_number = patch_number - patch_min;
-  uint16_t rel_patch_max = patch_max - patch_min;
+  uint16_t rel_patch_max = get_patch_max() - get_patch_min();
   if (!bank_selection_active()) {
     device_in_bank_selection = my_device_number + 1; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.
     bank_select_number = bank_number; //Reset the bank to current patch
     bank_size = my_bank_size;
   }
-
-  /*if (delta > 0) { // Perform bank up:
-    for (uint8_t i = 0; i < delta; i++) {
-      if (bank_select_number >= (rel_patch_max / bank_size)) bank_select_number = 0; // Check if we've reached the top
-      else bank_select_number ++;
-    }
-    }
-    if (delta < 0) { // Perform bank down:
-    for (uint8_t i = 0; i < abs(delta); i++) {
-      if (bank_select_number <= 0) bank_select_number = (rel_patch_max / bank_size); // Check if we've reached the bottom
-      else bank_select_number --;
-    }
-    }*/
   bank_select_number = update_encoder_value(delta, bank_select_number, 0, (rel_patch_max / bank_size));
 
   if (bank_select_number == bank_number) device_in_bank_selection = 0; //Check whether were back to the original bank
+}
 
-  request_bank_name(delta, bank_select_number * my_bank_size);
+uint16_t MD_base_class::get_patch_min() {
+  if (SCO_setlist_active(my_device_number + SETLIST_TARGET_FIRST_DEVICE)) return 0;
+  else return patch_min;
+}
+
+uint16_t MD_base_class::get_patch_max() {
+  if (SCO_setlist_active(my_device_number + SETLIST_TARGET_FIRST_DEVICE)) return Number_of_setlist_items - 1;
+  else return patch_max;
 }
 
 bool MD_base_class::bank_selection_active() {
@@ -306,7 +311,7 @@ bool MD_base_class::bank_selection_active() {
 
 void MD_base_class::update_bank_number(uint16_t number) {
   uint16_t bnumber;
-  if (number > patch_max) number = patch_max;
+  if (number > get_patch_max()) number = get_patch_max();
   if (bank_size == 0) bnumber = 0;
   else bnumber = (number - patch_min) / bank_size;
   bank_number = bnumber;
@@ -316,11 +321,9 @@ void MD_base_class::update_bank_number(uint16_t number) {
 void MD_base_class::update_bank_size(uint8_t b_size) { // If the bank size changes, update the current bank number
   if (bank_size != b_size) {
     bank_size = b_size;
-    update_bank_number(patch_number);
+    update_bank_number(setlist_item_number);
   }
 }
-
-void MD_base_class::request_bank_name(signed int delta, uint16_t number) {}
 
 bool MD_base_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) {
   return bank_selection_active();
@@ -341,6 +344,38 @@ void MD_base_class::display_patch_number_string() {
 
 void MD_base_class::number_format(uint16_t number, String &Output) {
   Output += String((number + 1) / 10) + String((number + 1) % 10);
+}
+
+// Setlists and songs
+
+void MD_base_class::setlist_song_select(uint16_t item) { // This may require more
+  //uint16_t new_patch = SCO_read_setlist_item(item);
+  if (item > patch_max) return;
+  select_patch(item);
+  patch_number = item;
+}
+
+uint16_t MD_base_class::setlist_song_get_current_item_state() {
+  return patch_number;
+}
+
+uint16_t MD_base_class::setlist_song_get_number_of_items() {
+  return patch_max;
+}
+
+void MD_base_class::setlist_song_full_item_format(uint16_t item, String &Output) {
+  Output = device_name;
+  Output += ": ";
+  number_format(item, Output);
+}
+
+void MD_base_class::setlist_song_short_item_format(uint16_t item, String &Output) {
+  number_format(item, Output);
+}
+
+uint16_t MD_base_class::patch_number_in_current_setlist(uint16_t number) {
+  if (SCO_setlist_active(my_device_number + SETLIST_TARGET_FIRST_DEVICE)) return SCO_read_setlist_item(number);
+  else return number;
 }
 
 void MD_base_class::direct_select_format(uint16_t number, String &Output) {
@@ -591,7 +626,7 @@ uint8_t MD_base_class::read_current_device_page() { // Return the number of the 
 uint8_t MD_base_class::select_next_device_page() { // Select the next page for this device
   uint8_t tries = 4;
 
-  if (Current_page == read_current_device_page()) { // Select next page unless we are on some other page.
+  if (Current_page == read_current_device_page()) { // Select next page unless we are on some other page
     while (tries > 0) {
       current_device_page++;
       if (current_device_page >= 4) current_device_page = 0;
@@ -599,7 +634,7 @@ uint8_t MD_base_class::select_next_device_page() { // Select the next page for t
       tries--;
     }
   }
-  else if (Previous_page != read_current_device_page()) { // Finding our way back from the par-bank edit screen to category to the current_device_page.
+  else if ((Previous_page != read_current_device_page()) && (Current_page != PAGE_FOR_DEVICE_MODE)) { // Finding our way back from the par-bank edit screen to category to the current_device_page.
     uint8_t pg = Previous_page;
     Current_page = read_current_device_page(); // This will set the previous page on the next page change...
     return pg;
@@ -609,6 +644,11 @@ uint8_t MD_base_class::select_next_device_page() { // Select the next page for t
 
 void MD_base_class::get_snapscene_title(uint8_t number, String &Output) {
   Output += "Not supported";
+}
+
+void MD_base_class::get_snapscene_title_short(uint8_t number, String &Output) {
+  Output += "S";
+  Output += String(number);
 }
 
 void MD_base_class::get_snapscene_label(uint8_t number, String &Output) {
@@ -627,6 +667,8 @@ bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2,
 void MD_base_class::set_snapscene(uint8_t sw, uint8_t number) {
   MIDI_send_current_snapscene(my_device_number, current_snapscene);
 }
+
+void MD_base_class::release_snapscene(uint8_t sw, uint8_t number) {}
 
 void MD_base_class::show_snapscene(uint8_t number) {}
 
@@ -1060,6 +1102,7 @@ void MD_base_class::looper_reset() {
   looper_reverse = false;
   looper_half_speed = false;
   looper_overdub_happened = false;
+  current_looper_state = LOOPER_STATE_ERASED;
 }
 
 uint8_t looper_bar = 0;

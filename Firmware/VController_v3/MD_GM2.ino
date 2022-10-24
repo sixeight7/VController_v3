@@ -49,16 +49,21 @@ void MD_GM2_class::init() // Default values for variables
   MIDI_channel = GM2_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(GM2_MIDI_PORT); // Default value
   //bank_number = 0; // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = GM2_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = GM2_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = GM2_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = GM2_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = GM2_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = GM2_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = GM2_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = GM2_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = GM2_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = GM2_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = GM2_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = GM2_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = GM2_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = GM2_DEFAULT_VC_PAGE2; // Default value
@@ -177,8 +182,7 @@ void MD_GM2_class::check_PC_in(uint8_t program, uint8_t channel, uint8_t port) {
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch;
+      set_patch_number(new_patch);
       //page_check();
       do_after_patch_selection();
       update_page = REFRESH_PAGE;

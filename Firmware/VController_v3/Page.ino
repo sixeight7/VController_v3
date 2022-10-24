@@ -38,6 +38,7 @@ uint8_t number_of_connected_devices = 0;
 
 void setup_page()
 {
+  DEBUGMAIN("Starting page setup");
   DEBUGMSG("Number of commands stored in external EEPROM: " + String(number_of_cmds));
   if ((Current_page >= Number_of_pages) && (Current_page < FIRST_FIXED_CMD_PAGE)) Current_page = DEFAULT_PAGE;
   PAGE_load_current();
@@ -57,6 +58,11 @@ void main_page() {
         break;
       case REFRESH_PAGE:
         DEBUGMAIN("** Refreshing page " + String(Current_page));
+        update_page = OFF;
+        PAGE_request_first_switch();
+        break;
+      case REFRESH_PATCH_BANK_ONLY:
+        DEBUGMAIN("** Refreshing patchbank only on page " + String(Current_page));
         update_page = OFF;
         PAGE_request_first_switch();
         break;
@@ -191,7 +197,7 @@ void PAGE_load_switch(uint8_t sw) {
         SP[sw].Value2 = Data2;
         SP[sw].Value3 = cmd.Value1;
         SP[sw].PP_number = Data1;
-        SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
+        SP[sw].Colour = Device[Dev]->my_snapscene_colour; // Set the colour
         break;
       case LOOPER:
         SP[sw].PP_number = Data1;
@@ -228,27 +234,87 @@ void PAGE_load_switch(uint8_t sw) {
         LCD_set_SP_label(sw, msg);
         break;
       case MIDI_PC:
-        SP[sw].PP_number = Data1;
-        SP[sw].Value1 = cmd.Data2; // Value1 stores MIDI channel
-        SP[sw].Value2 = cmd.Value1; // value2 stores MIDI port
+        SP[sw].Sel_type = Data1;
+        if (Data1 == BANKSELECT) {
+          SP[sw].Bank_position = Data2;
+          SP[sw].Bank_size = cmd.Value1;
+          SP[sw].Value2 = cmd.Value2; // Value2 stores MIDI channel
+          SP[sw].Value3 = cmd.Value3; // value3 stores MIDI port
+        }
+        if (Data1 == SELECT) {
+          SP[sw].PP_number = Data2; // PC number
+          SP[sw].Value1 = cmd.Value1; // MIDI channel
+          SP[sw].Value2 = cmd.Value2; // MIDI port
+        }
+        if ((Data1 == PREV) || (Data1 == NEXT)) {
+          SP[sw].Assign_max = Data2; // Max value
+          SP[sw].Value1 = cmd.Value1; // MIDI channel
+          SP[sw].Value2 = cmd.Value2; // MIDI port
+          SP[sw].Refresh_with_FX_only = true;
+        }
+        if ((Data1 == BANKUP) || (Data1 == BANKDOWN)) {
+          SP[sw].Bank_size = Data2; // Bank size
+          SP[sw].Value1 = cmd.Value1; // MIDI channel
+          SP[sw].Value2 = cmd.Value2; // MIDI port
+        }
         SP[sw].Colour = Setting.MIDI_PC_colour;
         LCD_clear_SP_label(sw);
         break;
       case MIDI_CC:
         SP[sw].PP_number = Data1;
-        val = MIDI_recall_CC(Data1, cmd.Value3, SCO_MIDI_port(cmd.Value4));
+        val = MIDI_recall_CC(Data1, cmd.Value3, MIDI_set_port_number_from_menu(cmd.Value4));
         if (val == NOT_FOUND) SP[sw].Target_byte1 = cmd.Value2; // Default value for STEP/UPDOWN - starts with minimum value
         else SP[sw].Target_byte1 = val;
         SP[sw].Assign_max = cmd.Value1;
         SP[sw].Direction = UP;
         if (Data2 == CC_TOGGLE) SP[sw].State = 1;
         else SP[sw].State = 0;
-        //DEBUGMSG("!!!MIDI_CC: val:" + String(val) + ", cmd.Value1:" + String(cmd.Value1) + ", cmd.Value2:" + String(cmd.Value2));
         if (val == cmd.Value1) SP[sw].State = 0;
         if (val == cmd.Value2) SP[sw].State = 1;
         SP[sw].Latch = Data2;
         SP[sw].Colour = Setting.MIDI_CC_colour;
         LCD_clear_SP_label(sw);
+        break;
+      case SETLIST:
+        SP[sw].Sel_type = Data1;
+        if (Data1 == SL_SELECT) {
+          SP[sw].PP_number = Data2; //Store page number
+        }
+        if (Data1 == SL_BANKSELECT) {
+          SP[sw].Bank_position = Data2;
+          SP[sw].Bank_size = cmd.Value1;
+        }
+        SP[sw].Colour = Setting.LED_global_colour;
+        SP[sw].Refresh_with_FX_only = true;
+        break;
+      case SONG:
+        SP[sw].Sel_type = Data1;
+        if ((Data1 == SONG_SELECT) | (Data1 == SONG_PARTSEL)) {
+          SP[sw].PP_number = Data2; //Store page number
+        }
+        if (Data1 == SONG_BANKSELECT) {
+          SP[sw].Bank_position = Data2;
+          SP[sw].Bank_size = cmd.Value1;
+        }
+        if ((Data1 == SONG_PREV) || (Data1 == SONG_NEXT)) {
+          SP[sw].Trigger = Data2;
+        }
+        SP[sw].Colour = Setting.LED_global_colour;
+        SP[sw].Refresh_with_FX_only = true;
+        break;
+      case MODE:
+        SP[sw].Sel_type = Data1;
+        if (Data1 == SELECT) {
+          SP[sw].PP_number = Data2; //Store mode number
+        }
+        SP[sw].Colour = Setting.LED_global_colour;
+        break;
+      case MIDI_MORE:
+        SP[sw].PP_number = Data1;
+        SP[sw].Value1 = Data2;
+        SP[sw].Colour = Setting.LED_global_colour;
+        MIDI_get_port_number_name(Data2, msg);
+        LCD_set_SP_label(sw, msg);
         break;
     }
   }
@@ -284,7 +350,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
       if (Dev == CURRENT) Dev = Current_device;
       uint8_t Type = SP[Current_switch].Type;
       uint16_t my_patch_number;
-      uint8_t page;
+      uint8_t page, number;
       uint8_t asgn_num;
       String msg;
       DEBUGMAIN("Request data for switch " + String(Current_switch) + ", device " + String(Dev) + ", type: " + String(Type));
@@ -300,15 +366,15 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
               SP[Current_switch].PP_number = my_patch_number;
             }
             if (SP[Current_switch].Sel_type == NEXT) {
-              my_patch_number = Device[Dev]->calculate_next_patch_number();
+              my_patch_number = Device[Dev]->calculate_prev_next_patch_number(1);
               SP[Current_switch].PP_number = my_patch_number;
             }
             if (SP[Current_switch].Sel_type == PREV) {
-              my_patch_number = Device[Dev]->calculate_prev_patch_number();
+              my_patch_number = Device[Dev]->calculate_prev_next_patch_number(-1);
               SP[Current_switch].PP_number = my_patch_number;
             }
-            if ((Device[Dev]->can_request_sysex_data()) || (Dev == KPA)) {
-              request_next_switch = Device[Dev]->request_patch_name(Current_switch, SP[Current_switch].PP_number);  //Request the patch name
+            if ((Device[Dev]->can_request_sysex_data()) && (SP[Current_switch].PP_number != NO_RESULT)) {
+              request_next_switch = Device[Dev]->request_patch_name(Current_switch, SCO_get_patchnumber(Dev, SP[Current_switch].PP_number));  //Request the patch name
               if (!request_next_switch) PAGE_start_sysex_watchdog();
               DEBUGMSG("Requesting patch name #" + String(SP[Current_switch].PP_number));
             }
@@ -429,15 +495,22 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
           case SNAPSCENE:
             if ((Device[Dev]->current_snapscene == SP[Current_switch].Value2) && (SP[Current_switch].Value3 > 0)) {
               SP[Current_switch].PP_number = SP[Current_switch].Value3;
+              SP[Current_switch].State = SP[Current_switch].Value2;
             }
             else if ((Device[Dev]->current_snapscene == SP[Current_switch].Value1) && (SP[Current_switch].Value2 > 0)) {
               SP[Current_switch].PP_number = SP[Current_switch].Value2;
+              SP[Current_switch].State = SP[Current_switch].Value1;
             }
             else {
               SP[Current_switch].PP_number = SP[Current_switch].Value1;
+              if ((Device[Dev]->current_snapscene == SP[Current_switch].Value3) && (SP[Current_switch].Value3 > 0)) SP[Current_switch].State = SP[Current_switch].Value3;
+              else SP[Current_switch].State = SP[Current_switch].Value1;
             }
-            request_next_switch = Device[Dev]->request_snapscene_name(Current_switch, SP[Current_switch].Value1, SP[Current_switch].Value2, SP[Current_switch].Value3);
-            if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
+            if (active_update_type != REFRESH_PATCH_BANK_ONLY) {
+              request_next_switch = Device[Dev]->request_snapscene_name(Current_switch, SP[Current_switch].Value1, SP[Current_switch].Value2, SP[Current_switch].Value3);
+              if (!request_next_switch) PAGE_start_sysex_watchdog(); // Start the watchdog
+            }
+            else request_next_switch = true;
             break;
           case LOOPER:
             Device[Dev]->request_looper_label(Current_switch);
@@ -468,15 +541,19 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
           case PAGE:
             if ((SP[Current_switch].Sel_type == BANKUP) || (SP[Current_switch].Sel_type == BANKDOWN)) break;
             if (SP[Current_switch].Sel_type == BANKSELECT) {
-              page = (page_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
-              if (page >= Number_of_pages) page += FIRST_SELECTABLE_FIXED_CMD_PAGE - Number_of_pages; // Jump over the gap in the pages to reach the fixed ones
-              SP[Current_switch].PP_number = page;
+              number = (page_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position + SCO_get_page_min() - 1;
+              SP[Current_switch].PP_number = number;
               SP[Current_switch].Colour = Setting.LED_global_colour;
+              page = SCO_get_page_number(number);
             }
-            else if (SP[Current_switch].Sel_type == NEXT)
-              page = update_encoder_value(1, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
-            else if (SP[Current_switch].Sel_type == PREV)
-              page = update_encoder_value(-1, Current_page, LOWEST_USER_PAGE, Number_of_pages - 1);
+            else if (SP[Current_switch].Sel_type == NEXT) {
+              number = update_encoder_value(1, Current_page_setlist_item, SCO_get_page_min(), SCO_get_page_max());
+              page = SCO_get_page_number(number);
+            }
+            else if (SP[Current_switch].Sel_type == PREV) {
+              number = update_encoder_value(-1, Current_page_setlist_item, SCO_get_page_min(), SCO_get_page_max());
+              page = SCO_get_page_number(number);
+            }
             else {
               page = SP[Current_switch].PP_number;
             }
@@ -490,6 +567,136 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
               SP[Current_switch].Colour = 0; // Switch colour off if this page does not exist.
               LCD_clear_SP_label(Current_switch);
             }
+            break;
+          case MIDI_PC:
+            if (SP[Current_switch].Sel_type == BANKSELECT) {
+              number = (midi_pc_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              SP[Current_switch].PP_number = number % 128;
+            }
+            if (SP[Current_switch].Sel_type == NEXT) {
+              number = MIDI_recall_PC(SP[Current_switch].Value1, MIDI_set_port_number_from_menu(SP[Current_switch].Value2)) + 1;
+              if (number > SP[Current_switch].Assign_max) number = 0;
+              SP[Current_switch].PP_number = number;
+            }
+            if (SP[Current_switch].Sel_type == PREV) {
+              number = MIDI_recall_PC(SP[Current_switch].Value1, MIDI_set_port_number_from_menu(SP[Current_switch].Value2));
+              if (number > 0) number--;
+              else number = SP[Current_switch].Assign_max;
+              SP[Current_switch].PP_number = number;
+            }
+            break;
+          case MIDI_CC:
+            break;
+          case SETLIST:
+            if (SP[Current_switch].Sel_type == SL_BANKSELECT) {
+              if (device_in_bank_selection == SETLIST_BANK_SELECTION_IN_PROGRESS) number = (setlist_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              else number = (setlist_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              SP[Current_switch].PP_number = number % 128;
+            }
+            if (SP[Current_switch].Sel_type == SL_NEXT) {
+              number = Current_setlist + 1;
+              if (number > MAX_NUMBER_OF_SETLISTS) number = 0;
+              SP[Current_switch].PP_number = number;
+            }
+            if (SP[Current_switch].Sel_type == SL_PREV) {
+              number = Current_setlist;
+              if (number > 0) number--;
+              else number = MAX_NUMBER_OF_SETLISTS;
+              SP[Current_switch].PP_number = number;
+            }
+            SCO_get_setlist_name(SP[Current_switch].PP_number, msg);
+            LCD_set_SP_label(Current_switch, msg);
+            break;
+          case SONG:
+            if (SP[Current_switch].Sel_type == SONG_BANKSELECT) {
+              if (device_in_bank_selection == SONG_BANK_SELECTION_IN_PROGRESS) number = (song_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              else number = (song_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              SP[Current_switch].PP_number = number % 128;
+              SCO_get_song_name(SCO_get_song_number(SP[Current_switch].PP_number), msg);
+              LCD_set_SP_label(Current_switch, msg);
+              break;
+            }
+            if (SP[Current_switch].Sel_type == SONG_NEXT) {
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_SONG) {
+                number = Current_song_setlist_item + 1;
+                if (number > SCO_get_song_max()) number = 0;
+                SP[Current_switch].PP_number = number;
+                if ((SCO_setlist_active(SETLIST_TARGET_SONG)) && (Current_song_setlist_item == SCO_get_song_max())) msg = LCD_End;
+                else SCO_get_song_number_and_name(SCO_get_song_number(SP[Current_switch].PP_number), msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_PART) {
+                number = Current_part + 1;
+                if (number >= NUMBER_OF_PARTS) number = 0;
+                SP[Current_switch].PP_number = number;
+                SCO_get_part_name(SP[Current_switch].PP_number, msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_SONGPART) {
+                number = Current_part + 1;
+                page = Current_song;
+                if (number >= NUMBER_OF_PARTS) {
+                  number = 0;
+                  if (page++ > SCO_get_song_max()) page = 0;
+                }
+                SP[Current_switch].PP_number = number;
+                SCO_get_song_and_part_name(page, SP[Current_switch].PP_number, msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+            }
+            if (SP[Current_switch].Sel_type == SONG_PREV) {
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_SONG) {
+                number = Current_song_setlist_item;
+                if (number > 0) number--;
+                else number = SCO_get_song_max();
+                SP[Current_switch].PP_number = number;
+                if ((SCO_setlist_active(SETLIST_TARGET_SONG)) && (Current_song_setlist_item == 0)) msg = LCD_Start;
+                else SCO_get_song_number_and_name(SCO_get_song_number(SP[Current_switch].PP_number), msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_PART) {
+                number = Current_part;
+                if (number > 0) number--;
+                else number = NUMBER_OF_PARTS - 1;
+                SP[Current_switch].PP_number = number;
+                SCO_get_part_name(SP[Current_switch].PP_number, msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+              if (SP[Current_switch].Trigger == SONG_PREVNEXT_SONGPART) {
+                number = Current_part;
+                page = Current_song;
+                if (number > 0) number--;
+                else {
+                  number = NUMBER_OF_PARTS - 1;
+                  if (page > 0) page--;
+                  else page = SCO_get_song_max();
+                }
+                SP[Current_switch].PP_number = number;
+                SCO_get_song_and_part_name(page, SP[Current_switch].PP_number, msg);
+                LCD_set_SP_label(Current_switch, msg);
+                break;
+              }
+            }
+            if (SP[Current_switch].Sel_type == SONG_PARTSEL) {
+              SCO_get_part_name(SP[Current_switch].PP_number, msg);
+              LCD_set_SP_label(Current_switch, msg);
+              break;
+            }
+            SCO_get_song_name(SP[Current_switch].PP_number, msg);
+            LCD_set_SP_label(Current_switch, msg);
+            break;
+          case MODE:
+            if (SP[Current_switch].Sel_type == NEXT)
+              SP[Current_switch].PP_number = update_encoder_value(1, Current_mode, 0, NUMBER_OF_MODES - 1);
+            else if (SP[Current_switch].Sel_type == PREV)
+              SP[Current_switch].PP_number = update_encoder_value(-1, Current_mode, 0, NUMBER_OF_MODES - 1);
+            break;
+          case MIDI_MORE:
             break;
         }
         // Set main backlight colour
@@ -535,6 +742,7 @@ void PAGE_check_sysex_watchdog() {
 
 void PAGE_check_first_connect(uint8_t dev) { // Will check if last connected device is the first that connects
   number_of_connected_devices++;
+  if (Current_mode != DEVICE_MODE) return;
   if (number_of_connected_devices == 1) {
     set_current_device(dev);
     if ((Current_device < NUMBER_OF_DEVICES) && (Current_page != PAGE_MENU)) SCO_select_page(Device[dev]->read_current_device_page()); // Load the patch page associated to this device
@@ -543,6 +751,7 @@ void PAGE_check_first_connect(uint8_t dev) { // Will check if last connected dev
 
 void PAGE_check_disconnect(uint8_t dev) {
   number_of_connected_devices--;
+  if (Current_mode != DEVICE_MODE) return;
   if ((number_of_connected_devices == 0) || (Current_device == dev)) SCO_select_next_device();
 }
 
@@ -551,7 +760,7 @@ bool PAGE_check_on_page(uint8_t dev, uint16_t patch) { // Will check if the patc
   for (uint8_t s = 1; s < NUMBER_OF_SWITCHES + 1; s++) { // Run through the switches on the current page
     if ((SP[s].Type == PATCH) && (SP[s].Sel_type == BANKSELECT) && (SP[s].Device == dev)) {
       dev_on_page = true;
-      if (SP[s].PP_number == patch) return true;
+      if (Device[dev]->patch_number_in_current_setlist(SP[s].PP_number) == patch) return true;
     }
   }
 

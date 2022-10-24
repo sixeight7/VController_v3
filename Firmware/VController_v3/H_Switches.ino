@@ -178,7 +178,7 @@ void inta_pin_interrupt() {
 }
 
 void setup_switch_check() {
-
+  DEBUGMAIN("Initializing switches");
 #ifdef POWER_SWITCH_PIN
   pinMode(POWER_SWITCH_PIN, INPUT_PULLUP);
 #endif
@@ -439,8 +439,10 @@ void SC_check_external_switches() {
       if (my_press > 0) switch_pressed = NUMBER_OF_SWITCHES + (NUMBER_OF_ENCODERS * 2) + (j * 2) + my_press;
       uint8_t my_release = ctl_jack[j].released();
       if (my_release > 0) switch_released = NUMBER_OF_SWITCHES + (NUMBER_OF_ENCODERS * 2) + (j * 2) + my_release;
-      Expr_ped_value = ctl_jack[j].pedal_value();
-      if (ctl_jack[j].check_expr_pedal()) switch_type = SW_TYPE_EXPRESSION_PEDAL;
+      if (ctl_jack[j].check_expr_pedal()) {
+        switch_type = SW_TYPE_EXPRESSION_PEDAL;
+        Expr_ped_value = ctl_jack[j].pedal_value();
+      }
       else switch_type = SW_TYPE_SWITCH;
     }
   }
@@ -596,7 +598,8 @@ void SC_update_long_presses_and_hold() {
         switch_pressed = multi_switch_pressed;
       }
       else if (multi_switch_booleans == MENU_KEY_COMBINATION) {
-        SCO_select_page(PAGE_SELECT);
+        if (Current_page != PAGE_SELECT) SCO_select_page(PAGE_SELECT);
+        else SCO_select_page(PAGE_MENU);
         //multi_switch_booleans = MENU_KEY_COMBINATION;
         multi_switch_pressed = SPECIAL_KEY_COMBINATION;
       }
@@ -605,7 +608,9 @@ void SC_update_long_presses_and_hold() {
         DEBUGMAIN("More than one switch pressed. Multi switch booleans: 0x" + String(multi_switch_booleans & ~(1 << (switch_pressed - 1)), HEX));
         switch_pressed = 0; // No valid combination. Switch press discarded.
       }
-
+    }
+    else {
+      multi_switch_booleans = 0;
     }
 
     switch (switch_type) {
@@ -665,7 +670,7 @@ void SC_update_long_presses_and_hold() {
       if (switch_held_times_triggered > 15) Hold_time = 75;
       if (switch_held_times_triggered > 45) Hold_time = 38;
       switch_was_held = true;
-      
+
       DEBUGMAIN("Switch held: " + String(switch_held));
     }
   }
@@ -748,18 +753,18 @@ void SC_set_enc1_acceleration(bool state) {
 uint16_t update_encoder_value(signed int delta, uint16_t value, uint16_t min, uint16_t max) {
   setAccelerationRange(max - min);
   bool hold_at_the_end = ((SC_switch_is_encoder()) || (switch_was_held));
-  
+
   if (delta > 0) {
     for (uint16_t i = 0; i < delta; i++) {
       if (value >= max) { // Check if we've reached the top
         if (((encoder_timer + ENCODER_TURN_TIME > millis()) && (hold_at_the_end)) || (delta > 1)) value = max;
-            else value = min;
-        }
-    else value++;
+        else value = min;
+      }
+      else value++;
+    }
   }
-}
-// Perform bank down:
-if (delta < 0) {
+  // Perform bank down:
+  if (delta < 0) {
     for (uint16_t i = 0; i < abs(delta); i++) {
       if (value <= min) { // Check if we've reached the bottom
         if (((encoder_timer + ENCODER_TURN_TIME > millis()) && (hold_at_the_end)) || (delta < -1)) value = min;

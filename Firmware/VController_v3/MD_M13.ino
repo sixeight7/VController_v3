@@ -56,16 +56,21 @@ FLASHMEM void MD_M13_class::init() { // Default values for variables
   my_LED_colour = 6; // Default value: white
   MIDI_channel = M13_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(M13_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = M13_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = M13_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = M13_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = M13_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = M13_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = M13_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = M13_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = M13_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = M13_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = M13_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = M13_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = M13_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = M13_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = M13_DEFAULT_VC_PAGE2; // Default value
@@ -233,8 +238,7 @@ FLASHMEM void MD_M13_class::check_PC_in(uint8_t program, uint8_t channel, uint8_
   // Check the source by checking the channel
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // M13 sends a program change
     if (patch_number != program) {
-      prev_patch_number = patch_number;
-      patch_number = program;
+      set_patch_number(program);
       do_after_patch_selection();
       update_page = REFRESH_PAGE;
     }
@@ -579,7 +583,7 @@ FLASHMEM void MD_M13_class::read_parameter_title_short(uint16_t number, String &
 }
 
 FLASHMEM bool MD_M13_class::request_parameter(uint8_t sw, uint16_t number) {
-  if (M13_data == NULL) return false;
+  if (M13_data == NULL) return true;
   //Effect type and state are stored in the M13_FX array
   //Effect can have three states: 0 = no effect, 1 = on, 2 = off
   DEBUGMSG("M13 parameter request number: " + String(number));

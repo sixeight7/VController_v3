@@ -8,27 +8,18 @@
 // ********************************* Section 1: Common settings ********************************************
 
 // Here are variables from various parts of the code that have been moved here, because they are used early on.
-// As the code develops and is improved, these variables should disappear from here.
 
-#if defined (CONFIG_CUSTOM)
-#define DEFAULT_PAGE DEFAULT_CUSTOM_PAGE
-#define PAGE_CURRENT_PATCH_BANK PAGE_CUSTOM_CURRENT_PATCH_BANK
-#define PAGE_MENU PAGE_CUSTOM_MENU
-#define PAGE_CURRENT_DIRECT_SELECT PAGE_CUSTOM_CURRENT_DIRECT_SELECT
-#define PAGE_DEFAULT PAGE_CUSTOM_DEFAULT
-#define PAGE_SELECT PAGE_CUSTOM_SELECT
-#define PAGE_CURRENT_PARAMETER PAGE_CUSTOM_CURRENT_PARAMETER
-#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_CUSTOM
-#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_CUSTOM
-#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_CUSTOM
-
-#elif defined (CONFIG_VCTOUCH)
+#if defined (CONFIG_VCTOUCH)
 #define DEFAULT_PAGE DEFAULT_VCTOUCH_PAGE
+#define PAGE_FOR_SONG_MODE PAGE_VCTOUCH_SONG_MODE
+#define PAGE_FOR_PAGE_MODE PAGE_VCTOUCH_PAGE_MODE
+#define PAGE_FOR_DEVICE_MODE PAGE_VCTOUCH_DEVICE_MODE
 #define PAGE_CURRENT_PATCH_BANK PAGE_VCTOUCH_CURRENT_PATCH_BANK
 #define PAGE_MENU PAGE_VCTOUCH_MENU
 #define PAGE_CURRENT_DIRECT_SELECT PAGE_VCTOUCH_CURRENT_DIRECT_SELECT
 #define PAGE_DEFAULT PAGE_VCTOUCH_DEFAULT
-#define PAGE_SELECT PAGE_VCTOUCH_SELECT
+#define PAGE_SELECT PAGE_VCTOUCH_DEVICE_MODE
+#define PAGE_SETLIST_SELECT PAGE_VCTOUCH_SETLIST_SELECT
 #define PAGE_CURRENT_PARAMETER PAGE_VCTOUCH_EDIT_PARAMETER
 #define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VCTOUCH
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VCTOUCH
@@ -36,23 +27,47 @@
 
 #elif defined (CONFIG_VCMINI)
 #define DEFAULT_PAGE DEFAULT_VCMINI_PAGE
+#define PAGE_FOR_SONG_MODE PAGE_VCMINI_SONG_MODE
+#define PAGE_FOR_PAGE_MODE PAGE_VCMINI_PAGE_MODE
+#define PAGE_FOR_DEVICE_MODE PAGE_VCMINI_DEVICE_MODE
 #define PAGE_CURRENT_PATCH_BANK PAGE_VCMINI_CURRENT_PATCH_BANK
 #define PAGE_MENU PAGE_VCMINI_MENU
 #define PAGE_CURRENT_DIRECT_SELECT PAGE_VCMINI_CURRENT_DIRECT_SELECT
 #define PAGE_DEFAULT PAGE_VCMINI_DEFAULT
-#define PAGE_SELECT PAGE_VCMINI_SELECT
+#define PAGE_SELECT PAGE_VCMINI_DEVICE_MODE
 #define PAGE_CURRENT_PARAMETER PAGE_VCMINI_CURRENT_PARAMETER
+#define PAGE_SETLIST_SELECT PAGE_VCMINI_SETLIST_SELECT
 #define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VCMINI
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VCMINI
 #define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_VCMINI
 
+#elif defined (CONFIG_CUSTOM)
+#define DEFAULT_PAGE DEFAULT_CUSTOM_PAGE
+#define PAGE_FOR_SONG_MODE PAGE_CUSTOM_SONG_MODE
+#define PAGE_FOR_PAGE_MODE PAGE_CUSTOM_PAGE_MODE
+#define PAGE_FOR_DEVICE_MODE PAGE_CUSTOM_DEVICE_MODE
+#define PAGE_CURRENT_PATCH_BANK PAGE_CUSTOM_CURRENT_PATCH_BANK
+#define PAGE_MENU PAGE_CUSTOM_MENU
+#define PAGE_CURRENT_DIRECT_SELECT PAGE_CUSTOM_CURRENT_DIRECT_SELECT
+#define PAGE_DEFAULT PAGE_CUSTOM_DEFAULT
+#define PAGE_SELECT PAGE_CUSTOM_DEVICE_MODE
+#define PAGE_SETLIST_SELECT PAGE_CUSTOM_SETLIST_SELECT
+#define PAGE_CURRENT_PARAMETER PAGE_CUSTOM_CURRENT_PARAMETER
+#define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_CUSTOM
+#define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_CUSTOM
+#define LAST_FIXED_CMD_PAGE LAST_FIXED_CMD_PAGE_CUSTOM
+
 #else
 #define DEFAULT_PAGE DEFAULT_VC_PAGE
 #define PAGE_CURRENT_PATCH_BANK PAGE_VC_CURRENT_PATCH_BANK 
+#define PAGE_FOR_SONG_MODE PAGE_VC_SONG_MODE
+#define PAGE_FOR_PAGE_MODE PAGE_VC_PAGE_MODE
+#define PAGE_FOR_DEVICE_MODE PAGE_VC_DEVICE_MODE
 #define PAGE_MENU PAGE_VC_MENU
 #define PAGE_CURRENT_DIRECT_SELECT PAGE_VC_CURRENT_DIRECT_SELECT
 #define PAGE_DEFAULT PAGE_VC_DEFAULT
-#define PAGE_SELECT PAGE_VC_SELECT
+#define PAGE_SELECT PAGE_VC_DEVICE_MODE
+#define PAGE_SETLIST_SELECT PAGE_VC_SETLIST_SELECT
 #define PAGE_CURRENT_PARAMETER PAGE_VC_CURRENT_PARAMETER
 #define FIRST_FIXED_CMD_PAGE FIRST_FIXED_CMD_PAGE_VC
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE FIRST_SELECTABLE_FIXED_CMD_PAGE_VC
@@ -61,21 +76,52 @@
 
 bool global_tuner_active = false;
 
+#define DEFAULT_MODE DEVICE_MODE
+uint8_t Current_mode = DEFAULT_MODE;
+
 // States and variable for updating page
 #define OFF 0
 #define REFRESH_FX_ONLY 1
-#define REFRESH_PAGE 2
-#define RELOAD_PAGE 3
+#define REFRESH_PATCH_BANK_ONLY 2
+#define REFRESH_PAGE 3
+#define RELOAD_PAGE 4
 uint8_t update_page = OFF;
 uint8_t Number_of_pages = 0; // Real value is read in EEPROM_create_command_indexes()
 uint8_t Current_page = PAGE_CURRENT_PATCH_BANK;
+uint8_t Current_page_setlist_item = 0;
 uint8_t page_bank_number = 0;
 uint8_t page_bank_select_number = 0;
 uint8_t page_last_selected = 1;
-uint8_t Current_device = 255;                     // The device that is currently selected
+uint8_t Current_device = 255;
 uint8_t Previous_page = DEFAULT_PAGE;
 uint8_t Previous_device = 0;
 uint8_t Previous_bank_size = 0; // Used for direct select
+uint8_t Current_setlist = 0;
+#define MAX_NUMBER_OF_SETLISTS 99
+uint16_t Selected_setlist_item = 0;
+#define GLOBAL_TEMPO 39
+uint16_t Selected_setlist_tempo = GLOBAL_TEMPO;
+uint16_t Current_setlist_position = 0;
+uint16_t Number_of_setlist_items = 0;
+#define MAX_NUMBER_OF_SETLIST_ITEMS 50
+uint8_t Current_setlist_target = 0;
+#define MAX_NUMBER_OF_SETLIST_TARGETS NUMBER_OF_DEVICES + 2
+uint8_t setlist_bank_number, setlist_bank_select_number;
+uint8_t Current_setlist_buffer[VC_PATCH_SIZE];
+uint8_t Current_song = 0;
+uint8_t Current_song_setlist_item = 0; // The item in the setlist
+#define MAX_NUMBER_OF_SONGS 99
+uint8_t Current_part = 0;
+#define NUMBER_OF_PARTS 8
+uint8_t song_bank_number, song_bank_select_number;
+uint8_t Current_song_buffer[VC_PATCH_SIZE];
+#define NUMBER_OF_SONG_TARGETS 5
+uint16_t Current_song_item[NUMBER_OF_SONG_TARGETS] = { 0 };
+uint8_t Current_song_midi_port[NUMBER_OF_SONG_TARGETS] = { 0 };
+uint8_t Current_song_midi_channel[NUMBER_OF_SONG_TARGETS] = { 1 };
+
+#define SETLIST_ID 255
+#define SONG_ID 254
 
 uint8_t Current_MIDI_switch = 1; // The selected MIDI switch in the menu
 uint8_t calibrate_exp_pedal = 0; // The selected expression pedal in the menu
@@ -89,14 +135,15 @@ uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
 String Text_entry; // The string we use for entering a text in the menu
 uint8_t Text_entry_length = 16;
 bool on_screen_keyboard_active = false;
-bool open_menu_for_Katana_patch_save = false;
-bool open_menu_for_SY1000_scene_save = false;
+uint8_t open_specific_menu = 0;
 bool do_not_forward_after_Helix_PC_message = false;
 
 #define UP true
 #define DOWN false
 
 #define NOT_FOUND 255 // Special state for SP[].PP_number in case an assign is not listed
+#define NO_RESULT 65535
+#define NEW_PATCH 65534
 
 #define DEVICE_OFF 0
 #define DEVICE_ON 1
@@ -133,6 +180,7 @@ MD_MG300_class My_MG300 = MD_MG300_class(MG300);
 MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2, &My_MG300};
 
 void setup_devices() { // Trigger the initialization of  the devices
+  DEBUGMAIN("Initializing devices");
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     DEBUGMSG("Init device " + String(d));
     Device[d]->init();

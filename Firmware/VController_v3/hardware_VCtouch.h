@@ -3,10 +3,12 @@
 #ifndef HARDWARE_VCT_H
 #define HARDWARE_VCT_H
 
-// This file contains all the hardware settings for the VController Production Model version 1.
+// This file contains all the hardware settings for the VC-touch Production Model version 1.
 // Make sure you include this file when updating to new firmware
 
 #define VC_NAME "VC-touch"
+#define HARDWARE_VERSION 5
+
 
 // Choose which configuration for the switches is chosen in Config.ino
 //#define CONFIG_VCONTROLLER
@@ -79,7 +81,7 @@
 //#define SECONDARY_MAIN_DISPLAY_ADDRESS 0x27 // If we have a PCF8745T chip in the i2c expander
 #define MAIN_TFT_DISPLAY
 #define MAIN_TFT_BACKLIGHT_PIN 24
-#define MAIN_LCD_DISPLAY_SIZE 16
+#define MAIN_LCD_DISPLAY_SIZE 22
 #define USE_TFT_USER_FONT
 
 // *** Individual displays above switches
@@ -172,28 +174,37 @@
 // Names and numbers of ports
 #define PORT1_NAME "USB MIDI"
 #define PORT1_TYPE USBMIDI_PORT
+#define PORT1_NUMBER 0
 
 #define PORT2_NAME "USB MIDI HOST"
 #define PORT2_TYPE USBHMIDI_PORT
+#define PORT2_NUMBER 1
 
 #define PORT3_NAME "MIDI 1"
 #define PORT3_TYPE MIDI1_PORT
+#define PORT3_NUMBER 2
 
 #define PORT4_NAME "MIDI 2"
 #define PORT4_TYPE MIDI2_PORT
+#define PORT4_NUMBER 3
 
 #define PORT5_NAME "MIDI 3"
 #define PORT5_TYPE MIDI3_PORT
+#define PORT5_NUMBER 4
 
 #define PORT6_NAME "MIDI 4"
 #define PORT6_TYPE MIDI4_PORT
+#define PORT6_NUMBER 5
 
 #define PORT7_NAME "WIRELESS MIDI"
 #define PORT7_TYPE MIDI5_PORT
+#define PORT7_NUMBER 6
 
 #define PORT8_NAME "ALL MIDI PORTS"
 #define PORT8_TYPE ALL_MIDI_PORTS
+#define PORT8_NUMBER 7
 
 #define PORT9_NAME ""
 #define PORT9_TYPE USBMIDI_PORT
+#define PORT9_NUMBER 8
 #endif

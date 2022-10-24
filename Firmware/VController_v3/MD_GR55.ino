@@ -64,16 +64,21 @@ FLASHMEM void MD_GR55_class::init() // Default values for variables
   MIDI_channel = GR55_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(GR55_MIDI_PORT); // Default value
   is_always_on = true; // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = GR55_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = GR55_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = GR55_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = GR55_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = GR55_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = GR55_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = GR55_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = GR55_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = GR55_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = GR55_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = GR55_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = GR55_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = GR55_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = GR55_DEFAULT_VC_PAGE2; // Default value
@@ -102,9 +107,9 @@ FLASHMEM void MD_GR55_class::check_SYSEX_in(const unsigned char* sxdata, short u
     // Check if it is the patch number
     if ((address == 0x01000000) && (checksum_ok)) {
       if (patch_number != sxdata[12]) { //Right after a patch change the patch number is sent again. So here we catch that message.
-        prev_patch_number = patch_number;
-        patch_number = sxdata[11] * 128 + sxdata[12];
-        if (patch_number > 2047) patch_number = patch_number - 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will close it.
+        uint16_t new_patch = sxdata[11] * 128 + sxdata[12];
+        if (new_patch > 2047) new_patch = new_patch - 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will close it.
+        set_patch_number(new_patch);
         //page_check();
         do_after_patch_selection();
         update_page = REFRESH_PAGE;
@@ -196,9 +201,8 @@ FLASHMEM void MD_GR55_class::check_PC_in(uint8_t program, uint8_t channel, uint8
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // GR55 sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch;
-      if (patch_number > 2047) patch_number = patch_number - 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will close it.
+      if (new_patch > 2047) new_patch = new_patch - 1751; // There is a gap of 1752 patches in the numbering system of the GR-55. This will close it.
+      set_patch_number(new_patch);
       request_sysex(GR55_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
       do_after_patch_selection();

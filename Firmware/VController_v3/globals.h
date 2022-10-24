@@ -34,7 +34,7 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Bass_mode_device; // The device that will perform bass mode
   uint8_t Bass_mode_cc_number;
   uint8_t Bass_mode_min_velocity; // The minimum velocity
-  uint8_t Main_display_mode; // The mode of the main display
+  uint8_t Main_display_bottom_line_mode; // The mode of the main display
   uint8_t exp_max[4]; // the maximum values of the expression pedals
   uint8_t exp_min[4]; // the minimum values of the expression pedals
   uint8_t FX_LOOPER_colour; // Colour for the looper
@@ -59,6 +59,8 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
   uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
   bool    Is_katana50; // 50W version of Katana
+  uint8_t Main_display_top_line_mode;
+  uint8_t Block_identity_messages; // To block sysex messages as it messes with certain devices
 };
 
 #define SETTING_BACKLIGHT_BRIGHTNESS_BYTE 5
@@ -119,10 +121,12 @@ const Setting_struct Default_settings = {  // Default values for global settings
   1,     // WIFI mode
   true,  // Status of AppleMIDI / RTPMIDI
   true,  // Enable the WIFI server for OTA updates
-  1,     // Enable Follow_tempo_from_G2M
+  0,     // Disable Follow_tempo_from_G2M
   1,     // Colour of tap tempo LED when tempo following is on: green
   0,     // Forward midi in both directions
   false, // 50W version of Katana
+  5,     // Main_display_top_line_mode
+  0,     // Block_identity_messages
 };
 
 Setting_struct Setting;

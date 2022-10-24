@@ -76,16 +76,21 @@ FLASHMEM void MD_VG99_class::init() // Default values for variables
   my_LED_colour = 2; // Default value: red
   MIDI_channel = VG99_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(VG99_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = VG99_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = VG99_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = VG99_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = VG99_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = VG99_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = VG99_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = VG99_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = VG99_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = VG99_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = VG99_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = VG99_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = VG99_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = VG99_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = VG99_DEFAULT_VC_PAGE2; // Default value
@@ -121,8 +126,7 @@ FLASHMEM void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short u
     // Check if it is the patch number
     if ((address == 0x71000100) && (checksum_ok)) {
       if (patch_number != sxdata[12]) { // Right after a patch change the patch number is sent again. So here we catch that message.
-        prev_patch_number = patch_number;
-        patch_number = sxdata[11] * 128 + sxdata[12];
+        set_patch_number(sxdata[11] * 128 + sxdata[12]);
         //page_check();
         do_after_patch_selection();
         update_page = REFRESH_PAGE;
@@ -160,7 +164,7 @@ FLASHMEM void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short u
     // Check if it is the current patch name (address: 0x60, 0x00, 0x00, 0x00)
     if ((sxdata[6] == 0x12) && (address == 0x60000000) && (checksum_ok)) {
       current_patch_name = "";
-      for (uint8_t count = 11; count < 28; count++) {
+      for (uint8_t count = 11; count < 27; count++) {
         current_patch_name += static_cast<char>(sxdata[count]); //Add ascii character to Patch Name String
       }
       update_main_lcd = true;
@@ -212,9 +216,8 @@ FLASHMEM void MD_VG99_class::check_PC_in(uint8_t program, uint8_t channel, uint8
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // VG99 sends a program change
     uint16_t new_patch = (CC00 * 100) + program;
     if ((patch_number != new_patch) && (millis() - PC_ignore_timer > VG99_PC_IGNORE_TIMER_LENGTH)) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch;
-      if (!do_not_forward_after_Helix_PC_message) select_patch(new_patch); // Trick to fool the VG-99 to supress messages that freeze the user interface of the VG-99
+      set_patch_number(new_patch);
+      if (!do_not_forward_after_Helix_PC_message) select_patch(patch_number); // Trick to fool the VG-99 to supress messages that freeze the user interface of the VG-99
       do_not_forward_after_Helix_PC_message = false;
       request_sysex(VG99_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       do_after_patch_selection();
@@ -1079,7 +1082,7 @@ FLASHMEM uint16_t MD_VG99_class::get_parbank_parameter_id(uint16_t par_number) {
       active_fx_number++;
     }
   }
-  return 65535; // No parameters in this category
+  return NO_RESULT; // No parameters in this category
 }
 
 // ********************************* Section 6: VG99 assign control ********************************************

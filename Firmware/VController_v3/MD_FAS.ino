@@ -102,16 +102,22 @@ FLASHMEM void MD_FAS_class::init() { // Default values for variables
   my_LED_colour = 1; // Default value: green
   MIDI_channel = FAS_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(FAS_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = FAS_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = FAS_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = FAS_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = FAS_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = FAS_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = FAS_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = FAS_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = FAS_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = FAS_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = FAS_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = FAS_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = FAS_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = FAS_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = FAS_DEFAULT_VC_PAGE2; // Default value
@@ -162,7 +168,7 @@ FLASHMEM void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short un
           new_patch = sxdata[6] << 7 | sxdata[7];
           if (patch_number != new_patch) { //Right after a patch change the patch number is sent again. So here we catch that message.
             prev_patch_number = patch_number;
-            patch_number = new_patch;
+            set_patch_number(new_patch);
             //page_check();
             do_after_patch_selection();
             update_page = REFRESH_PAGE;
@@ -270,8 +276,7 @@ FLASHMEM void MD_FAS_class::check_PC_in(uint8_t program, uint8_t channel, uint8_
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // AXEFX sends a program change
     uint16_t new_patch = (CC00 * 128) + program;
     if (patch_number != new_patch) {
-      prev_patch_number = patch_number;
-      patch_number = new_patch;
+      set_patch_number(new_patch);
       write_sysex(FAS_GET_PRESET_NAME); // So the main display always show the correct patch
       //page_check();
       do_after_patch_selection();
@@ -795,7 +800,7 @@ FLASHMEM uint16_t MD_FAS_class::get_parbank_parameter_id(uint16_t par_number) {
         active_fx_number++;
       }
     }
-    return 65535; // An effect number that is way out of range - not all FX have XY states, so this can happen
+    return NO_RESULT; // An effect number that is way out of range - not all FX have XY states, so this can happen
   }
   else { // When not bi-directional, show all the effects
     return par_number;

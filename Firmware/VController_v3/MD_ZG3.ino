@@ -54,16 +54,21 @@ void MD_ZG3_class::init() // Default values for variables
   my_LED_colour = 1; // Default value: green
   MIDI_channel = ZG3_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(ZG3_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = ZG3_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = ZG3_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = ZG3_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = ZG3_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = ZG3_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = ZG3_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = ZG3_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = ZG3_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = ZG3_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = ZG3_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = ZG3_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = ZG3_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = ZG3_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = ZG3_DEFAULT_VC_PAGE2; // Default value

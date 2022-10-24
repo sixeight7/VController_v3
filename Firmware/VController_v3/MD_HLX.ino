@@ -16,6 +16,7 @@
 #define HLX_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define HLX_PATCH_MIN 0
 #define HLX_PATCH_MAX 127
+#define HLX_NUMBER_OF_SETLISTS 7
 
 // The Helix does not respond to any sysex messages. Therefore we must implement one-way midi connectivity.
 
@@ -75,16 +76,21 @@ FLASHMEM void MD_HLX_class::init() { // Default values for variables
   my_LED_colour = 2; // Default value: red
   MIDI_channel = HLX_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(HLX_MIDI_PORT); // Default value
-#if defined(IS_VCTOUCH)
+#if defined(CONFIG_VCTOUCH)
   my_device_page1 = HLX_DEFAULT_VCTOUCH_PAGE1; // Default value
   my_device_page2 = HLX_DEFAULT_VCTOUCH_PAGE2; // Default value
   my_device_page3 = HLX_DEFAULT_VCTOUCH_PAGE3; // Default value
   my_device_page4 = HLX_DEFAULT_VCTOUCH_PAGE4; // Default value
-#elif defined(IS_VCMINI)
+#elif defined(CONFIG_VCMINI)
   my_device_page1 = HLX_DEFAULT_VCMINI_PAGE1; // Default value
   my_device_page2 = HLX_DEFAULT_VCMINI_PAGE2; // Default value
   my_device_page3 = HLX_DEFAULT_VCMINI_PAGE3; // Default value
   my_device_page4 = HLX_DEFAULT_VCMINI_PAGE4; // Default value
+#elif defined (CONFIG_CUSTOM)
+  my_device_page1 = HLX_DEFAULT_CUSTOM_PAGE1; // Default value
+  my_device_page2 = HLX_DEFAULT_CUSTOM_PAGE2; // Default value
+  my_device_page3 = HLX_DEFAULT_CUSTOM_PAGE3; // Default value
+  my_device_page4 = HLX_DEFAULT_CUSTOM_PAGE4; // Default value
 #else
   my_device_page1 = HLX_DEFAULT_VC_PAGE1; // Default value
   my_device_page2 = HLX_DEFAULT_VC_PAGE2; // Default value
@@ -115,8 +121,7 @@ FLASHMEM void MD_HLX_class::check_PC_in(uint8_t program, uint8_t channel, uint8_
   // Check the source by checking the channel
   if ((port == MIDI_in_port) && (channel == MIDI_channel)) { // HLX sends a program change
     if (patch_number != program) {
-      prev_patch_number = patch_number;
-      patch_number = program;
+      set_patch_number(program);
       //request_sysex(HLX_REQUEST_CURRENT_PATCH_NAME); // So the main display always show the correct patch
       //page_check();
       do_after_patch_selection();
@@ -264,6 +269,45 @@ FLASHMEM void MD_HLX_class::number_format(uint16_t number, String &Output) {
   Output += String((bank_no + 1) / 10) + String((bank_no + 1) % 10) + PatchChar;
 }
 
+// Setlists and songs
+
+void MD_HLX_class::setlist_song_select(uint16_t item) { // This may require more
+  if (item > setlist_song_get_number_of_items()) return;
+  uint8_t new_setlist = item / 128;
+  uint8_t new_patch = item % 128;
+  if (current_setlist != new_setlist) {
+    MIDI_send_CC(32, new_setlist, MIDI_channel, MIDI_out_port);
+    current_setlist = new_setlist;
+  }
+  select_patch(new_patch);
+  patch_number = new_patch;
+}
+
+uint16_t MD_HLX_class::setlist_song_get_current_item_state() {
+  return (current_setlist * HLX_NUMBER_OF_SETLISTS) + patch_number;
+}
+
+uint16_t MD_HLX_class::setlist_song_get_number_of_items() {
+  return (HLX_NUMBER_OF_SETLISTS * (patch_max + 1)) - 1;
+}
+
+void MD_HLX_class::setlist_song_full_item_format(uint16_t item, String &Output) {
+  Output = device_name;
+  Output += ": ";
+  setlist_song_short_item_format(item, Output);
+}
+
+void MD_HLX_class::setlist_song_short_item_format(uint16_t item, String &Output) {
+  uint8_t setlist = item / 128;
+  uint8_t patch = item % 128;
+  Output += "SET";
+  Output += String(setlist + 1);
+  Output += ' ';
+  number_format(patch, Output);
+}
+
+// Direct select
+
 FLASHMEM void MD_HLX_class::direct_select_format(uint16_t number, String &Output) {
   if (direct_select_state == 0) Output += String(number) + "__";
   else Output += String(bank_select_number) + String(number) + "_";
@@ -271,7 +315,7 @@ FLASHMEM void MD_HLX_class::direct_select_format(uint16_t number, String &Output
 
 FLASHMEM bool MD_HLX_class::valid_direct_select_switch(uint8_t number) {
   bool result = false;
-  if (direct_select_state == 0) { // Show all switches on first digit
+  if (direct_select_state == 0) {
     result = ((number * 40) <= (patch_max - patch_min));
   }
   else {
@@ -343,7 +387,7 @@ const PROGMEM HLX_CC_type_struct HLX_CC_types[] = {
   {"EXP1", 1, 128}, // 11
   {"EXP2", 2, 128},
   {"EXP3", 3, 128},
-  {"SETLIST", 32, 6}, // 14
+  {"SETLIST", 32, HLX_NUMBER_OF_SETLISTS - 1}, // 14
   {"SNAPSHOT", 69, 8},
 };
 
