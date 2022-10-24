@@ -29,6 +29,8 @@ public:
     void write(QJsonObject &json) const;
     //void readMidi();
 
+signals:
+        void updateProgressBar(int value);
 public slots:
 
 private slots:
@@ -52,13 +54,15 @@ private:
     const QVector<Setting_menu_struct> VCsettingMenu =
     {
       { "General Settings", HEADER, 0, 0, 0, 0 },
-      { "Main display mode shows on bottom line", OPTION, 19, 0, 3, &Setting.Main_display_mode },// Switch 1
-      { "Main display shows top right", OPTION, 50, 0, 2, &Setting.Main_display_show_top_right }, // Switch 2
-      { "CURNUM action", OPTION, 53, 0, 5, &Setting.CURNUM_action }, // Switch 3
-      { "Master Expression Pedal also controls", OPTION, 37, 0, 2, &Setting.MEP_control }, // Switch 4
-      { "Send Global Tempo on patch change", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 5
-      { "Hide tap tempo LED", OPTION, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 6
-      { "Katana type", OPTION, 83, 0, 1, &Setting.Is_katana50 }, // Switch 7
+      { "Main disp top", OPTION, 19, 0, 5, &Setting.Main_display_top_line_mode },// Switch 1
+      { "Main disp top+", OPTION, 53, 0, 5, &Setting.Main_display_show_top_right }, // Switch 2
+      { "Main disp bottom", OPTION, 19, 0, 5, &Setting.Main_display_bottom_line_mode },// Switch 3
+      { "CURNUM action", OPTION, 60, 0, 5, &Setting.CURNUM_action }, // Switch 4
+      { "MEP also cntrols", OPTION, 40, 0, 2, &Setting.MEP_control }, // Switch 5
+      { "Glob.tempo on PC", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 6
+      { "Hide tempo LED", OPTION, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 7
+      { "Backlight Type", OPTION, 51, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 8
+      { "Katana type", OPTION, 90, 0, 1, &Setting.Is_katana50 }, // Switch 9
 
       { "LED Settings", HEADER, 0, 0, 0, 0 }, // Menu title
       { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 1
@@ -91,29 +95,30 @@ private:
       { "MIDI Advanced Settings", HEADER, 0, 0, 0, 0 }, // Menu title
       { "Read MIDI clock", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.Read_MIDI_clock_port }, // Switch 1
       { "Send MIDI clock", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.Send_MIDI_clock_port }, // Switch 2
+      { "Block device detection messages (careful)", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.Block_identity_messages }, // Switch 3
       { "Bass mode Guitar-to-MIDI channel", VALUE, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
       { "Bass mode device", OPTION, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
       { "Bass mode CC number", VALUE, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
       { "Bass mode min velocity", VALUE, 0, 0, 127, &Setting.Bass_mode_min_velocity}, // Switch 8
       { "HighNotePriotyCC", VALUE, 0, 0, 127, &Setting.HNP_mode_cc_number }, // Switch 9
-      { "Follow tempo from Guitar2MIDI", OPTION, 72, 0, 2, &Setting.Follow_tempo_from_G2M}, // Switch 10
+      { "Follow tempo from Guitar2MIDI", OPTION, 79, 0, 2, &Setting.Follow_tempo_from_G2M}, // Switch 10
 
       { "MIDI Forwarding Settings", HEADER }, // Menu title
       { "Rule 1: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[0] }, // Switch 1
       { "Rule 1: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[0] }, // Switch 2
-      { "Rule 1: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
+      { "Rule 1: MIDI filter", OPTION, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[0] }, // Switch 3
       { "Rule 2: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[1] }, // Switch 4
       { "Rule 2: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[1] }, // Switch 5
-      { "Rule 2: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
+      { "Rule 2: MIDI filter", OPTION, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[1] }, // Switch 6
       { "Rule 3: Source port", OPTION, MIDI_PORT_SUBLIST, 0, 0, &Setting.MIDI_forward_source_port[2] }, // Switch 7
       { "Rule 3: Dest port", OPTION, MIDI_PORT_SUBLIST, 0, 1, &Setting.MIDI_forward_dest_port[2] }, // Switch 8
-      { "Rule 3: MIDI filter", OPTION, 60, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
+      { "Rule 3: MIDI filter", OPTION, 67, 0, NUMBER_OF_MIDI_FORWARD_FILTERS - 1, &Setting.MIDI_forward_filter[2] }, // Switch 9
       { "Forward data bi-directional", OPTION, 75, 0, 7, &Setting.MIDI_forward_bidirectional }, // Switch 10
 
 
       { "WIRELESS MENU (VC-touch)", HEADER }, // Menu title
       { "Bluetooth", OPTION, 1, 0, 1, &Setting.BLE_mode }, // Switch 1
-      { "WIFI mode", OPTION, 68, 0, 2, &Setting.WIFI_mode }, // Switch 2
+      { "WIFI mode", OPTION, 75, 0, 2, &Setting.WIFI_mode }, // Switch 2
       { "RTPMIDI enabled", OPTION, 1, 0, 1, &Setting.RTP_enabled }, // Switch 7
       { "WIFI server", OPTION, 1, 0, 1, &Setting.WIFI_server_enabled }, // Switch 8
     };
@@ -121,50 +126,50 @@ private:
     const uint16_t NUMBER_OF_SETTINGS_MENU_ITEMS = VCsettingMenu.size();
 
     QStringList menu_sublist = {
-      // Sublist 1 - 3: Booleans
-      "OFF", "ON", "DETECT",
+           // Sublist 1 - 3: Booleans
+          "OFF", "ON", "DETECT",
 
-      // Sublist 4 - 18: LED colours
-      "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "LIGHT BLUE", "", "", "",
+          // Sublist 4 - 18: LED colours
+          "OFF", "GREEN", "RED", "BLUE", "ORANGE", "CYAN", "WHITE", "YELLOW", "PURPLE", "PINK", "SOFT GREEN", "LIGHT BLUE", "", "", "",
 
-      // Sublist 19 - 22: Main display modes
-      "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS",
+          // Sublist 19 - 22: Main display modes
+          "PAGE NAME", "PATCH NAME", "PATCHES COMBINED", "VCMINI LABELS", "SCENE NAME", "ALL PATCH NUMBRS", "",
 
-      // Sublist 23 - 32: MIDI ports
-      "OFF", MIDI_PORT_NAMES,
+          // Sublist 26 - 35: MIDI ports
+          "OFF", MIDI_PORT_NAMES,
 
-      // Sublist 33 - 36: Expression pedals
-      "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
+           // Sublist 36 - 39: Expression pedals
+          "EXP PEDAL #1", "EXP PEDAL #2", "EXP PEDAL #3", "EXP PEDAL #4",
 
-      // Sublist 37 - 39: MEP control options
-      "NONE", "UP/DOWN", "UP/DN + STEP",
+          // Sublist 40 - 42: MEP control options
+          "NONE", "UP/DOWN", "UP/DN + STEP",
 
-      // Sublist 40 - 47: MIDI switch types
-      "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
+          // Sublist 43 - 50: MIDI switch types
+          "OFF", "CC MOMENTARY", "CC SINGLE SHOT", "CC RANGE", "PC", "", "", "",
 
-      // Sublist 48 - 49: RGB Display colour schemes
-      "ADAFRUIT", "BUYDISPLAY",
+          // Sublist 51 - 52: RGB Display colour schemes
+          "ADAFRUIT", "BUYDISPLAY",
 
-      // Sublist 50 - 52: Main display top right types
-      "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME",
+          // Sublist 53 - 59: Main display top right types
+          "OFF", "CURRENT DEVICE", "CURRENT TEMPO", "SCENE NAME", "PATCH NUMBER", "SCENE NUMBER", "",
 
-      // Sublist 53 - 58: Current number actions
-      "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
+          // Sublist 60 - 66: Current number actions
+          "OFF", "PREVIOUS PATCH", "TAP TEMPO", "TUNER", "US20 EMULATION", "DIRECT SELECT", "",
 
-      // Sublist 60 - 67: MIDI forward filters
-      "BLOCK ALL MIDI", "FORWARD ALL MIDI", "ALL BUT SYSEX", "FWD PC ONLY", "FORWARD CC ONLY", "FWD NOTES ONLY", "FWD SYSEX ONLY", "",
+          // Sublist 67 - 74: MIDI forward filters
+          "BLOCK ALL MIDI", "FORWARD ALL MIDI", "ALL BUT SYSEX", "FWD PC ONLY", "FORWARD CC ONLY", "FWD NOTES ONLY", "FWD SYSEX ONLY", "",
 
-      // Sublist 68 - 71: WIFI modes
-      "OFF", "Client", "Access point", "Client + AP",
+          // Sublist 75 - 78: WIFI modes
+          "OFF", "Client", "Access point", "Client + AP",
 
-      // Sublist 72 - 74: Tempo follow modes
-      "DISABLED", "OFF", "ON",
+          // Sublist 79 - 81: Tempo follow modes
+          "DISABLED", "OFF", "ON",
 
-      // Sublist 75 - 82: MIDI forwarding bidirectional settings
-      "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
+          // Sublist 82 - 89: MIDI forwarding bidirectional settings
+          "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
 
-      // Sublist 83 - 84: Katana type
-      "Katana100 (8 CH)", "Katana50 (4 CH)",
+          // Sublist 90 - 91: Katana type
+          "Katana100 (8 CH)", "Katana50 (4 CH)",
     };
 };
 

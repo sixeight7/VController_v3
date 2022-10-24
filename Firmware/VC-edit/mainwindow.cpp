@@ -11,6 +11,8 @@
 #include "vcdevices.h"
 #include "commandeditdialog.h"
 #include "aboutdialog.h"
+#include "songeditdialog.h"
+#include "setlisteditdialog.h"
 #include "scenedialog.h"
 #include "mainwindow.h"
 
@@ -91,7 +93,7 @@ MainWindow::MainWindow(QWidget *parent) :
     fillPatchTypeComboBox(ui->patchTypeComboBox);
     ui->patchListWidget->setDefaultDropAction(Qt::MoveAction);
     connect(ui->patchListWidget, SIGNAL(moveCommand(customListWidget*,int,int)), this, SLOT(movePatch(customListWidget*,int,int)));
-    connect(ui->patchListWidget, SIGNAL(customDoubleClicked()), this, SLOT(on_actionRename_triggered()));
+    connect(ui->patchListWidget, SIGNAL(customDoubleClicked()), this, SLOT(on_actionEditPatch_triggered()));
 
     ui->currentPageComboBox->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->currentPageComboBox, SIGNAL(customContextMenuRequested(const QPoint)), this, SLOT(ShowPageContextMenu(QPoint)));
@@ -130,6 +132,7 @@ void MainWindow::runEverySecond()
 void MainWindow::updateSettings()
 {
     fillTreeWidget(ui->treeWidget);
+    closeProgressBar("Settings read succesfully");
 }
 
 void MainWindow::updateCommands(int check_number_of_cmds, int check_number_of_pages)
@@ -143,6 +146,7 @@ void MainWindow::updateCommands(int check_number_of_cmds, int check_number_of_pa
     }
     else qDebug() << "Midi dump received succesful";
     fillPageComboBox(ui->currentPageComboBox);
+    fillPageComboBox(ui->currentPageComboBox2);
     fillListBoxes(false);
 }
 
@@ -171,6 +175,7 @@ void MainWindow::loadAppSettings() {
     MyMidiOutPort = appSettings.value("midiOutPort").toString();
     MyMidi->openMidiOut(MyMidiOutPort);
     MyMidi->send_universal_identity_request(); //See if we can connect
+    MyMidiSlowMode = appSettings.value("midiSlowMode").toBool();
     appSettings.endGroup();
 
     if (newType != VC_type) {
@@ -180,11 +185,16 @@ void MainWindow::loadAppSettings() {
             booted = true;
         }
         else {
-            // reboot VC-edit
-            //QString program = qApp->arguments()[0];
-            //QStringList arguments = qApp->arguments().mid(1);
+#ifdef Q_OS_WIN
+            // reboot VC-edit for windows
+            QString program = qApp->arguments()[0];
+            QStringList arguments = qApp->arguments().mid(1);
+            qApp->quit();
+            QProcess::startDetached(program, arguments);
+#else
+            // reboot VC-edit for Mac
             qApp->exit(EXIT_CODE_REBOOT);
-            //QProcess::startDetached(program, arguments);
+#endif
         }
     }
 }
@@ -235,7 +245,8 @@ void MainWindow::remoteSwitchReleased(int sw) {
 
 void MainWindow::setupLcdDisplays() {
     // Setup virtual lcd_displays:
-    setFont(ui->lcd0, 28);
+    if (VC_type == VCTOUCH) setFont(ui->lcd0, 40);
+    else setFont(ui->lcd0, 28);
 }
 
 void MainWindow::setFont(QLabel* display, uint8_t size) {
@@ -319,19 +330,96 @@ void MainWindow::fillListBoxes(bool first_time)
 void MainWindow::fillPatchListBox(QListWidget *my_patchList)
 {
     my_patchList->clear();
-    if (currentDevicePatchType == 0) {
+    if (currentDevicePatchType == 0) { // Memory view
         for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
-          my_patchList->addItem(MyVCdevices->ReadPatchStringForListWidget(p, 0));
+          if (Device_patches[p][0] == EXT_SONG_TYPE) my_patchList->addItem(readSongStringForPatchListWidget(p, 0));
+          else if (Device_patches[p][0] == EXT_SETLIST_TYPE) my_patchList->addItem(readSetlistStringForPatchListWidget(p, 0));
+          else my_patchList->addItem(MyVCdevices->ReadPatchStringForListWidget(p, 0));
       }
     }
-    else {
+    else if (currentDevicePatchType == EXT_SONG_TYPE) { // SONG view
+        for (int p = 0; p <= MAX_NUMBER_OF_SONGS; p++) {
+            my_patchList->addItem(readSongStringForPatchListWidget(p, currentDevicePatchType));
+        }
+    }
+    else if (currentDevicePatchType == EXT_SETLIST_TYPE) { // SETLIST view
+        for (int p = 1; p <= MAX_NUMBER_OF_SETLISTS; p++) {
+            my_patchList->addItem(readSetlistStringForPatchListWidget(p, currentDevicePatchType));
+        }
+    }
+    else { // Device view
         uint8_t dev = (currentDevicePatchType & 0xFF) - 1;
-        for (int p = Device[dev]->patch_min_as_stored_on_VC(); p <= Device[dev]->patch_max_as_stored_on_VC; p++) {
+        if (dev < NUMBER_OF_DEVICES) {
+          for (int p = Device[dev]->patch_min_as_stored_on_VC(); p <= Device[dev]->patch_max_as_stored_on_VC; p++) {
             my_patchList->addItem(MyVCdevices->ReadPatchStringForListWidget(p, currentDevicePatchType));
+          }
         }
     }
 
     updateStatusLabel();
+}
+
+QString MainWindow::readSongStringForPatchListWidget(uint16_t number, uint8_t type)
+{
+    QString line;
+    int my_index;
+    if (type == 0) {
+        line = QString::number(number);
+        my_index = number;
+    }
+    else {
+        line = songEditDialog::get_song_number_name(number);
+        my_index = MyVCdevices->findIndex(type, number);
+    }
+    uint8_t my_type;
+    if (my_index != PATCH_INDEX_NOT_FOUND) my_type = Device_patches[my_index][0];
+    else my_type = 0;
+
+    line.append(":\t");
+    if (my_type == EXT_SONG_TYPE) {
+        uint8_t song_no = (Device_patches[my_index][1] << 7) + Device_patches[my_index][2];
+        line.append("SONG\t");
+        line.append(songEditDialog::get_song_number_name(song_no));
+        line.append("\t");
+        line.append(songEditDialog::get_song_name(my_index));
+    }
+    else {
+      line.append("New Song");
+    }
+
+    return line;
+}
+
+QString MainWindow::readSetlistStringForPatchListWidget(uint16_t number, uint8_t type)
+{
+    QString line;
+    int my_index;
+    if (type == 0) {
+        line = QString::number(number);
+        my_index = number;
+    }
+    else {
+        line = setlistEditDialog::get_setlist_number_name(number);
+        my_index = MyVCdevices->findIndex(type, number);
+    }
+
+    uint8_t my_type;
+    if (my_index != PATCH_INDEX_NOT_FOUND) my_type = Device_patches[my_index][0];
+    else my_type = 0;
+
+    line.append(":\t");
+    if (my_type == EXT_SETLIST_TYPE) {
+        uint8_t setlist_no = (Device_patches[my_index][1] << 7) + Device_patches[my_index][2];
+        line.append("SETLIST\t");
+        line.append(setlistEditDialog::get_setlist_number_name(setlist_no));
+        line.append("\t");
+        line.append(setlistEditDialog::get_setlist_name(my_index));
+    }
+    else {
+      line.append("New Setlist");
+    }
+
+    return line;
 }
 
 void MainWindow::fillPatchTypeComboBox(QComboBox *my_combobox)
@@ -340,6 +428,8 @@ void MainWindow::fillPatchTypeComboBox(QComboBox *my_combobox)
    QString memitem = VC_name;
    memitem.append(" memory");
    my_combobox->addItem(memitem);
+   my_combobox->addItem("SONGS");
+   my_combobox->addItem("SETLISTS");
    for (uint8_t dev = 0; dev < NUMBER_OF_DEVICES; dev++) {
        if (Device[dev]->supportPatchSaving() > 0) my_combobox->addItem(Device[dev]->full_device_name);
        if (Device[dev]->supportPatchSaving() > 1) my_combobox->addItem(Device[dev]->full_device_name + " bass mode");
@@ -347,13 +437,15 @@ void MainWindow::fillPatchTypeComboBox(QComboBox *my_combobox)
 
    QSettings appSettings;
    appSettings.beginGroup("MainWindow");
-   my_combobox->setCurrentIndex(appSettings.value("currentPatchTypeComboBoxItem", 1).toInt());
+   int index = appSettings.value("currentPatchTypeComboBoxItem", 1).toInt();
+   if (index > my_combobox->count()) index = 0;
+   my_combobox->setCurrentIndex(index);
    appSettings.endGroup();
 }
 
 void MainWindow::updateStatusLabel()
 {
-    uint8_t cmd_percentage = Commands.size() * 100 / MAX_NUMBER_OF_INTERNAL_COMMANDS;
+    uint8_t cmd_percentage = Commands.size() * 100 / EXT_EEP_MAX_NUMBER_OF_COMMANDS;
     //statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%");
 
     uint8_t patch_percentage = MyVCdevices->numberOfPatches() * 100 / MAX_NUMBER_OF_DEVICE_PRESETS;
@@ -409,9 +501,9 @@ void MainWindow::checkMenuItems()
 void MainWindow::updateLcdDisplay(int lcd_no, QString line1, QString line2) {
     if (lcd_no > myLCDs.count()) return;
     QString richText;
-    line1.resize(16);
+    //line1.resize(16);
     QString line1string = addNonBreakingSpaces(line1.toHtmlEscaped());
-    line2.resize(16);
+    //line2.resize(16);
     QString line2string = addNonBreakingSpaces(line2.toHtmlEscaped());
     if (lcd_no == 0) {
         richText = "<html><body><p style=\"line-height:.5\">" + line1string +
@@ -592,7 +684,8 @@ void MainWindow::on_actionOpen_triggered()
         MyVCseqPatterns->read(loadDoc.object());
         MyVCdevices->read(loadDoc.object());
         MyVCcommands->readAll(loadDoc.object());
-        MyVCdevices->readAll(loadDoc.object());
+        //MyVCdevices->readAll(loadDoc.object());
+        readAllPatchData(loadDoc.object());
         MyVCdevices->readAllLegacyKatana(loadDoc.object());
         fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
         updateCommandScreens(false);
@@ -636,7 +729,8 @@ void MainWindow::on_actionSave_triggered()
     MyVCseqPatterns->write(saveObject);
     MyVCdevices->write(saveObject);
     MyVCcommands->writeAll(saveObject);
-    MyVCdevices->writeAll(saveObject);
+    writeAllPatchData(saveObject);
+    //MyVCdevices->writeAll(saveObject);
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
     ui->statusbar->showMessage(MyFullBackupFile + " saved", STATUS_BAR_MESSAGE_TIME);
@@ -654,12 +748,53 @@ void MainWindow::writeHeader(QJsonObject &json, QString type)
     json["Header"] = headerObject;
 }
 
+void MainWindow::writeAllPatchData(QJsonObject &json) const
+{
+    QJsonObject allPatches;
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        uint8_t my_type = Device_patches[p][0];
+        int patch_no = (Device_patches[p][1] << 8) + Device_patches[p][2];
+        if (my_type > 0) {
+            QJsonObject patchObject;
+            patchObject["Device type"] = my_type;
+            patchObject["Device patch number"] = patch_no;
+            if ((my_type > 0) && (my_type <= NUMBER_OF_DEVICES)) MyVCdevices->writePatchData(p, patchObject);
+            if (my_type == EXT_SETLIST_TYPE) setlistEditDialog::writeSetlistData(p, patchObject);
+            if (my_type == EXT_SONG_TYPE) songEditDialog::writeSongData(p, patchObject);
+            allPatches["Patch_" + QString::number(p)] = patchObject;
+        }
+        //patchArray.append(patchObject);
+    }
+    json["Device Patches"] = allPatches;
+}
+
 QString MainWindow::readHeader(const QJsonObject &json)
 {
     if (!(json.contains("Header"))) return "";
     QJsonObject headerObject = json["Header"].toObject();
     if (!(headerObject["Source"].toString() == "VC-edit")) return "";
     return headerObject["Type"].toString();
+}
+
+void MainWindow::readAllPatchData(const QJsonObject &json)
+{
+    int my_type, patch_no;
+    QJsonObject allPatches = json["Device Patches"].toObject();
+    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
+        QJsonObject patchObject = allPatches["Patch_" + QString::number(p)].toObject();
+        if (!patchObject.isEmpty()) {
+            my_type = patchObject["Device type"].toInt();
+            patch_no = patchObject["Device patch number"].toInt();
+            int index = MyVCdevices->findIndex(my_type, patch_no);
+            if (index == PATCH_INDEX_NOT_FOUND) index = MyVCdevices->newIndex();
+            if (index != PATCH_INDEX_NOT_FOUND) { // Not out of memory
+                if ((my_type > 0) && (my_type <= NUMBER_OF_DEVICES)) MyVCdevices->readPatchData(patch_no, patchObject, my_type);
+                if (my_type == EXT_SETLIST_TYPE) setlistEditDialog::readSetlistData(patch_no, patchObject, my_type, index);
+                if (my_type == EXT_SONG_TYPE) songEditDialog::readSongData(patch_no, patchObject, my_type, index);
+                allPatches["Patch_" + QString::number(p)] = patchObject;
+            }
+        }
+    }
 }
 
 QString MainWindow::checkHeaderContainsRightVCtype(const QJsonObject &json)
@@ -836,7 +971,7 @@ void MainWindow::on_tabWidget_currentChanged(int index)
         ui->menuCommand->menuAction()->setVisible(false);
     }
 
-    if (ui->tabWidget->tabText(index) == "Device patches") {
+    if (ui->tabWidget->tabText(index) == "Songs/Setlists/Patches") {
         ui->menuPatch->menuAction()->setVisible(true);
         fillPatchListBox(ui->patchListWidget);
     }
@@ -876,9 +1011,9 @@ void MainWindow::on_readSysexCmdButton_clicked()
 
 void MainWindow::on_writeSysexCmdButton_clicked()
 {
-    if (Commands.size() > MAX_NUMBER_OF_INTERNAL_COMMANDS) {
+    if (Commands.size() > EXT_EEP_MAX_NUMBER_OF_COMMANDS) {
         QMessageBox msg;
-        msg.critical(this, "Out of memory", "Too many commands in current configuration to fit the VController. Please delete some commands or pages and try again.");
+        msg.critical(this, "Out of memory", "Too many commands in current configuration to fit the " + VC_name + ". Please delete some commands or pages and try again.");
         return;
     }
     try_reconnect_MIDI();
@@ -933,6 +1068,7 @@ void MainWindow::on_actionRenamePage_triggered()
     if (ok && !text.isEmpty()) {
         MyVCcommands->setCustomLabelString(currentPage, 0, text);
         fillPageComboBox(ui->currentPageComboBox);
+        fillPageComboBox(ui->currentPageComboBox2);
         dataEdited = true;
     }
 }
@@ -1010,7 +1146,7 @@ void MainWindow::ShowPatchContextMenu(const QPoint &pos)
     QMenu submenu;
     submenu.addAction(ui->actionCopyPatch);
     submenu.addAction(ui->actionPastePatch);
-    submenu.addAction(ui->actionRename);
+    submenu.addAction(ui->actionEditPatch);
     submenu.addAction(ui->actionImport);
     submenu.addAction(ui->actionExport);
     submenu.addAction((ui->actionInitialize_patch));
@@ -1142,6 +1278,7 @@ void MainWindow::VControllerDetected(int type, int versionMajor, int versionMino
         // Bring the remote control online
         MyMidi->sendSysexCommand(2, VC_REMOTE_CONTROL_ENABLE, 1);
     }
+    MyMidi->MIDI_editor_request_hardware_version();
 }
 
 void MainWindow::disconnect_VC() {
@@ -1252,8 +1389,13 @@ void MainWindow::on_writePatchButton_clicked()
     try_reconnect_MIDI();
     startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Uploading Device patches...");
     for (uint16_t p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
-        if (Device_patches[p][0] != 0) MyMidi->MIDI_send_device_patch(p);
-        else MyMidi->MIDI_send_initialize_device_patch(p);
+        if (Device_patches[p][0] != 0) {
+            MyMidi->MIDI_send_device_patch(p);
+            if (MyMidiSlowMode) QThread().msleep(100);
+        }
+        else {
+            MyMidi->MIDI_send_initialize_device_patch(p);
+        }
         updateProgressBar(p);
         //QThread().msleep(5);
     }
@@ -1261,16 +1403,36 @@ void MainWindow::on_writePatchButton_clicked()
     closeProgressBar("Katana patch upload complete");
 }
 
-void MainWindow::on_actionRename_triggered()
+void MainWindow::on_actionEditPatch_triggered()
 {
-    // Rename patch
+    // Edit patch
     bool ok;
     int item = ui->patchListWidget->currentRow();
     if (item == -1) return;
+    if (currentDevicePatchType == EXT_SETLIST_TYPE) item++;
 
     int index = MyVCdevices->findIndex(currentDevicePatchType, item);
 
-    uint8_t my_type = Device_patches[index][0];
+    uint8_t my_type;
+    if (index != PATCH_INDEX_NOT_FOUND) my_type = Device_patches[index][0];
+    else my_type = 0;
+
+    if (my_type == EXT_SONG_TYPE) {
+        songEditDialog sd(this, index);
+        sd.exec();
+        sd.close();
+        fillPatchListBox(ui->patchListWidget);
+        dataEdited = true;
+    }
+
+    if (my_type == EXT_SETLIST_TYPE) {
+        setlistEditDialog sd(this, index, MyVCcommands);
+        sd.exec();
+        sd.close();
+        fillPatchListBox(ui->patchListWidget);
+        dataEdited = true;
+    }
+
     if (my_type == KTN + 1) {
       QString text = QInputDialog::getText(this, tr("QInputDialog::getText()"),
                                          tr("New patch name:"), QLineEdit::Normal,
@@ -1290,6 +1452,18 @@ void MainWindow::on_actionRename_triggered()
         fillPatchListBox(ui->patchListWidget);
         dataEdited = true;
     }
+
+    // New items
+    if (my_type == 0) {
+        if (currentDevicePatchType == EXT_SETLIST_TYPE) {
+            setlistEditDialog::createNewSetlist(item);
+            on_actionEditPatch_triggered();
+        }
+        if (currentDevicePatchType == EXT_SONG_TYPE) {
+            songEditDialog::createNewSong(item);
+            on_actionEditPatch_triggered();
+        }
+    }
 }
 
 void MainWindow::on_actionExport_triggered()
@@ -1298,7 +1472,10 @@ void MainWindow::on_actionExport_triggered()
     int number = ui->patchListWidget->currentRow();
     if (number == -1) return;
 
+    if (currentDevicePatchType == EXT_SETLIST_TYPE) number++; // Setlist 0 is not shown in the list.
+
     int index = MyVCdevices->findIndex(currentDevicePatchType, number);
+    qDebug() << "Export triggered - index:" << index;
     if (index == PATCH_INDEX_NOT_FOUND) return;
 
     // Check if patch is empty
@@ -1307,12 +1484,18 @@ void MainWindow::on_actionExport_triggered()
         ui->statusbar->showMessage("Patch is empty", STATUS_BAR_MESSAGE_TIME);
         return;
     }
+
     int dev = type - 1;
+    QString defaultPatchName = "patch";
+    if (type == EXT_SETLIST_TYPE) defaultPatchName = setlistEditDialog::get_setlist_number_name(number) + "-" + setlistEditDialog::get_setlist_name(index).trimmed();
+    if (type == EXT_SONG_TYPE) defaultPatchName = songEditDialog::get_song_number_name(number) + "-" + songEditDialog::get_song_name(index).trimmed();
+    if (type <= NUMBER_OF_DEVICES) defaultPatchName = Device[dev]->DefaultPatchFileName(number);
+
 
     // File Save
     QFileInfo fileInfo(MySavePatchFile);
     qDebug() << MySavePatchFile << fileInfo.absoluteFilePath();
-    MySavePatchFile = fileInfo.absoluteFilePath() + "/" + Device[dev]->DefaultPatchFileName(number) + ".vcp";
+    MySavePatchFile = fileInfo.absoluteFilePath() + "/" + defaultPatchName + ".vcp";
     MySavePatchFile = QFileDialog::getSaveFileName(this, "Save patch:", MySavePatchFile, tr("VC-edit data (*.vcp)"));
     QFile saveFile(MySavePatchFile);
 
@@ -1321,10 +1504,23 @@ void MainWindow::on_actionExport_triggered()
         return;
     }
 
-    QString patchHeader = Device[dev]->patchFileHeader() + "Patch";
     QJsonObject saveObject;
-    writeHeader(saveObject, patchHeader);
-    MyVCdevices->writePatchData(index, saveObject);
+    QString patchHeader;
+    if (type == EXT_SETLIST_TYPE) {
+        patchHeader = "Setlist";
+        writeHeader(saveObject, patchHeader);
+        setlistEditDialog::writeSetlistData(index, saveObject);
+    }
+    if (type == EXT_SONG_TYPE) {
+        patchHeader = "Song";
+        writeHeader(saveObject, patchHeader);
+        songEditDialog::writeSongData(index, saveObject);
+    }
+    if (type <= NUMBER_OF_DEVICES) {
+        patchHeader = Device[dev]->patchFileHeader() + "Patch";
+        writeHeader(saveObject, patchHeader);
+        MyVCdevices->writePatchData(index, saveObject);
+    }
     QJsonDocument saveDoc(saveObject);
     saveFile.write(saveDoc.toJson());
     ui->statusbar->showMessage(MySavePatchFile + " saved", STATUS_BAR_MESSAGE_TIME);
@@ -1350,23 +1546,36 @@ void MainWindow::on_actionImport_triggered()
     QByteArray saveData = loadFile.readAll();
     QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
     fileLoaded = true;
-
-    uint8_t dev = currentDevicePatchType - 1;
-    QString patchHeader = Device[dev]->patchFileHeader() + "Patch";
     QString jsonType = readHeader(loadDoc.object());
-    if (jsonType == patchHeader) {
-        MyVCdevices->readPatchData(patch_no, loadDoc.object(), currentDevicePatchType);
+
+    int index = MyVCdevices->findIndex(currentDevicePatchType, patch_no);
+    if (index == PATCH_INDEX_NOT_FOUND) index = MyVCdevices->newIndex();
+    if (index == PATCH_INDEX_NOT_FOUND) return; // Out of memory
+
+    if (jsonType == "Setlist") {
+        setlistEditDialog::readSetlistData(patch_no, loadDoc.object(), currentDevicePatchType, index);
         fillPatchListBox(ui->patchListWidget);
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
     }
-    /*else if ((currentDevicePatchType == KTN + 1) && (jsonType == "KatanaPatch")) { // Open legacy format for Katana only
-        MyVCdevices->readPatchData(patch_no, loadDoc.object(), KTN + 1);
+    else if (jsonType == "Song") {
+        songEditDialog::readSongData(patch_no, loadDoc.object(), currentDevicePatchType, index);
         fillPatchListBox(ui->patchListWidget);
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
-    }*/
+    }
     else {
-        ui->statusbar->showMessage("Couldn't read selected. No VC-edit " + patchHeader + " file", STATUS_BAR_MESSAGE_TIME);
-        return;
+        uint8_t dev = currentDevicePatchType - 1;
+        QString patchHeader = Device[dev]->patchFileHeader() + "Patch";
+
+        if (jsonType == patchHeader) {
+            MyVCdevices->readPatchData(patch_no, loadDoc.object(), currentDevicePatchType);
+            fillPatchListBox(ui->patchListWidget);
+            ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
+        }
+
+        else {
+            ui->statusbar->showMessage("Couldn't read selected VC-edit " + patchHeader + " file", STATUS_BAR_MESSAGE_TIME);
+            return;
+        }
     }
 }
 
@@ -1415,10 +1624,13 @@ void MainWindow::on_actionInitialize_patch_triggered()
 
 void MainWindow::on_patchTypeComboBox_currentIndexChanged(int index)
 {
-   int prevType = currentDevicePatchType;
+    qDebug() << "Ïndex" << index;
+    int prevType = currentDevicePatchType;
     currentDevicePatchType = 0;
-    if (index > 0) {
-        uint8_t t = 0;
+    if (index == 1) currentDevicePatchType = EXT_SONG_TYPE;
+    if (index == 2) currentDevicePatchType = EXT_SETLIST_TYPE;
+    if (index > 2) {
+        uint8_t t = 2;
         for (uint8_t dev = 0; dev < NUMBER_OF_DEVICES; dev++) {
             if (Device[dev]->supportPatchSaving() > 0) {
                 t++;
@@ -1436,6 +1648,7 @@ void MainWindow::on_patchTypeComboBox_currentIndexChanged(int index)
     }
 
     if (currentDevicePatchType != prevType){
+        qDebug() << "Fill patchlistbox";
         fillPatchListBox(ui->patchListWidget);
     }
 
@@ -1744,6 +1957,7 @@ void MainWindow::drawRemoteControlAreaVCtouch()
     ui->remoteControlFrame->layout()->setSpacing(0);
     ui->tab_RemoteControl->layout()->setContentsMargins(0, 0, 0, 0);
     ui->lcd0->setFixedWidth(displayPixelSize * rowItems * 25);
+    ui->lcd0->setFixedHeight(100);
     ui->lcd0->setStyleSheet("QLabel { background-color : rgb(6, 19, 59); color : white; border-style: none; border-color: black; border-width: 0px;}");
     ui->switch_13->setShortcut(NULL);
     ui->switch_13->hide();
@@ -1814,7 +2028,7 @@ void MainWindow::drawRemoteControlAreaVCtouch()
         if (row >= 2) layout->insertLayout(0, newLineLayout);
         else layout->insertLayout(4, newLineLayout);
     }
-    layout->insertSpacing(6, 80);
+    layout->insertSpacing(6, 80); // Space between bottom switch rows
 }
 
 void MainWindow::drawRemoteSwitch(QHBoxLayout *layout, uint8_t switchNumber, int switchSize)

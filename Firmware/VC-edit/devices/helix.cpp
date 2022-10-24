@@ -117,3 +117,27 @@ uint8_t HLX_class::max_value(uint16_t par_no)
     if (par_no < number_of_parameters()) return 127;
     else return 0;
 }
+
+QString HLX_class::setlist_song_full_item_format(uint16_t item)
+{
+    QString Output = device_name;
+    Output += ": ";
+    Output += setlist_song_short_item_format(item);
+    return Output;
+}
+
+QString HLX_class::setlist_song_short_item_format(uint16_t item)
+{
+    uint8_t setlist = item / 128;
+    uint8_t patch = item % 128;
+    QString Output = "SET";
+    Output += QString::number(setlist + 1);
+    Output += ' ';
+    Output += number_format(patch);
+    return Output;
+}
+
+int HLX_class::setlist_song_get_number_of_items()
+{
+    return (HLX_NUMBER_OF_SETLISTS * (patch_max + 1));
+}

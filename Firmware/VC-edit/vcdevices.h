@@ -37,10 +37,8 @@ public:
     int getDevicePatchNumber(int number, int type);
     void WritePatch(int type, int number, QByteArray patch);
     void InitializePatchArea();
-    void readAll(const QJsonObject &json);
     void readPatchData(int patch_no, const QJsonObject &json, int my_type);
     void readAllLegacyKatana(const QJsonObject &json);
-    void writeAll(QJsonObject &json) const;
     void writePatchData(int patch_no, QJsonObject &json) const;
     void swapPatch(int patch_no1, int patch_no2, int type);
     void movePatch(int source_patch, int dest_patch, int type);
@@ -49,9 +47,8 @@ public:
     void clearCopyBuffer();
     void initializePatch(int number, int type);
 
-#define PATCH_INDEX_NOT_FOUND 0xFFFF
-
 signals:
+    void updateProgressBar(int value);
 
 public slots:
 

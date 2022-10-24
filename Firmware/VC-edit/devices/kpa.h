@@ -27,6 +27,7 @@ public:
     virtual QString read_parameter_state(uint16_t par_no, uint8_t value);
     virtual uint16_t number_of_parameters();
     virtual uint8_t max_value(uint16_t par_no);
+    virtual QString get_patch_info(uint16_t number);
 
     uint8_t model_number;
 };

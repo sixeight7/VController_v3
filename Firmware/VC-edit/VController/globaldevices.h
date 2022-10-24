@@ -31,5 +31,7 @@ extern SVL_class My_SVL;
 
 extern Device_class * Device[NUMBER_OF_DEVICES];
 
+#define MAX_NUMBER_OF_SETLISTS 99
+#define MAX_NUMBER_OF_SONGS 99
 
 #endif // GLOBALDEVICES_H

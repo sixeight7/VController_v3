@@ -33,8 +33,8 @@ public:
     virtual uint16_t patch_min_as_stored_on_VC();
 
 private:
-    uint8_t ktn_patch_min;
-    uint8_t ktn_bank_size;
+    uint8_t ktn_patch_min = 0;
+    uint8_t ktn_bank_size = 8;
 };
 
 #endif // KATANA_H

@@ -33,6 +33,7 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
     RtMidi.cpp\
+    customcheckbox.cpp \
     customdisplaylabel.cpp \
     customled.cpp \
     customlineedit.cpp \
@@ -40,6 +41,8 @@ SOURCES += main.cpp\
     mainwindow.cpp \
     midi.cpp \
     scenedialog.cpp \
+    setlisteditdialog.cpp \
+    songeditdialog.cpp \
     vcseqpattern.cpp \
     vcsettings.cpp \
     customcombobox.cpp \
@@ -73,6 +76,7 @@ SOURCES += main.cpp\
     devices/mg300.cpp
 
 HEADERS  += RtMidi.h \
+    customcheckbox.h \
     customdisplaylabel.h \
     customled.h \
     customlineedit.h \
@@ -80,6 +84,8 @@ HEADERS  += RtMidi.h \
     mainwindow.h \
     midi.h \
     scenedialog.h \
+    setlisteditdialog.h \
+    songeditdialog.h \
     vcseqpattern.h \
     vcsettings.h \
     customcombobox.h \
@@ -116,6 +122,8 @@ HEADERS  += RtMidi.h \
 
 FORMS += \
     scenedialog.ui \
+    setlisteditdialog.ui \
+    songeditdialog.ui \
     vceditsettingsdialog.ui \
     commandeditdialog.ui \
     mainwindow_VC-full.ui \
@@ -146,6 +154,7 @@ win32{
     CONFIG += static
     CONFIG += embed_manifest_exe
     CONFIG += release
+    CONFIG += c++1z
     DESTDIR = ./packager
     MOC_DIR += ./generatedfiles/release
     OBJECTS_DIR += release

@@ -24,9 +24,11 @@ signals:
 private slots:
     void on_buttonBox_accepted();
 
-    void on_hideKatanaTabCheckBox_stateChanged(int arg1);
-
     void on_deviceModeComboBox_currentIndexChanged(int index);
+
+    void on_MidiInComboBox_currentTextChanged(const QString &arg1);
+
+    void on_MidiOutComboBox_currentTextChanged(const QString &arg1);
 
 private:
     Ui::vcEditSettingsDialog *ui;

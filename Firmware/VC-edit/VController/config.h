@@ -56,7 +56,7 @@ struct Cmd_struct
 #define SWITCH_TYPE_MASK 0xE0
 
 // Common command types
-#define NUMBER_OF_COMMON_TYPES 9 // Only the one that can be selected in the command builder
+#define NUMBER_OF_COMMON_TYPES 13 // Only the one that can be selected in the command builder
 #define NOTHING 0           // Example: {<PAGE>, <SWITCH>, NOTHING, COMMON}
 #define PAGE 1              // Example: {<PAGE>, <SWITCH>, PAGE, COMMON, SELECT, PAGE_COMBO1}
 #define TAP_TEMPO 2         // Example: {<PAGE>, <SWITCH>, TAP_TEMPO, COMMON}
@@ -66,10 +66,14 @@ struct Cmd_struct
 #define MIDI_CC 6           // Example: {<PAGE>, <SWITCH>, MIDI_CC, COMMON, Controller, CC_TOGGLE_TYPE, Value1, Value2, Channel, Port}
 #define MIDI_NOTE 7         // Example: {<PAGE>, <SWITCH>, MIDI_NOTE, COMMON, Note, Velocity, Channel, Port}
 #define SELECT_NEXT_DEVICE 8// Example: {<PAGE>, <SWITCH>, SELECT_NEXT_DEVICE, COMMON}
+#define SETLIST 9            // Example: {<PAGE>, <SWITCH>, SETLIST, COMMON, NEXT}
+#define SONG 10              // Example: {<PAGE>, <SWITCH>, SONG, COMMON, NEXT}
+#define MODE 11              // Example: {<PAGE>, <SWITCH>, MODE, COMMON, SELECT, 0}
+#define MIDI_MORE 12         // Example: {<PAGE>, <SWITCH>, MIDI_PC, COMMON, START}
 
 // Common functions that can not be selected in the command builder
 #define NUMBER_OF_COMMON_TYPES_NOT_SELECTABLE 1
-#define MENU 9             // Example: {<PAGE>, <SWITCH>, MENU, COMMON, 1} - to display first menu item
+#define MENU 13             // Example: {<PAGE>, <SWITCH>, MENU, COMMON, 1} - to display first menu item
 
 // Device command types
 #define NUMBER_OF_DEVICE_TYPES 10
@@ -102,6 +106,12 @@ struct Cmd_struct
 #define PREV 5             // Example: {<PAGE>, <SWITCH>, PAGE, COMMON, PREV}
 #define NUMBER_OF_SELECT_TYPES 6
 
+// Mode types
+#define SONG_MODE 0
+#define PAGE_MODE 1
+#define DEVICE_MODE 2
+#define NUMBER_OF_MODES 3
+
 //Toggle types
 #define MOMENTARY 0
 #define TOGGLE 1
@@ -111,6 +121,7 @@ struct Cmd_struct
 #define STEP 4 // Set minimum ,maximum and step value
 #define RANGE 5 // For use with expression pedal
 #define UPDOWN 6 // Press and hold to increase/decrease. Press shortly to change direction
+#define ONE_SHOT 7
 #define TGL_OFF 255 // To show nothing
 
 // Special max values:
@@ -127,6 +138,46 @@ struct Cmd_struct
 #define CC_RANGE 4 // For use with expression pedal
 #define CC_STEP 5 // Step through the values from minimum to maximum
 #define CC_UPDOWN 6 // Press and hold to increase/decrease. Press shortly to change direction
+
+// MIDI_MORE options
+#define MIDI_START 0
+#define MIDI_STOP 1
+#define MIDI_START_STOP 2
+
+// Setlist command types
+#define SL_SELECT 0
+#define SL_BANKSELECT 1
+#define SL_BANKUP 2
+#define SL_BANKDOWN 3
+#define SL_PREV 4
+#define SL_NEXT 5
+#define SL_EDIT 6
+
+// Setlist targets
+#define SETLIST_TARGET_SONG 0
+#define SETLIST_TARGET_PAGE 1
+#define SETLIST_TARGET_FIRST_DEVICE 2
+
+// Song command types
+#define SONG_SELECT 0
+#define SONG_BANKSELECT 1
+#define SONG_BANKUP 2
+#define SONG_BANKDOWN 3
+#define SONG_PREV 4
+#define SONG_NEXT 5
+#define SONG_PARTSEL 6
+#define SONG_EDIT 7
+
+#define SONG_PREVNEXT_SONG 0 // PREV and NEXT will choose previous or next song
+#define SONG_PREVNEXT_PART 1 // PREV and NEXT will choose previous or next part
+#define SONG_PREVNEXT_SONGPART 2  // PREV and NEXT will choose previous or next part and move to the next song
+
+// Song targets
+#define SONG_TARGET_OFF 0
+#define SONG_TARGET_PC 1
+#define SONG_TARGET_CC 2
+#define SONG_TARGET_TEMPO 3
+#define SONG_TARGET_FIRST_DEVICE 4
 
 // Looper types
 #define NUMBER_OF_LOOPER_TYPES 11
@@ -178,8 +229,8 @@ struct Cmd_struct
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE_VC 203
 #define PAGE_VC_MENU 201
 #define PAGE_VC_CURRENT_DIRECT_SELECT 202
-#define PAGE_VC_SELECT 203
-#define PAGE_VC_DEVICE_SELECT 204
+#define PAGE_VC_DEVICE_MODE 203
+#define PAGE_VC_PAGE_MODE 204
 #define PAGE_VC_CURRENT_PATCH_BANK 205
 #define PAGE_VC_GR55_PATCH_BANK 206
 #define PAGE_VC_ZOOM_PATCH_BANK 207
@@ -198,13 +249,17 @@ struct Cmd_struct
 #define PAGE_VC_KTN_EDIT 220
 #define PAGE_VC_KTN_FX 221
 #define PAGE_VC_KPA_RIG_SELECT 222
-#define PAGE_VC_KPA_LOOPER 223
-#define PAGE_VC_CURRENT_ASSIGN 224
-#define PAGE_VC_SY1000_PATCH_BANK 225
-#define PAGE_VC_SY1000_ASSIGNS 226
-#define PAGE_VC_SY1000_SCENES 227
-#define PAGE_VC_MG300_PATCH_BANK 228
-#define LAST_FIXED_CMD_PAGE_VC 227
+#define PAGE_VC_KPA_FX_CONTROL 223
+#define PAGE_VC_KPA_LOOPER 224
+#define PAGE_VC_CURRENT_ASSIGN 225
+#define PAGE_VC_SY1000_PATCH_BANK 226
+#define PAGE_VC_SY1000_ASSIGNS 227
+#define PAGE_VC_SY1000_SCENES 228
+#define PAGE_VC_MG300_PATCH_BANK 229
+#define PAGE_VC_SONG_MODE 230
+#define PAGE_VC_SONG_SELECT 231
+#define PAGE_VC_SETLIST_SELECT 232
+#define LAST_FIXED_CMD_PAGE_VC 232
 
 #define DEFAULT_VC_PAGE PAGE_VC_SELECT // The page that gets selected when a valid page number is unknown
 
@@ -230,8 +285,8 @@ struct Cmd_struct
 #define HLX_DEFAULT_VC_PAGE4 0
 
 #define KPA_DEFAULT_VC_PAGE1 PAGE_VC_KPA_RIG_SELECT
-#define KPA_DEFAULT_VC_PAGE2 PAGE_VC_CURRENT_PARAMETER
-#define KPA_DEFAULT_VC_PAGE3 PAGE_VC_KPA_LOOPER
+#define KPA_DEFAULT_VC_PAGE2 PAGE_VC_KPA_FX_CONTROL
+#define KPA_DEFAULT_VC_PAGE3 0
 #define KPA_DEFAULT_VC_PAGE4 0
 
 #define KTN_DEFAULT_VC_PAGE1 PAGE_VC_KTN_PATCH_BANK
@@ -292,8 +347,8 @@ struct Cmd_struct
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE_VCMINI 203
 #define PAGE_VCMINI_MENU 201
 #define PAGE_VCMINI_CURRENT_DIRECT_SELECT 202
-#define PAGE_VCMINI_SELECT 203
-#define PAGE_VCMINI_BANK_SELECT 204
+#define PAGE_VCMINI_DEVICE_MODE 203
+#define PAGE_VCMINI_PAGE_MODE 204
 #define PAGE_VCMINI_CURRENT_PATCH_BANK 205
 #define PAGE_VCMINI_UP_DOWN_TAP 206
 #define PAGE_VCMINI_CURRENT_PARAMETER 207
@@ -312,7 +367,10 @@ struct Cmd_struct
 #define PAGE_VCMINI_MG300_FX3 220
 #define PAGE_VCMINI_SY1000_MODE_SEL1 221
 #define PAGE_VCMINI_SY1000_MODE_SEL2 222
-#define LAST_FIXED_CMD_PAGE_VCMINI 222
+#define PAGE_VCMINI_KPA_RIG_SELECT 223
+#define PAGE_VCMINI_SONG_MODE 224
+#define PAGE_VCMINI_SETLIST_SELECT 225
+#define LAST_FIXED_CMD_PAGE_VCMINI 225
 
 #define DEFAULT_VCMINI_PAGE PAGE_VCMINI_CURRENT_PATCH_BANK // The page that gets selected when a valid page number is unknown
 
@@ -337,7 +395,7 @@ struct Cmd_struct
 #define HLX_DEFAULT_VCMINI_PAGE3 PAGE_VCMINI_LOOPER
 #define HLX_DEFAULT_VCMINI_PAGE4 0
 
-#define KPA_DEFAULT_VCMINI_PAGE1 PAGE_VCMINI_CURRENT_PATCH_BANK
+#define KPA_DEFAULT_VCMINI_PAGE1 PAGE_VCMINI_KPA_RIG_SELECT
 #define KPA_DEFAULT_VCMINI_PAGE2 PAGE_VCMINI_CURRENT_PARAMETER
 #define KPA_DEFAULT_VCMINI_PAGE3 PAGE_VCMINI_KPA_LOOPER
 #define KPA_DEFAULT_VCMINI_PAGE4 0
@@ -399,31 +457,37 @@ struct Cmd_struct
 #define FIRST_SELECTABLE_FIXED_CMD_PAGE_VCTOUCH 203
 #define PAGE_VCTOUCH_MENU 201
 #define PAGE_VCTOUCH_CURRENT_DIRECT_SELECT 202
-#define PAGE_VCTOUCH_SELECT 203
-#define PAGE_VCTOUCH_DEVICE_SELECT 204
+#define PAGE_VCTOUCH_DEVICE_MODE 203
+#define PAGE_VCTOUCH_PAGE_MODE 204
 #define PAGE_VCTOUCH_CURRENT_PATCH_BANK 205
 #define PAGE_VCTOUCH_GR55_PATCH_BANK 206
 #define PAGE_VCTOUCH_ZOOM_PATCH_BANK 207
 #define PAGE_VCTOUCH_CURRENT_PARAMETER 208
-#define PAGE_VCTOUCH_GP10_ASSIGNS 209
-#define PAGE_VCTOUCH_GR55_ASSIGNS 210
-#define PAGE_VCTOUCH_VG99_EDIT 211
-#define PAGE_VCTOUCH_M13_PARAMETER 212
-#define PAGE_VCTOUCH_FULL_LOOPER 213
-#define PAGE_VCTOUCH_HLX_PATCH_BANK 214
-#define PAGE_VCTOUCH_HLX_PARAMETER 215
-#define PAGE_VCTOUCH_SNAPSCENE_LOOPER 216
-#define PAGE_VCTOUCH_KTN_PATCH_BANK 217
-#define PAGE_VCTOUCH_KTN_EDIT 218
-#define PAGE_VCTOUCH_KTN_FX 219
-#define PAGE_VCTOUCH_KPA_RIG_SELECT 220
-#define PAGE_VCTOUCH_KPA_LOOPER 221
-#define PAGE_VCTOUCH_CURRENT_ASSIGN 222
-#define PAGE_VCTOUCH_SY1000_PATCH_BANK 223
-#define PAGE_VCTOUCH_SY1000_ASSIGNS 224
-#define PAGE_VCTOUCH_SY1000_SCENES 225
-#define PAGE_VCTOUCH_MG300_PATCH_BANK 226
-#define LAST_FIXED_CMD_PAGE_VCTOUCH 226
+#define PAGE_VCTOUCH_EDIT_PARAMETER 209
+#define PAGE_VCTOUCH_GP10_ASSIGNS 210
+#define PAGE_VCTOUCH_GR55_ASSIGNS 211
+#define PAGE_VCTOUCH_VG99_EDIT 212
+#define PAGE_VCTOUCH_M13_PARAMETER 213
+#define PAGE_VCTOUCH_FULL_LOOPER 214
+#define PAGE_VCTOUCH_HLX_PATCH_BANK 215
+#define PAGE_VCTOUCH_HLX_PARAMETER 216
+#define PAGE_VCTOUCH_SNAPSCENE_LOOPER 217
+#define PAGE_VCTOUCH_KTN_PATCH_BANK 218
+#define PAGE_VCTOUCH_KTN_EDIT 219
+#define PAGE_VCTOUCH_KTN_FX 220
+#define PAGE_VCTOUCH_KPA_RIG_SELECT 221
+#define PAGE_VCTOUCH_KPA_FX_CONTROL 222
+#define PAGE_VCTOUCH_KPA_LOOPER 223
+#define PAGE_VCTOUCH_CURRENT_ASSIGN 224
+#define PAGE_VCTOUCH_SY1000_PATCH_BANK 225
+#define PAGE_VCTOUCH_SY1000_ASSIGNS 226
+#define PAGE_VCTOUCH_SY1000_SCENES 227
+#define PAGE_VCTOUCH_MG300_PATCH_BANK 228
+#define PAGE_VCTOUCH_MIDI_PC_BANK_SELECT 229
+#define PAGE_VCTOUCH_SONG_MODE 230
+#define PAGE_VCTOUCH_SONG_SELECT 231
+#define PAGE_VCTOUCH_SETLIST_SELECT 232
+#define LAST_FIXED_CMD_PAGE_VCTOUCH 232
 
 #define DEFAULT_VCTOUCH_PAGE PAGE_VCTOUCH_SELECT // The page that gets selected when a valid page number is unknown
 
@@ -449,8 +513,8 @@ struct Cmd_struct
 #define HLX_DEFAULT_VCTOUCH_PAGE4 0
 
 #define KPA_DEFAULT_VCTOUCH_PAGE1 PAGE_VCTOUCH_KPA_RIG_SELECT
-#define KPA_DEFAULT_VCTOUCH_PAGE2 PAGE_VCTOUCH_CURRENT_PARAMETER
-#define KPA_DEFAULT_VCTOUCH_PAGE3 PAGE_VCTOUCH_KPA_LOOPER
+#define KPA_DEFAULT_VCTOUCH_PAGE2 PAGE_VCTOUCH_KPA_FX_CONTROL
+#define KPA_DEFAULT_VCTOUCH_PAGE3 0
 #define KPA_DEFAULT_VCTOUCH_PAGE4 0
 
 #define KTN_DEFAULT_VCTOUCH_PAGE1 PAGE_VCTOUCH_KTN_PATCH_BANK
@@ -500,6 +564,10 @@ struct Cmd_struct
 
 // ********************************* Section 7: VC-touch default configuration for programmable pages ********************************************
 #define PAGE_VCTOUCH_DEFAULT 0
+#define PAGE_VCTOUCH_COMBO1 1
+#define PAGE_VCTOUCH_COMBO2 2
+#define PAGE_VCTOUCH_FUNCTIONS_TEST 3
+#define PAGE_VCTOUCH_GM_TEST 4
 
 // Setting variables
 extern QVector<Cmd_struct> Commands;

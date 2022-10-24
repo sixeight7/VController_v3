@@ -275,19 +275,6 @@ void VCdevices::InitializePatchArea()
     }
 }
 
-void VCdevices::readAll(const QJsonObject &json)
-{
-    int my_type, patch_no;
-    QJsonObject allPatches = json["Device Patches"].toObject();
-    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
-        QJsonObject patchObject = allPatches["Patch_" + QString::number(p)].toObject();
-        if (!patchObject.isEmpty()) {
-            my_type = patchObject["Device type"].toInt();
-            patch_no = patchObject["Device patch number"].toInt();
-            readPatchData(patch_no, patchObject, my_type);
-        }
-    }
-}
 
 void VCdevices::readPatchData(int patch_no, const QJsonObject &json, int my_type)
 {
@@ -313,24 +300,6 @@ void VCdevices::readAllLegacyKatana(const QJsonObject &json)
     }
 }
 
-void VCdevices::writeAll(QJsonObject &json) const
-{
-    QJsonObject allPatches;
-    for (int p = 0; p < MAX_NUMBER_OF_DEVICE_PRESETS; p++) {
-        uint8_t my_type = Device_patches[p][0];
-        int patch_no = (Device_patches[p][1] << 8) + Device_patches[p][2];
-        if (my_type > 0) {
-            QJsonObject patchObject;
-            patchObject["Device type"] = my_type;
-            patchObject["Device patch number"] = patch_no;
-            writePatchData(p, patchObject);
-            allPatches["Patch_" + QString::number(p)] = patchObject;
-        }
-        //patchArray.append(patchObject);
-    }
-    json["Device Patches"] = allPatches;
-}
-
 void VCdevices::writePatchData(int patch_no, QJsonObject &json) const
 {
     uint8_t my_type = Device_patches[patch_no][0];
@@ -343,6 +312,10 @@ void VCdevices::writePatchData(int patch_no, QJsonObject &json) const
 void VCdevices::swapPatch(int patch_no1, int patch_no2, int type)
 {
     if (patch_no1 == patch_no2) return;
+    if (type == EXT_SETLIST_TYPE) {
+            patch_no1++;
+            patch_no2++;
+    }
 
     if (type & BASS_MODE_NUMBER_OFFSET) {
         patch_no1 |= BASS_MODE_NUMBER_OFFSET;
@@ -380,6 +353,7 @@ void VCdevices::movePatch(int source_patch, int dest_patch, int type)
 void VCdevices::pastePatch(int number, int type)
 {
     if (type == 0) return;
+    if (type == EXT_SETLIST_TYPE) number++;
 
     if (!copyBufferFilled) return;
     int len = Patch_copy_buffer.length() / VC_PATCH_SIZE;
@@ -415,6 +389,7 @@ void VCdevices::clearCopyBuffer()
 
 void VCdevices::initializePatch(int number, int type)
 {
+    if (type == EXT_SETLIST_TYPE) number++;
     int index = findIndex(type, number);
     if (index == PATCH_INDEX_NOT_FOUND) return;
 
@@ -425,6 +400,7 @@ void VCdevices::initializePatch(int number, int type)
 
 void VCdevices::copyPatch(int number, int type)
 {
+    if (type == EXT_SETLIST_TYPE) number++;
     int index = findIndex(type, number);
     if (index == PATCH_INDEX_NOT_FOUND) return;
 

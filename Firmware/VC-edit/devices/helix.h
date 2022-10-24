@@ -9,6 +9,7 @@
 #define HLX_MIDI_PORT 1 // Default port is MIDI1
 #define HLX_PATCH_MIN 0
 #define HLX_PATCH_MAX 127
+#define HLX_NUMBER_OF_SETLISTS 7
 
 class HLX_class : public Device_class
 {
@@ -22,6 +23,9 @@ public:
     virtual QString read_parameter_state(uint16_t par_no, uint8_t value);
     virtual uint16_t number_of_parameters();
     virtual uint8_t max_value(uint16_t par_no);
+    virtual QString setlist_song_full_item_format(uint16_t item);
+    virtual QString setlist_song_short_item_format(uint16_t item);
+    virtual int setlist_song_get_number_of_items();
 };
 
 #endif // HELIX_H

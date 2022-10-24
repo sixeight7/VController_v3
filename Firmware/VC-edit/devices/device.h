@@ -41,6 +41,9 @@ public:
     virtual QString DefaultPatchFileName(int index);
     QString numConv(int number) const;
     virtual uint16_t patch_min_as_stored_on_VC();
+    virtual QString setlist_song_full_item_format(uint16_t item);
+    virtual QString setlist_song_short_item_format(uint16_t item);
+    virtual int setlist_song_get_number_of_items();
 
     // Variables
     QString device_name;

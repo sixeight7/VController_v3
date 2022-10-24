@@ -37,6 +37,7 @@
 #define VC_REQUEST_SEQ_PATTERNS 18
 #define VC_SET_SEQ_PATTERN 19
 #define VC_INITIALIZE_DEVICE_PATCH 20
+#define VC_REQUEST_HARDWARE_VERSION 21
 
 class Midi : public QObject
 {
@@ -68,6 +69,7 @@ public:
     void MIDI_send_device_patch(uint16_t patch_no);
     void MIDI_send_initialize_device_patch(uint16_t patch_no);
     void MIDI_editor_finish_device_patch_dump();
+    void MIDI_editor_request_hardware_version();
     void send_universal_identity_request();
 
 signals:

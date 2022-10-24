@@ -44,7 +44,7 @@ QPushButton:pressed { background-color: white; border-style: inset; }</string>
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>4</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_PageCommands">
        <property name="autoFillBackground">
@@ -541,7 +541,7 @@ border-radius: 10px;</string>
       </widget>
       <widget class="QWidget" name="tab_KatanaPatches">
        <attribute name="title">
-        <string>Device patches</string>
+        <string>Songs/Setlists/Patches</string>
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_21">
         <item>
@@ -1021,7 +1021,7 @@ border-radius: 10px;</string>
     </property>
     <addaction name="actionCopyPatch"/>
     <addaction name="actionPastePatch"/>
-    <addaction name="actionRename"/>
+    <addaction name="actionEditPatch"/>
     <addaction name="actionImport"/>
     <addaction name="actionExport"/>
     <addaction name="actionInitialize_patch"/>
@@ -1067,8 +1067,11 @@ border-radius: 10px;</string>
    <property name="text">
     <string>Rename</string>
    </property>
+   <property name="toolTip">
+    <string>Rename</string>
+   </property>
    <property name="shortcut">
-    <string>Ctrl+R</string>
+    <string>Ctrl+E</string>
    </property>
   </action>
   <action name="actionClearPage">
@@ -1187,12 +1190,15 @@ border-radius: 10px;</string>
     <string>Ctrl+V</string>
    </property>
   </action>
-  <action name="actionRename">
+  <action name="actionEditPatch">
    <property name="text">
-    <string>Rename</string>
+    <string>Edit</string>
+   </property>
+   <property name="toolTip">
+    <string>Edit</string>
    </property>
    <property name="shortcut">
-    <string>Ctrl+R</string>
+    <string>Ctrl+E</string>
    </property>
   </action>
   <action name="actionImport">

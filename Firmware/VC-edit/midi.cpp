@@ -217,13 +217,16 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
     if ((message->at(0) == 0xF0) && (message->at(1) == VC_MANUFACTURING_ID) && (message->at(2) == VC_FAMILY_CODE) &&
             (message->at(3) == VCmidi_model_number) && (message->at(4) == VC_DEVICE_ID)) {
         MIDI_debug_data(message, true);
+        uint8_t dsize, index;
         switch (message->at(5)) { // Check for the sysex command
         case VC_REMOTE_UPDATE_DISPLAY:
-            for (int i = 0; i < 16; i++) { // Read line 1
-                line1.append(addChar(message->at(i + 7)));
+            dsize = (message->size() - 8) / 2;
+            index = 7;
+            for (int i = 0; i < dsize; i++) { // Read line 1
+                line1.append(addChar(message->at(index++)));
             }
             for (int i = 0; i < 16; i++) { // Read line 2
-                line2.append(addChar(message->at(i + 23)));
+                line2.append(addChar(message->at(index++)));
             }
             emit updateLcdDisplay(message->at(6), line1, line2);
             break;
@@ -233,11 +236,11 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
                 emit updateLED(i + 1, message->at(i + 7));
             }
             break;
-        case VC_SET_GENERAL_SETTINGS:
-            MIDI_editor_receive_settings(message);
-            break;
         case VC_START_COMMANDS_DUMP:
             MIDI_editor_receive_start_commands_dump((message->at(6) << 7) + message->at(7));
+            break;
+        case VC_SET_GENERAL_SETTINGS:
+            MIDI_editor_receive_settings(message);
             break;
         case VC_SET_DEVICE_SETTINGS:
             MIDI_editor_receive_device_settings(message);
@@ -262,6 +265,9 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
             break;
         case VC_FINISH_DEVICE_PATCH_DUMP:
             MIDI_editor_receive_finish_device_patch_dump(message);
+            break;
+        case VC_REQUEST_HARDWARE_VERSION:
+            qDebug() << "Hardware version:" << message->at(6);
             break;
         }
     }
@@ -445,6 +451,12 @@ void Midi::MIDI_editor_finish_device_patch_dump()
     MIDI_send_data(VC_FINISH_DEVICE_PATCH_DUMP, dummy, 1);
 }
 
+void Midi::MIDI_editor_request_hardware_version()
+{
+    uint8_t dummy[1] = {0};
+    MIDI_send_data(VC_REQUEST_HARDWARE_VERSION, dummy, 1);
+}
+
 void Midi::send_universal_identity_request()
 {
     // Format: 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7
@@ -589,7 +601,6 @@ void Midi::MIDI_editor_receive_midi_switch_settings(std::vector<unsigned char> *
         MIDI_switch[sw].channel = mssettings[3];
         MIDI_switch[sw].cc = mssettings[4];
         emit updateProgressBar(sw + NUMBER_OF_DEVICES);
-        if (sw >= NUMBER_OF_MIDI_SWITCHES - 1) emit closeProgressBar("Settings download succesful");
     }
 }
 
@@ -608,7 +619,11 @@ void Midi::MIDI_editor_receive_seq_pattern(std::vector<unsigned char> *message)
               MIDI_seq_pattern[pattern][i] = mpatterndata[i + 1];
           }
       }
-      if (pattern == NUMBER_OF_SEQ_PATTERNS - 1) emit updateSettings();
+      emit updateProgressBar(pattern + NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES);
+      if (pattern == NUMBER_OF_SEQ_PATTERNS - 1) {
+          emit closeProgressBar("Settings download succesful");
+          emit updateSettings();
+      }
 }
 
 void Midi::MIDI_editor_receive_device_patch(std::vector<unsigned char> *message)
@@ -662,8 +677,9 @@ void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)
     }
     uint8_t* settingbytes = (uint8_t*)&Setting;
     MIDI_read_data(message, settingbytes, sizeof(Setting));
-    emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES, "Receiving settings");
-    emit updateSettings();
+    //emit updateSettings();
+    emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES + NUMBER_OF_SEQ_PATTERNS, "Receiving settings");
+    emit updateProgressBar(0);
 }
 
 QByteArray Midi::ReadPatch(int number)

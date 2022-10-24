@@ -77,10 +77,6 @@ QString KTN_class::number_format(uint16_t patch_no)
     else if ((!Setting.Is_katana50) || (ktn_bank_size == 8)) return "VC" + QString::number((patch_no - number_of_channels - 1) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 1) % ktn_bank_size + 1);
     else if (patch_no == 5) return "VC0.0";
     else return "VC" + QString::number((patch_no - number_of_channels - 2) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 2) % ktn_bank_size + 1);
-
-    /*if (patch_no == 0) return "PANEL";
-    else if (patch_no < 9) return "CH" + QString::number(patch_no);
-    else return "VC" + QString::number((patch_no - 9) / ktn_bank_size) + "." + QString::number((patch_no - 9) % ktn_bank_size + 1);*/
 }
 
 // Parameter categories
@@ -136,8 +132,8 @@ QVector<KTN_parameter_struct> KTN_parameters = {
     {0xB003, 0xB003, 101, "PDL PAR 04", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
     {0xB004, 0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
     {0xB005, 0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
-    {0x0030, 0x0010, 2, "BOOST", 1 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-    {0x0031, 0x0011, 22, "BST TP", 1, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+    {0x0030, 0x0010, 2, "BOOST", 302 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+    {0x0031, 0x0011, 24, "BST TP", 302, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
     {0x0032, 0x0012, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
     {0x0033, 0x0013, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
     {0x0034, 0x0014, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
@@ -404,6 +400,14 @@ QStringList KTN_sublists = {
 
       // Sublist 290 - 292 for pedal type
       "WAH", "PDL BEND", "WAH 95E",
+
+      // Sublist 293 - 301: EXP assign type
+      "VOLUME", "FOOTVOL", "FV/WAH", "BOOSTER", "MOD", "DELAY1", "FX", "DELAY2", "REVERB",
+
+      // Sublist 302 - 325: New booster types
+      "MILD B", "CLEAN B", "TREBLE B", "CRUNCH", "NAT OD", "WARM OD", "FAT DS", "LEAD DS", "METAL DS", "OCT.FUZZ",
+      "BLUES OD", "OD-1", "TUBESCRM", "TURBO OD", "DIST", "RAT", "GUVNR DS", "DST+", "METAL ZN", "60s FUZZ",
+      "MUFF FZ", "HM-2", "MTL CORE", "CENTA OD",
 };
 
 const uint16_t KTN_SIZE_OF_SUBLIST = KTN_sublists.size();

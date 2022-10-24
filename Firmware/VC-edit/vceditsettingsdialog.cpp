@@ -40,6 +40,7 @@ void vcEditSettingsDialog::loadSettings()
     appSettings.beginGroup("Midi");
     ui->MidiInComboBox->setCurrentText(appSettings.value("midiInPort").toString());
     ui->MidiOutComboBox->setCurrentText(appSettings.value("midiOutPort").toString());
+    ui->SlowMidiCheckBox->setChecked(appSettings.value("midiSlowMode").toBool());
     appSettings.endGroup();
 
     appSettings.beginGroup("MainWindow");
@@ -69,6 +70,8 @@ void vcEditSettingsDialog::on_buttonBox_accepted()
     if (inPort != "") appSettings.setValue("midiInPort", inPort);
     QString outPort = ui->MidiOutComboBox->currentText();
     if (outPort != "") appSettings.setValue("midiOutPort", outPort);
+    bool goSlow = ui->SlowMidiCheckBox->isChecked();
+    appSettings.setValue("midiSlowMode", goSlow);
     appSettings.endGroup();
     qDebug() << "Midi settings saved:" << inPort << outPort;
 
@@ -76,15 +79,6 @@ void vcEditSettingsDialog::on_buttonBox_accepted()
     appSettings.setValue("VC_type", ui->deviceModeComboBox->currentIndex());
     appSettings.endGroup();
 
-    emit appSettingsChanged();
-}
-
-void vcEditSettingsDialog::on_hideKatanaTabCheckBox_stateChanged(int arg1)
-{
-    QSettings appSettings;
-    appSettings.beginGroup("MainWindow");
-    //appSettings.setValue("hideKatanaTab", ui->hideKatanaTabCheckBox->isChecked());
-    appSettings.endGroup();
     emit appSettingsChanged();
 }
 
@@ -97,3 +91,18 @@ void vcEditSettingsDialog::on_deviceModeComboBox_currentIndexChanged(int index)
     on_buttonBox_accepted();
     close();
 }
+
+
+void vcEditSettingsDialog::on_MidiInComboBox_currentTextChanged(const QString &arg1)
+{
+    if (arg1 == "VC MIDI") ui->SlowMidiCheckBox->setChecked(false);
+    else ui->SlowMidiCheckBox->setChecked(true);
+}
+
+
+void vcEditSettingsDialog::on_MidiOutComboBox_currentTextChanged(const QString &arg1)
+{
+    if (arg1 == "VC MIDI") ui->SlowMidiCheckBox->setChecked(false);
+    else ui->SlowMidiCheckBox->setChecked(true);
+}
+

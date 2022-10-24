@@ -30,6 +30,7 @@ public:
     void setMidiSwitchSetting(uint8_t sw, uint8_t parameter, uint8_t value);
 
 signals:
+    void updateProgressBar(int value);
 
 public slots:
 

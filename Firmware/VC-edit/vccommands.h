@@ -9,6 +9,7 @@
 #include "VController/config.h"
 #include "customlistwidget.h"
 #include "VController/globals.h"
+#include "VController/globaldevices.h"
 
 #include <QObject>
 #include <QComboBox>
@@ -16,9 +17,13 @@
 #include <QTableWidget>
 
 #define MAX_NUMBER_OF_PAGES 256
-#define EXT_EEP_MAX_NUMBER_OF_COMMANDS 1737
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS_VC_AND_VCMINI 1737
+#define EXT_EEP_MAX_NUMBER_OF_COMMANDS_VCTOUCH 3225
+extern uint16_t EXT_EEP_MAX_NUMBER_OF_COMMANDS;
 #define MAX_NUMBER_OF_INTERNAL_COMMANDS 1000
 #define INTERNAL_CMD 0x8000 // MSB of an index set indicates the command is an internal command
+
+#define MEMORY_FULL 0xFFFF
 
 class VCcommands : public QObject
 {
@@ -117,7 +122,7 @@ private:
     customListWidget *lastWidget = 0;
 
     uint16_t First_cmd_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1]; // Gives the index number of every first command for every dwitch on every page
-    uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS]; // Gives the number of the next command that needs to be read from EEPROM
+    uint16_t Next_cmd_index[EXT_EEP_MAX_NUMBER_OF_COMMANDS_VCTOUCH]; // Gives the number of the next command that needs to be read from EEPROM
     uint16_t Next_internal_cmd_index[MAX_NUMBER_OF_INTERNAL_COMMANDS]; // Gives the index of the next command that needs to be read from Fixed_commands[]
     uint16_t Title_index[MAX_NUMBER_OF_PAGES][NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1]; // gives the index number of the title command for page 0 (page title) and every switch with a display
     bool isIndexed = false;
@@ -168,6 +173,14 @@ private:
     #define TYPE_LOOPER 31
     #define TYPE_EXP_PEDAL 32
     #define TYPE_CMDTYPE_ASSIGN 33
+    #define TYPE_SETLIST 34
+    #define TYPE_SETLIST_TYPE 35
+    #define TYPE_SONG 36
+    #define TYPE_SONG_TYPE 37
+    #define TYPE_SONGPART 38
+    #define TYPE_SONGPREVNEXT 39
+    #define TYPE_MODE 40
+    #define TYPE_MIDI_MORE 41
 
     // Some of the data for the sublists below is not fixed, but must be read from a Device class or from EEPROM
     // Here we define these sublists
@@ -182,6 +195,8 @@ private:
     #define SUBLIST_PATCH_BANK 247
     #define SUBLIST_SWITCH 246
     #define SUBLIST_MIDI_PORT 245
+    #define SUBLIST_SETLIST 244 // To show the setlist name
+    #define SUBLIST_SONG 243 // To show the song name
 
     #define SWITCH_MAX_NUMBER 24
 
@@ -221,12 +236,20 @@ private:
         { "LOOPER", 92, 0, 10 }, // TYPE_LOOPER 31
         { "EXP.PEDAL", 103, 0, 3 }, // TYPE_EXP_PEDAL 32
         { "SELECT TYPE", 129, 0, 3 }, // TYPE_CMDTYPE_ASSIGN 33
+        { "SETLIST", SUBLIST_SETLIST, 0, MAX_NUMBER_OF_SETLISTS }, // TYPE_SETLIST 34
+        { "SELECT TYPE", 137, 0, 6 }, // TYPE_SETLIST_TYPE 35
+        { "SONG", SUBLIST_SONG, 0, MAX_NUMBER_OF_SONGS }, // TYPE_SONG 36
+        { "SELECT TYPE", 145, 0, 7 }, // TYPE_SONG_TYPE 37
+        { "SONG PART", 0, 0, 7 }, // TYPE_SONGPART 38
+        { "INC/DEC TYPE", 154, 0, 2 }, // TYPE_SONGPREVNEXT 39
+        { "MODE", 157, 0, 2 }, // TYPE_MODE
+        { "COMMAND", 160, 0, 2 }, // TYPE_MIDI_MORE
     };
 
     const QStringList cmd_sublist = {
 
         // Sublist 1 - 17: Common Command Types
-        "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "MENU", "", "", "", "", "", "", "",
+        "NO COMMAND", "PAGE", "TAP TEMPO", "SET TEMPO", "GLOBAL TUNER", "MIDI PC", "MIDI CC", "MIDI NOTE", "NEXT DEVICE", "SETLIST", "SONG", "MODE", "MIDI MORE", "MENU", "", "", "",
 
         // Sublist 18 - 39: Device Command Types
         "PATCH", "PARAMETER", "ASSIGN", "SNAP/SCENE", "LOOPER", "MUTE", "SEL DEVICE PAGE", "SEL NEXT PAGE", "MASTER EXP PEDAL", "TOGGL MASTER EXP",
@@ -260,7 +283,24 @@ private:
 
         // Sublist 129 - 136 Page/ patch select types
         "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "", "",
+
+        // Sublist 137 - 144: Setlist select types
+        "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "EDIT", "",
+
+        // Sublist 145 - 154: Song select types
+        "SELECT", "BANK SELECT", "BANK UP", "BANK DOWN", "NEXT", "PREVIOUS", "PARTSEL", "EDIT", "",
+
+        // Sublist 154 - 156: Song inc/dec types
+        "SONG", "PART", "SONG+PART",
+
+        // Sublist 157 - 159: Mode types
+        "SONG", "PAGE", "DEVICE",
+
+        // Sublist 160 - 162: Midi more types
+        "START", "STOP", "START/STOP",
     };
+
+#define INDEX_CC_TOGGLE_TYPE 85
 
     struct cmdbyte_struct {
       uint8_t Type;

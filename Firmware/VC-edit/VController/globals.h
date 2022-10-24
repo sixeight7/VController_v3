@@ -42,7 +42,7 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Bass_mode_device; // The device that will perform bass mode
   uint8_t Bass_mode_cc_number;
   uint8_t Bass_mode_min_velocity; // The minimum velocity
-  uint8_t Main_display_mode; // The mode of the main display
+  uint8_t Main_display_bottom_line_mode; // The mode of the main display
   uint8_t exp_max[4]; // the maximum values of the expression pedals
   uint8_t exp_min[4]; // the minimum values of the expression pedals
   uint8_t FX_LOOPER_colour; // Colour for the looper
@@ -67,6 +67,8 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
   uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
   uint8_t Is_katana50; // 50W version of Katana
+  uint8_t Main_display_top_line_mode;
+  uint8_t Block_identity_messages; // To block sysex messages as it messes with certain devices
 };
 
 extern Setting_struct Setting;
@@ -87,20 +89,37 @@ struct MIDI_switch_settings_struct {
 #define NUMBER_OF_MIDI_SWITCHES 25 // Switch 0 is also counted
 extern MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES];
 
-#define NUMBER_OF_SEQ_PATTERNS 32
+#define NUMBER_OF_SEQ_PATTERNS_VC_AND_VCMINI 32
+#define NUMBER_OF_SEQ_PATTERNS_VCTOUCH 64
+extern uint8_t NUMBER_OF_SEQ_PATTERNS;
 #define EEPROM_SEQ_PATTERN_SIZE 36
-extern uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE];
+extern uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS_VCTOUCH][EEPROM_SEQ_PATTERN_SIZE];
 
 #define VC_PATCH_SIZE 192
-#define MAX_NUMBER_OF_DEVICE_PRESETS 150 // Copy of EXT_MAX_NUMBER_OF_PATCH_PRESETS
+#define MAX_NUMBER_OF_DEVICE_PRESETS_VC_AND_VCMINI 150
+#define MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH 300
+extern uint16_t MAX_NUMBER_OF_DEVICE_PRESETS; // Copy of EXT_MAX_NUMBER_OF_PATCH_PRESETS
 #define BASS_MODE_NUMBER_OFFSET 0x1000
 
-extern uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS][VC_PATCH_SIZE]; // Storage for the actual patches
+extern uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH][VC_PATCH_SIZE]; // Storage for the actual patches
 
 extern uint8_t number_of_midi_ports;
 extern QStringList midi_port_names;
 extern uint8_t VCmidi_model_number;
 
 #define NUMBER_OF_MIDI_FORWARD_FILTERS 7
+
+#define EXT_SETLIST_TYPE 254
+#define EXT_SONG_TYPE 253
+
+#define MAX_NUMBER_OF_SONGS 99
+#define MAX_NUMBER_OF_SETLISTS 99
+#define MAX_NUMBER_OF_SETLIST_ITEMS 50
+
+#define PATCH_INDEX_NOT_FOUND 0xFFFF
+
+#define GLOBAL_TEMPO 39
+#define MIN_BPM 40
+#define MAX_BPM 250
 
 #endif // GLOBALS_H

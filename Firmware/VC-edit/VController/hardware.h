@@ -100,4 +100,14 @@
 
 #define MIDI_PORT_NAMES "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"
 
+#define PORT1_NUMBER 0
+#define PORT2_NUMBER 1
+#define PORT3_NUMBER 2
+#define PORT4_NUMBER 3
+#define PORT5_NUMBER 4
+#define PORT6_NUMBER 5
+#define PORT7_NUMBER 6
+#define PORT8_NUMBER 7
+#define PORT9_NUMBER 8
+
 #endif // HARDWARE_H

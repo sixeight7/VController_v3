@@ -44,6 +44,8 @@ Programming commands:
 
 */
 
+uint16_t EXT_EEP_MAX_NUMBER_OF_COMMANDS = EXT_EEP_MAX_NUMBER_OF_COMMANDS_VC_AND_VCMINI;
+
 VCcommands::VCcommands(QObject *parent) : QObject(parent)
 {
 
@@ -113,6 +115,10 @@ void VCcommands::setup_VC_config()
         midi_port_names.append(VCTOUCH_PORT9_NAME);
         switchnames = VCtouch_switch_names;
         VCmidi_model_number = 0x03;
+
+        EXT_EEP_MAX_NUMBER_OF_COMMANDS = EXT_EEP_MAX_NUMBER_OF_COMMANDS_VCTOUCH;
+        MAX_NUMBER_OF_DEVICE_PRESETS = MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH;
+        NUMBER_OF_SEQ_PATTERNS = NUMBER_OF_SEQ_PATTERNS_VCTOUCH;
     }
 }
 
@@ -132,6 +138,8 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
     cmdString.append(" ");
 
     const QStringList ShortCmdTypes = {"SEL", "BANKSEL", "BANK UP", "BANK DOWN", "NEXT", "PREV", "", "",};
+    const QStringList ShortSetlistTypes = {"SEL", "BANKSEL", "BANK UP", "BANK DOWN", "NEXT", "PREV", "EDIT", "",};
+    const QStringList ShortSongTypes = {"SEL", "BANKSEL", "BANK UP", "BANK DOWN", "NEXT", "PREV", "PART", "EDIT",};
 
     uint16_t patch_no;
     switch (cmd.Type) { // Check extra bytes:
@@ -195,7 +203,6 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
     case SET_TEMPO:
     case PAR_BANK_DOWN:
     case PAR_BANK_UP:
-    case MIDI_PC:
         cmdString.append(QString::number(cmd.Data1));
         break;
     case PAGE:
@@ -220,11 +227,22 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
         cmdString.append(":");
         cmdString.append(read_title(cmd.Data1, 0));
         break;
+    case MIDI_PC:
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+        }
+        if (cmd.Data1 == BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }break;
     case MIDI_CC:
         cmdString.append("#");
         cmdString.append(QString::number(cmd.Data1));
         cmdString.append(" ");
-        cmdString.append(cmd_sublist.at(cmd.Data2 + 82));
+        cmdString.append(cmd_sublist.at(cmd.Data2 + INDEX_CC_TOGGLE_TYPE - 1));
         break;
     case MIDI_NOTE:
         cmdString.append("#");
@@ -237,6 +255,50 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
         break;
     case MASTER_EXP_PEDAL:
         if (cmd.Data1 < 4) cmdString.append(cmd_sublist[cmd.Data1 + 97]);
+        break;
+    case SETLIST:
+        cmdString.append(ShortSetlistTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SL_SELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append(":");
+            cmdString.append(read_title(cmd.Data2, 0));
+        }
+        if (cmd.Data1 == SL_BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }
+        break;
+    case SONG:
+        cmdString.append(ShortSongTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SONG_SELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append(":");
+            cmdString.append(read_title(cmd.Data2, 0));
+        }
+        if (cmd.Data1 == SONG_BANKSELECT) {
+            cmdString.append(QString::number(cmd.Data2));
+            cmdString.append("/");
+            cmdString.append(QString::number(cmd.Value1));
+        }
+        break;
+    case MODE:
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == SELECT) {
+            if (cmd.Data2 == SONG_MODE) cmdString.append("SONG");
+            else if (cmd.Data2 == PAGE_MODE) cmdString.append("PAGE");
+            else if (cmd.Data2 == DEVICE_MODE) cmdString.append("DEVICE");
+        }
+        break;
+    case MIDI_MORE:
+        cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
+        cmdString.append(" ");
+        if (cmd.Data1 == MIDI_START) cmdString.append("START");
+        else if (cmd.Data1 == MIDI_STOP) cmdString.append("STOP");
+        else if (cmd.Data1 == MIDI_START_STOP) cmdString.append("START/STOP");
         break;
     case MENU:
         if (cmd.Data1 == MENU_SELECT) cmdString.append("SELECT");
@@ -544,10 +606,6 @@ int VCcommands::valueFromIndex(uint8_t type, uint16_t index) // Recreate the gap
         if (index < Number_of_pages) return index;
         else return (index - Number_of_pages + first_fixed_cmd_page);
         break;
-    case TYPE_MIDI_PORT:
-        if (index == number_of_midi_ports) return 15;
-        else return index;
-        break;
     default:
         return index;
     }
@@ -741,7 +799,7 @@ uint8_t VCcommands::duplicatePage(int pg)
     uint8_t newPage = Number_of_pages;
     Number_of_pages++;
 
-    for (int s = 0; s < NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES; s++) {
+    for (int s = 0; s < NUMBER_OF_SWITCHES + NUMBER_OF_EXTERNAL_SWITCHES + 1; s++) {
         for (int c = 0; c < count_cmds(pg, s); c++) {
             uint16_t cmd_no = get_cmd_number(pg, s, c);
             Cmd_struct cmd = get_cmd(cmd_no);
@@ -976,7 +1034,8 @@ inline bool VCcommands::is_label(uint8_t sw) {
 
 uint16_t VCcommands::new_command_index()
 {
-    ; // we now have a new command
+    //if (Commands.size() >= EXT_EEP_MAX_NUMBER_OF_COMMANDS) return MEMORY_FULL;
+    // we now have a new command
     return Commands.size();
 }
 
@@ -1140,7 +1199,7 @@ void VCcommands::set_type_and_value(uint8_t number, uint8_t type, uint8_t index,
 
     uint8_t max = cmdtype[type].Max;
     if (cmdtype[type].Sublist == SUBLIST_PAGE) max = last_fixed_cmd_page;
-    if (cmdtype[type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports - 1;
+    if (cmdtype[type].Sublist == SUBLIST_MIDI_PORT) max = number_of_midi_ports;
     cmdbyte[number].Max = max;
     cmdbyte[number].Min = cmdtype[type].Min;
     if (in_edit_mode) {
@@ -1219,10 +1278,11 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
             break;
           case MIDI_PC:
             // Command: COMMON, MIDI_PC, NUMBER, CHANNEL, PORT
-            set_type_and_value(CB_DATA1, TYPE_PC, 0, in_edit_mode);
-            set_type_and_value(CB_DATA2, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
-            set_type_and_value(CB_VAL1, TYPE_MIDI_PORT, 0, in_edit_mode);
-            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
+            set_type_and_value(CB_DATA1, TYPE_CMDTYPE, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_PC, 0, in_edit_mode);
+            set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+            set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
             break;
           case MIDI_CC:
             // Command: COMMON, CC_number, CC_TOGGLE_TYPE, Value1, Value2, Channel, Port
@@ -1245,6 +1305,29 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
             // Command: COMMON, SET_TEMPO, number
             set_type_and_value(CB_DATA1, TYPE_BPM, Setting.Bpm, in_edit_mode);
             clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case SETLIST:
+            // Command: COMMON, SELECT, 0
+            set_type_and_value(CB_DATA1, TYPE_SETLIST_TYPE, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_SETLIST, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            break;
+          case SONG:
+            // Command: COMMON, SELECT, 0
+            set_type_and_value(CB_DATA1, TYPE_SONG_TYPE, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_SONG, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            break;
+          case MODE:
+            // Command: COMMON, SET_TEMPO, number
+            set_type_and_value(CB_DATA1, TYPE_MODE, Setting.Bpm, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case MIDI_MORE:
+            // Command: COMMON, MODE, number
+            set_type_and_value(CB_DATA1, TYPE_MIDI_MORE, 0, in_edit_mode);
+            set_type_and_value(CB_DATA2, TYPE_MIDI_PORT, 0, in_edit_mode);
+            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
             break;
           default:
             // For all two byte commands
@@ -1271,7 +1354,8 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
             set_type_and_value(CB_DATA2, TYPE_PATCH_NUMBER, patch_no % 100, in_edit_mode);
             set_type_and_value(CB_VAL1, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
             if (dev < NUMBER_OF_DEVICES) {
-                cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
+                if (cmdbyte[CB_VAL1].Value != (Device[dev]->patch_max / 100)) cmdbyte[CB_DATA2].Max = 99;
+                else cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
                 cmdbyte[CB_VAL1].Max = Device[dev]->patch_max / 100;
                 cmdbyte[CB_DATA2].Min = Device[dev]->patch_min % 100;
                 cmdbyte[CB_VAL1].Min = Device[dev]->patch_min / 100;
@@ -1364,6 +1448,12 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
               set_type_and_value(CB_DATA2, TYPE_PAGE, 0, in_edit_mode);
               clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
             }
+            if (current_cmd_function() == MIDI_PC) {
+              set_type_and_value(CB_DATA2, TYPE_PC, 0, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+              set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+              clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
+            }
             if (current_cmd_function() == PATCH) {
               uint8_t dev = cmdbyte[CB_DEVICE].Value;
               uint16_t patch_no = 0;
@@ -1372,7 +1462,8 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
               set_type_and_value(CB_VAL1, TYPE_PATCH_100, patch_no / 100, in_edit_mode);
               clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 4-7
               if (dev < NUMBER_OF_DEVICES) {
-                  cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
+                  if (cmdbyte[CB_VAL1].Value != (Device[dev]->patch_max / 100)) cmdbyte[CB_DATA2].Max = 99;
+                  else cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
                   cmdbyte[CB_VAL1].Max = Device[dev]->patch_max / 100;
                   cmdbyte[CB_DATA2].Min = Device[dev]->patch_min % 100;
                   cmdbyte[CB_VAL1].Min = Device[dev]->patch_min / 100;
@@ -1398,19 +1489,105 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
             break;
           case NEXT:
           case PREV:
-            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            if (current_cmd_function() == MIDI_PC) {
+              set_type_and_value(CB_DATA2, TYPE_MAX, 127, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+              set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+              clear_cmd_bytes(CB_VAL3, in_edit_mode); // Clear bytes 4-7
+            }
+            else {
+              clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            }
             break;
           case BANKSELECT:
-            set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
-            set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
-            clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+            if (current_cmd_function() == MIDI_PC) {
+              set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+              set_type_and_value(CB_VAL2, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+              set_type_and_value(CB_VAL3, TYPE_MIDI_PORT, 0, in_edit_mode);
+              clear_cmd_bytes(CB_VAL4, in_edit_mode); // Clear bytes 7
+            }
+            else {
+              set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+              clear_cmd_bytes(CB_VAL2, in_edit_mode); // Clear bytes 3-7
+            }
             break;
           case BANKUP:
           case BANKDOWN:
-            set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
-            clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            if (current_cmd_function() == MIDI_PC) {
+              set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+              set_type_and_value(CB_VAL1, TYPE_MIDI_CHANNEL, 1, in_edit_mode);
+              set_type_and_value(CB_VAL2, TYPE_MIDI_PORT, 0, in_edit_mode);
+              clear_cmd_bytes(CB_VAL3, in_edit_mode);
+            }
+            else {
+              set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+              clear_cmd_bytes(CB_VAL1, in_edit_mode); // Clear bytes 3-7
+            }
             break;
         }
+      }
+    }
+
+    // *****************************************
+    // * BYTE3: Setlist command type updated   *
+    // *****************************************
+    if (cmd_type == TYPE_SETLIST_TYPE) {
+      switch (cmdbyte[cmd_byte_no].Value) {
+        case SL_SELECT:
+          set_type_and_value(CB_DATA2, TYPE_SETLIST, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SL_BANKSELECT:
+          set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL2, in_edit_mode);
+          break;
+        case SL_BANKUP:
+        case SL_BANKDOWN:
+          set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SL_NEXT:
+        case SL_PREV:
+        case SL_EDIT:
+          clear_cmd_bytes(CB_DATA2, in_edit_mode);
+          break;
+      }
+    }
+
+    // *****************************************
+    // * BYTE3: Song command type updated      *
+    // *****************************************
+    if (cmd_type == TYPE_SONG_TYPE) {
+      switch (cmdbyte[cmd_byte_no].Value) {
+        case SONG_SELECT:
+          set_type_and_value(CB_DATA2, TYPE_SONG, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_PARTSEL:
+          set_type_and_value(CB_DATA2, TYPE_SONGPART, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_BANKSELECT:
+          set_type_and_value(CB_DATA2, TYPE_REL_NUMBER, 1, in_edit_mode);
+          set_type_and_value(CB_VAL1, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL2, in_edit_mode);
+          break;
+        case SONG_BANKUP:
+        case SONG_BANKDOWN:
+          set_type_and_value(CB_DATA2, TYPE_BANK_SIZE, 10, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_NEXT:
+        case SONG_PREV:
+          set_type_and_value(CB_DATA2, TYPE_SONGPREVNEXT, 0, in_edit_mode);
+          clear_cmd_bytes(CB_VAL1, in_edit_mode);
+          break;
+        case SONG_EDIT:
+          clear_cmd_bytes(CB_DATA2, in_edit_mode);
+          break;
       }
     }
 
@@ -1523,6 +1700,8 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
           if (patch_no < Device[Dev]->patch_min) {
             cmdbyte[CB_VAL1].Value = Device[Dev]->patch_max / 100;
           }
+          if (cmdbyte[CB_VAL1].Value != (Device[dev]->patch_max / 100)) cmdbyte[CB_DATA2].Max = 99;
+          else cmdbyte[CB_DATA2].Max = Device[dev]->patch_max % 100;
         }
       }
 
@@ -1755,6 +1934,12 @@ QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)
         break;
     case SUBLIST_MIDI_PORT:
         if (value < midi_port_names.size()) msg = midi_port_names.at(value);
+        break;
+    case SUBLIST_SETLIST:
+        msg = "SUBLIST " + QString::number(value);
+        break;
+    case SUBLIST_SONG:
+        msg = "SONG " + QString::number(value);
         break;
     default: // Static sublist - read it from the cmd_sublist array
         index = indexFromValue(cmd_type, value) + cmdtype[cmd_type].Sublist;

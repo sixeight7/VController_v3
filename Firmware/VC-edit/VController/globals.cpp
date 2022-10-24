@@ -57,6 +57,8 @@ Setting_struct Setting = {  // Default values for global settings
   1,     // Colour of tap tempo LED when tempo following is on: green
   0,     // Forward midi in both directions
   false, // 50W version of Katana
+  5,     // Main_display_top_line_mode
+  0,     // Block_identity_messages
 };
 
 MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default settings for MIDI_switch settings
@@ -86,7 +88,7 @@ MIDI_switch_settings_struct MIDI_switch[NUMBER_OF_MIDI_SWITCHES] = { // Default 
   { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 23
 };
 
-uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE] = {
+uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS_VCTOUCH][EEPROM_SEQ_PATTERN_SIZE] = {
     { 1, 24, 0, 0, 64, 80, 95, 108, 118, 125, 127, 125, 118, 108, 95, 80, 64, 47, 32, 19, 9, 2, 0, 2, 9, 19, 32, 47 },   // 1: Sine wave
     { 1, 24, 0, 0, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },     // 2: Block wave
     { 1, 24, 0, 0, 11, 21, 32, 42, 53, 64, 74, 85, 95, 106, 116, 127, 116, 106, 95, 85, 74, 64, 53, 42, 32, 21, 11, 0 }, // 3: Triangle wave
@@ -97,8 +99,11 @@ uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS][EEPROM_SEQ_PATTERN_SIZE] = {
     { 1, 24, 0, 0, 127, 127, 127, 127, 127, 127, 0, 0, 32, 32, 32, 32, 32, 32, 0, 0, 95, 95, 95, 95, 95, 95, 0, 0 },     // 8: Beat 3
 };
 
-uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS][VC_PATCH_SIZE]; // Storage for the actual patches
+uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH][VC_PATCH_SIZE]; // Storage for the actual patches
 
 uint8_t number_of_midi_ports = 0;
 QStringList midi_port_names = {};
 uint8_t VCmidi_model_number;
+
+uint8_t NUMBER_OF_SEQ_PATTERNS = NUMBER_OF_SEQ_PATTERNS_VC_AND_VCMINI;
+uint16_t MAX_NUMBER_OF_DEVICE_PRESETS = MAX_NUMBER_OF_DEVICE_PRESETS_VC_AND_VCMINI; // Copy of EXT_MAX_NUMBER_OF_PATCH_PRESETS

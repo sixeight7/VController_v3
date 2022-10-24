@@ -56,14 +56,8 @@ bool KPA_class::check_command_enabled(uint8_t cmd)
 QString KPA_class::number_format(uint16_t patch_no)
 {
     QString Output = "";
-    if (patch_no < 5) Output += "BROWSE";
-    else {
-       uint16_t rig_no = patch_no - 4;
-       Output += "RIG" + QString::number(rig_no / 100) + QString::number((rig_no / 10) % 10) + QString::number(rig_no % 10);
-    }
-    Output += "/";
-    uint16_t performance_no = (patch_no / 5) + 1;
-    Output += QString::number(performance_no / 100) + QString::number((performance_no / 10) % 10) + QString::number(performance_no % 10) + "-" + QString::number((patch_no % 5) + 1);
+    uint16_t performance_no = patch_no + 1;
+    Output += QString::number(performance_no / 100) + QString::number((performance_no / 10) % 10) + QString::number(performance_no % 10);
 
     return Output;
 }
@@ -72,27 +66,30 @@ struct KPA_CC_type_struct { // Combines all the data we need for controlling a p
   QString Name; // The name for the label
   uint16_t Address;
   uint8_t CC; // The cc for this effect.
+  uint8_t latch_type;
 };
 
 QVector<KPA_CC_type_struct> KPA_CC_types = {
-      {"STOMP A", 0x3203, 17}, // 0
-      {"STOMP B", 0x3303, 18},
-      {"STOMP C", 0x3403, 19},
-      {"STOMP D", 0x3503, 20},
-      {"STOMP X", 0x3803, 22},
-      {"STOMP MOD", 0x3A03, 24},
-      {"STOMP DLY", 0x3C03, 26},
-      {"STOMP RVB", 0x4B02, 28},
-      {"ROTARY SPEED", 0x0000, 33},
-      {"DLY FBACK INF", 0x0000, 34},
-      {"DELAY HOLD", 0x0000, 35}, // 10
-      {"WAH PDL", 0x0000, 1},
-      {"MORPH PDL", 0x0000, 11},
-      {"VOLUME", 0x0000, 7},
-      {"PITCH PDL", 0x0000, 2},
-      {"MODE", KPA_MODE_ADDRESS, 0},
-      {"RIG LEFT", 0x0000, 48},
-      {"RIG RIGHT", 0x0000, 49}
+    {"STOMP A", 0x3203, 17, TOGGLE}, // 0
+    {"STOMP B", 0x3303, 18, TOGGLE},
+    {"STOMP C", 0x3403, 19, TOGGLE},
+    {"STOMP D", 0x3503, 20, TOGGLE},
+    {"STOMP X", 0x3803, 22, TOGGLE},
+    {"STOMP MOD", 0x3A03, 24, TOGGLE},
+    {"STOMP DLY", 0x3C03, 27, TOGGLE},
+    {"STOMP RVB", 0x3D03, 29, TOGGLE},
+    {"ROTARY SPD", 0x0000, 33, TOGGLE},
+    {"DLY FB INF", 0x0000, 34, TOGGLE},
+    {"DELAY HOLD", 0x0000, 35, TOGGLE}, // 10
+    {"MORPH BTN", 0x0000, 80, MOMENTARY},
+    {"WAH PDL", 0x0000, 1, UPDOWN},
+    {"MORPH PDL", 0x0000, 11, UPDOWN},
+    {"VOLUME", 0x0000, 7, UPDOWN},
+    {"PITCH PDL", 0x0000, 2, UPDOWN},
+    {"MODE", KPA_MODE_ADDRESS, 0, TOGGLE},
+    {"RIG UP", 0x0000, 48, ONE_SHOT},
+    {"RIG DOWN", 0x0000, 49, ONE_SHOT},
+    {"LOOPER POS", 0x7F35, 0, TOGGLE}
 };
 
 const uint16_t KPA_NUMBER_OF_PARAMETERS = KPA_CC_types.size();
@@ -131,4 +128,26 @@ uint8_t KPA_class::max_value(uint16_t par_no)
     if ((par_no == KPA_WAH_PEDAL) || (par_no == KPA_PITCH_PEDAL) || (par_no == KPA_VOL_PEDAL) || (par_no == KPA_MORPH_PEDAL)) return 128; // Return 128 for the expression pedals
       if (par_no < number_of_parameters()) return 2;
       else return 0;
+}
+
+QString KPA_class::get_patch_info(uint16_t number)
+{
+    uint16_t patch_no = (Device_patches[number][1] << 8) + Device_patches[number][2] - 1;
+    QString line;
+    if (patch_no < 25) {
+        line = number_format(patch_no * 8);
+        line.append('-');
+        line.append(number_format((patch_no * 8) + 7));
+        line.append("\tPerformance names");
+    }
+    else {
+        patch_no -= 25;
+        line = "RIG";
+        line.append(number_format(patch_no * 8));
+        line.append("-");
+        line.append(number_format((patch_no * 8) + 7));
+        line.append("\tRig names");
+    }
+    //line.append(QString::number(patch_no));
+    return line;
 }

@@ -199,6 +199,21 @@ uint16_t Device_class::patch_min_as_stored_on_VC()
     return 0;
 }
 
+QString Device_class::setlist_song_full_item_format(uint16_t item)
+{
+  return device_name + ": " + number_format(item);
+}
+
+QString Device_class::setlist_song_short_item_format(uint16_t item)
+{
+    return number_format(item);
+}
+
+int Device_class::setlist_song_get_number_of_items()
+{
+    return patch_max + 1;
+}
+
 uint8_t Device_class::MIDI_port_number(uint8_t port)
 {
    if (VC_type == VCONTROLLER) {

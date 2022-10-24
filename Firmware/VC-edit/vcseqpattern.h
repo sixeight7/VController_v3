@@ -30,6 +30,7 @@ public:
     void setSeqPatternSetting(uint8_t pattern, uint8_t parameter, uint8_t value);
 
 signals:
+    void updateProgressBar(int value);
 
 public slots:
 

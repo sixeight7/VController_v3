@@ -23,8 +23,8 @@
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
 // Version should be the same as the version shown on the VController of VC-mini
 #define VCMINI_FIRMWARE_VERSION_MAJOR 3
-#define VCMINI_FIRMWARE_VERSION_MINOR 9
-#define VCMINI_FIRMWARE_VERSION_BUILD 1
+#define VCMINI_FIRMWARE_VERSION_MINOR 10
+#define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
 #define EXIT_CODE_REBOOT 777
@@ -84,7 +84,7 @@ public slots:
     // Menu Patch
     void on_actionCopyPatch_triggered();
     void on_actionPastePatch_triggered();
-    void on_actionRename_triggered();
+    void on_actionEditPatch_triggered();
     void on_actionExport_triggered();
     void on_actionImport_triggered();
 
@@ -170,13 +170,18 @@ private:
     void fillPageComboBox(QComboBox *my_combobox);
     void fillListBoxes(bool first_time);
     void fillPatchListBox(QListWidget *my_patchList);
+    QString readSongStringForPatchListWidget(uint16_t number, uint8_t type);
+    QString readSetlistStringForPatchListWidget(uint16_t number, uint8_t type);
     void fillPatchTypeComboBox(QComboBox *my_combobox);
     void updateStatusLabel();
     void disconnect_VC();
 
     // Loading and saving files
     void writeHeader(QJsonObject &json, QString type);
+    void writeAllPatchData(QJsonObject &json) const;
     QString readHeader(const QJsonObject &json);
+    void readAllPatchData(const QJsonObject &json);
+
     QString checkHeaderContainsRightVCtype(const QJsonObject &json);
 
     void try_reconnect_MIDI();
@@ -194,6 +199,7 @@ private:
     QString MySavePageFile;
     QString MySavePatchFile;
     QString MyMidiInPort, MyMidiOutPort;
+    bool MyMidiSlowMode;
     Midi *MyMidi;
     QTimer *timer;
     VCsettings *MyVCsettings;

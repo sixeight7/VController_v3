@@ -10,7 +10,7 @@ scenedialog::scenedialog(QWidget *parent, int _index) :
     ui->setupUi(this);
     my_index = _index;
     uint8_t my_type = Device_patches[my_index][0];
-    if (my_type > 0) {
+    if ((my_type > 0) && (my_type <= NUMBER_OF_DEVICES)) {
       uint8_t dev = my_type - 1;
 
       // Load scene names
@@ -33,7 +33,7 @@ scenedialog::~scenedialog()
 void scenedialog::on_buttonBox_accepted()
 {
     uint8_t my_type = Device_patches[my_index][0];
-    if (my_type > 0) {
+    if ((my_type > 0) && (my_type <= NUMBER_OF_DEVICES)) {
       uint8_t dev = my_type - 1;
       // Save scene names
       Device[dev]->store_scene_name_to_buffer(my_index, 0, ui->lineEditScene1->text());
