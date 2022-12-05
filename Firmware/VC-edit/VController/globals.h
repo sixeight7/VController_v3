@@ -10,6 +10,7 @@
 
 extern uint8_t VC_type;
 extern QString VC_name;
+extern uint8_t VC_hardware_version;
 
 #define LCD_DISPLAY_SIZE 16
 

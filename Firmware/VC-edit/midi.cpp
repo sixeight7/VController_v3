@@ -267,7 +267,8 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
             MIDI_editor_receive_finish_device_patch_dump(message);
             break;
         case VC_REQUEST_HARDWARE_VERSION:
-            qDebug() << "Hardware version:" << message->at(6);
+            VC_hardware_version = message->at(6);
+            qDebug() << "Hardware version:" << VC_hardware_version;
             break;
         }
     }

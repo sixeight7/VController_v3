@@ -4,6 +4,7 @@
 
 uint8_t VC_type = 255; // Set to non existing type
 QString VC_name = "VC-mini";
+uint8_t VC_hardware_version = 255;  // Set to non existing type
 
 Setting_struct Setting = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
