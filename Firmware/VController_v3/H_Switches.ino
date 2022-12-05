@@ -600,7 +600,6 @@ void SC_update_long_presses_and_hold() {
       else if (multi_switch_booleans == MENU_KEY_COMBINATION) {
         if (Current_page != PAGE_SELECT) SCO_select_page(PAGE_SELECT);
         else SCO_select_page(PAGE_MENU);
-        //multi_switch_booleans = MENU_KEY_COMBINATION;
         multi_switch_pressed = SPECIAL_KEY_COMBINATION;
       }
       else if (multi_switch_booleans & ~(1 << (switch_pressed - 1))) {

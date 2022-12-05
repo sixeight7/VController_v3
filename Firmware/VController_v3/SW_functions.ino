@@ -827,11 +827,20 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
+  uint16_t pnumber;
 
   DEBUGMSG("Switch held -> execute command " + String(Type) + " for device " + String(Dev));
 
   if (Dev < NUMBER_OF_DEVICES) {
     switch (Type) {
+      case PATCH:
+        if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_next_patch_number(-1);
+        else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_prev_next_patch_number(1);
+        else break;
+        Device[Dev]->patch_select_pressed(pnumber, Sw);
+        mute_all_but_me(Dev); // mute all the other devices
+        update_page = RELOAD_PAGE;
+        break;
       case PARAMETER:
         if ((Data2 == STEP) || (Data2 == UPDOWN)) {
           if (first_cmd) SCO_update_held_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal

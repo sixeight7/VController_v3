@@ -67,6 +67,8 @@
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
 
 #define MENU_KEY_COMBINATION 0x220 // Switches 6 and 10
+#define YES_SWITCH 7
+#define NO_SWITCH 9
 
 // *** Neopixel LEDs
 #define NUMBER_OF_LEDS     15 // Number of neopixel LEDs connected

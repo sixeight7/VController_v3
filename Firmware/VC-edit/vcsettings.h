@@ -62,7 +62,6 @@ private:
       { "Glob.tempo on PC", OPTION, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 6
       { "Hide tempo LED", OPTION, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 7
       { "Backlight Type", OPTION, 51, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 8
-      { "Katana type", OPTION, 90, 0, 1, &Setting.Is_katana50 }, // Switch 9
 
       { "LED Settings", HEADER, 0, 0, 0, 0 }, // Menu title
       { "LED Brightness", VALUE, 0, 0, 100, &Setting.LED_brightness }, // Switch 1

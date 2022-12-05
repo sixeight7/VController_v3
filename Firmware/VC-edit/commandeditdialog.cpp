@@ -183,10 +183,10 @@ void commandEditDialog::on_comboBoxSwitch_activated(int index)
 
 void commandEditDialog::on_commandListWidget_currentRowChanged(int currentRow)
 {
-    qDebug() << "onCurrentRowChanged" << currentRow;
     if ((currentRow != currentItem) && (currentRow >= 0)) {
         currentItem = currentRow;
         if (!rebuilding) {
+            qDebug() << "CurrentItem" << currentItem;
             MyVCcommands->fillCommandTableWidget(ui->tableWidget, currentPage, currentSwitch, currentItem);
             updateUpDownButtons();
             checkFocus();

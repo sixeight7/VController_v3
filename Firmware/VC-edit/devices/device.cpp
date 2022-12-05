@@ -23,6 +23,7 @@ uint8_t Device_class::get_setting(uint8_t variable)
         case 8: return my_device_page3;
         case 9: return my_device_page4;
         case 10: return enabled;
+        case 11: return dev_type;
       }
       return 0;
 }
@@ -41,7 +42,18 @@ void Device_class::set_setting(uint8_t variable, uint8_t value)
       case 8: my_device_page3 = value; break;
       case 9: my_device_page4 = value; break;
       case 10: enabled = value; break;
+      case 11: dev_type = value; break;
     }
+}
+
+uint8_t Device_class::get_number_of_dev_types()
+{
+  return 1;
+}
+
+QString Device_class::get_dev_type_name(uint8_t number)
+{
+  return "Default";
 }
 
 QString Device_class::get_setting_name(uint8_t variable) // Setting names for json output file
@@ -57,7 +69,8 @@ QString Device_class::get_setting_name(uint8_t variable) // Setting names for js
         "my_device_page2",  // 7
         "my_device_page3",  // 8
         "my_device_page4",  // 9
-        "enabled"           // 10
+        "enabled",          // 10
+        "dev_type"          // 11
     };
     if (variable < setting_names.size()) return setting_names.at(variable);
     return "";

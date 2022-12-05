@@ -10,12 +10,17 @@
 #define KTN_MIDI_CHANNEL 1
 #define KTN_PATCH_MAX 158
 
+#define TYPE_KTN_100 0
+#define TYPE_KTN_50 1
+
 class KTN_class : public Device_class
 {
 public:
     KTN_class(uint8_t _dev_no) : Device_class(_dev_no) {}
 
     virtual void init();
+    virtual uint8_t get_number_of_dev_types();
+    virtual QString get_dev_type_name(uint8_t number);
     virtual bool check_command_enabled(uint8_t cmd);
     virtual QString number_format(uint16_t patch_no);
     virtual QString read_parameter_name(uint16_t par_no);

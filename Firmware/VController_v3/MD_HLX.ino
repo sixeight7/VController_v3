@@ -16,25 +16,25 @@
 #define HLX_MIDI_PORT MIDI1_PORT // Default port is MIDI1
 #define HLX_PATCH_MIN 0
 #define HLX_PATCH_MAX 127
-#define HLX_NUMBER_OF_SETLISTS 7
+#define HLX_NUMBER_OF_SETLISTS 7 // Helix only
 
 // The Helix does not respond to any sysex messages. Therefore we must implement one-way midi connectivity.
 
 // The Helix does support the following CC-messages:
 // CC#01 0-127 Emulates EXP 1 Pedal
 // CC#02 0-127 Emulates EXP 2 Pedal
-// CC#03 0-127 Emulates EXP 3 Pedal
+// CC#03 0-127 Emulates EXP 3 Pedal (Helix only)
 // CC#49 0-127 Emulates Stomp footswitch mode's FS1
 // CC#50 0-127 Emulates Stomp footswitch mode's FS2
 // CC#51 0-127 Emulates Stomp footswitch mode's FS3
 // CC#52 0-127 Emulates Stomp footswitch mode's FS4
 // CC#53 0-127 Emulates Stomp footswitch mode's FS5
-// CC#54 0-127 Emulates Stomp footswitch mode's FS7
-// CC#55 0-127 Emulates Stomp footswitch mode's FS8
-// CC#56 0-127 Emulates Stomp footswitch mode's FS9
-// CC#57 0-127 Emulates Stomp footswitch mode's FS10
-// CC#58 0-127 Emulates Stomp footswitch mode's FS11
-// CC#59 0-127 Emulates EXP Toe switch
+// CC#54 0-127 Emulates Stomp footswitch mode's FS7 (not HX stomp / effects)
+// CC#55 0-127 Emulates Stomp footswitch mode's FS8 (not HX stomp / effects)
+// CC#56 0-127 Emulates Stomp footswitch mode's FS9 (Helix only)
+// CC#57 0-127 Emulates Stomp footswitch mode's FS10 (Helix only)
+// CC#58 0-127 Emulates Stomp footswitch mode's FS11 (Helix only)
+// CC#59 0-127 Emulates EXP Toe switch (Helix only)
 
 // CC#60 0-63: Overdub;
 // CC#60 64-127: Record Looper Record/Overdub switch (FS8)
@@ -55,6 +55,7 @@
 // CC#64 64-127 Tap Tempo
 // CC#68 0-127 Tuner screen on/off
 // CC#69 0-7 Snapshot select
+// CC#71 0 - 3 Foot switch mode  (0= Stomp, 1= Scroll, 2= Preset, 3=Snapshot, 4= prev foot switch mode, 5= next foot switch mode) (HX stomp only)
 
 #define HLX_SNAPSHOT_SELECT_CC 69
 
@@ -112,6 +113,46 @@ FLASHMEM void MD_HLX_class::update() {
   if (update_sequencer) { // Is triggered from the device_sequencer_timer_expired().
     send_sequence_step_CC();
     update_sequencer = false;
+  }
+}
+
+FLASHMEM uint8_t MD_HLX_class::get_number_of_dev_types() {
+  return 8;
+}
+
+FLASHMEM void MD_HLX_class::get_dev_type_name(uint8_t number, String &name) {
+  switch (number) {
+    case TYPE_HELIX_01A: name = "Helix (01A)"; break;
+    case TYPE_HELIX_000: name = "Helix (000)"; break;
+    case TYPE_HX_STOMP_01A: name = "HX stomp (01A)"; break;
+    case TYPE_HX_STOMP_000: name = "HX stomp (000)"; break;
+    case TYPE_HX_STOMP_XL_01A: name = "HX stomp XL(01A)"; break;
+    case TYPE_HX_STOMP_XL_000: name = "HX stomp XL(000)"; break;
+    case TYPE_HX_EFFECTS_01A: name = "HX effects (01A)"; break;
+    case TYPE_HX_EFFECTS_000: name = "HX effects (000)"; break;
+    default: name = "?"; break;
+  }
+}
+
+FLASHMEM void MD_HLX_class::do_after_dev_type_update() {
+  switch (dev_type) {
+    case TYPE_HELIX_01A:
+    case TYPE_HELIX_000:
+      patch_max = HLX_PATCH_MAX;
+      number_of_snapshots = 8;
+      break;
+    case TYPE_HX_STOMP_01A:
+    case TYPE_HX_STOMP_000:
+      patch_max = 125;
+      number_of_snapshots = 3;
+      break;
+    case TYPE_HX_STOMP_XL_01A:
+    case TYPE_HX_STOMP_XL_000:
+    case TYPE_HX_EFFECTS_01A:
+    case TYPE_HX_EFFECTS_000:
+      patch_max = HLX_PATCH_MAX;
+      number_of_snapshots = 4;
+      break;
   }
 }
 
@@ -264,9 +305,28 @@ FLASHMEM bool MD_HLX_class::flash_LEDs_for_patch_bank_switch(uint8_t sw) { // Wi
 
 FLASHMEM void MD_HLX_class::number_format(uint16_t number, String &Output) {
   char PatchChar;
-  uint8_t bank_no = number >> 2;
-  PatchChar = 65 + number % 4;
-  Output += String((bank_no + 1) / 10) + String((bank_no + 1) % 10) + PatchChar;
+  uint8_t hlx_bank_size;
+  uint8_t bank_no;
+
+  switch (dev_type) {
+    case TYPE_HELIX_01A:
+    case TYPE_HX_STOMP_01A:
+    case TYPE_HX_STOMP_XL_01A:
+    case TYPE_HX_EFFECTS_01A:
+      hlx_bank_size = 4;
+      if (dev_type == TYPE_HX_STOMP_01A) hlx_bank_size = 3;
+      bank_no = number / hlx_bank_size;
+      PatchChar = 65 + number % hlx_bank_size;
+      Output += String((bank_no + 1) / 10) + String((bank_no + 1) % 10) + PatchChar;
+      break;
+    case TYPE_HELIX_000:
+    case TYPE_HX_STOMP_000:
+    case TYPE_HX_STOMP_XL_000:
+    case TYPE_HX_EFFECTS_000:
+      Output += String(number / 100) + String((number / 10) % 10) + String(number % 10);
+      break;
+  }
+
 }
 
 // Setlists and songs
@@ -752,7 +812,7 @@ FLASHMEM void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint
 
     // Forward messages from EEPROM memory
     EEPROM_load_HELIX_message(Program);
-    DEBUGMSG("Stored setlist: " + String(HLX_message_setlist) + " == HLX setlist: " + String(current_setlist));
+    //DEBUGMSG("Stored Helix setlist: " + String(HLX_message_setlist) + " == HLX setlist: " + String(current_setlist));
     if (current_setlist == HLX_message_setlist) {
       MIDI_Helix_sent_msg_no = 0;
       for (uint8_t m = 0; m < MIDI_HLX_MESSAGES; m++) {
@@ -770,7 +830,7 @@ FLASHMEM void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint
       }
       do_not_forward_after_Helix_PC_message = true;
 
-      DEBUGMSG("Done sending " + String(MIDI_Helix_sent_msg_no) + " messages from memory at " + String(millis()));
+      //DEBUGMSG("Done sending " + String(MIDI_Helix_sent_msg_no) + " messages from memory at " + String(millis()));
     }
 
     // Set timer

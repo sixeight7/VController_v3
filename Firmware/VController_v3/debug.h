@@ -6,14 +6,14 @@
 void StartFreeTimer();
 
 // Enable normal debugging (put // in front of #define to disable it
-#define DEBUG_NORMAL
+//#define DEBUG_NORMAL
 
 // Enable debugging of main events (put // in front of the next line to disable it
-#define DEBUG_MAIN
+//#define DEBUG_MAIN
 
 // Midi debugging
-#define DEBUG_MIDI
-#define DEBUG_SYSEX
+//#define DEBUG_MIDI
+//#define DEBUG_SYSEX
 //#define DEBUG_SYSEX_UNIVERSAL
 
 #define DEBUG_SYSEX_MAX_LENGTH 256 // The maximum numbers of bytes shown in the debug window

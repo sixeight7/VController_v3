@@ -44,6 +44,7 @@ void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
                         comboBox->addItem("---"); // First item is "no page selected"
                         VCd->fillPageComboBox(comboBox);
                         VCd->fillFixedPageComboBox(comboBox);
+                        connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(devicePageSettingChanged(int, int, int)));
                         int pageNumber = Device[d]->get_setting(VCdeviceMenu[i].parameter);
                         comboBox->setCurrentIndex(VCd->indexFromValue(TYPE_PAGE, pageNumber));
                         slider->setRange(0, VCd->indexFromValue(TYPE_PAGE, last_fixed_cmd_page));
@@ -53,18 +54,30 @@ void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
                         for (int p = 0; p < number_of_midi_ports; p++)
                             comboBox->addItem(midi_port_names[p]);
                         comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(deviceSettingChanged(int, int, int)));
+                        slider->setRange(0, number_of_midi_ports - 1);
+                        slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                    }
+                    else if (VCdeviceMenu[i].sublist == TYPE_MODE_SUBLIST) {
+                        for(int j = 0; j < Device[d]->get_number_of_dev_types(); j++) {
+                            comboBox->addItem(Device[d]->get_dev_type_name(j));
+                        }
+                        comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(deviceSettingChanged(int, int, int)));
+                        slider->setRange(0, Device[d]->get_number_of_dev_types() - 1);
+                        slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
                     }
                     else {
                         int number_of_items = VCdeviceMenu[i].max - VCdeviceMenu[i].min + 1;
                         for (int j = 0; j < number_of_items; j++)
                             comboBox->addItem(menu_sublist.at(j + VCdeviceMenu[i].sublist - 1));
                         comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(deviceSettingChanged(int, int, int)));
                     }
-                    my_tree->setItemWidget(child, 2, comboBox);
-                    connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(devicePageSettingChanged(int, int, int)));
-                    connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
-                    connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
-                }               
+                }
+                my_tree->setItemWidget(child, 2, comboBox);
+                connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
+                connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
             }
             if (VCdeviceMenu[i].type == VALUE) {
                 child->setText(0, VCdeviceMenu[i].name + " (" + QString::number(VCdeviceMenu[i].min) + " - " + QString::number(VCdeviceMenu[i].max) + ")");

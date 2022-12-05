@@ -198,7 +198,7 @@ void setup_eeprom()
   if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEP_initialize_Helix_data();
   if (read_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_MG300_DATA_VERSION) EEP_initialize_MG300_data();
   if (read_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR) != CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION) EEP_initialize_seq_patterns_data();
-  
+
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
   Current_page = EEPROM.read(EEPROM_CURRENT_PAGE_ADDR);
@@ -209,9 +209,14 @@ void setup_eeprom()
   EEPROM_create_patch_data_index();
 }
 
-void EEPROM_init_misc() {
+void EEPROM_init_settings_from_menu() {
+  EEP_initialize_internal_eeprom_data();
+  EEP_read_eeprom_common_data();
+  delay(700);
   EEP_initialize_Helix_data();
+  delay(700);
   EEP_initialize_MG300_data();
+  delay(700);
   EEP_initialize_seq_patterns_data();
 }
 
@@ -263,6 +268,7 @@ void EEP_read_eeprom_common_data() {
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
       Device[d]->set_setting(var, EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var));
     }
+    Device[d]->do_after_dev_type_update();
   }
 }
 
@@ -1291,10 +1297,10 @@ void EEPROM_memory_test() {
   else msg += "--";
 
 #ifdef IS_VCTOUCH
-/*  // Test TFT memory chip
-  msg += " TFT:";
-  if (TFT_check_mem_chip()) msg += "OK";
-  else msg += "--";*/
+  /*  // Test TFT memory chip
+    msg += " TFT:";
+    if (TFT_check_mem_chip()) msg += "OK";
+    else msg += "--";*/
 #endif
 
   LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);

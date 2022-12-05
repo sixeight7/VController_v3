@@ -721,6 +721,7 @@ void LCD_set_combined_patch_number_and_name() {
   }
 
   // Set combined patchname
+  for (uint8_t i = 0; i < patch_names[0].length(); i++) Serial.print(String((uint8_t)patch_names[0][i]) + " ");
   switch (number_of_active_devices) {
     case 0:
       Combined_patch_name = "";
@@ -729,15 +730,24 @@ void LCD_set_combined_patch_number_and_name() {
       Combined_patch_name = patch_names[0];
       break;
     case 2: // Show 7 bytes of both names
-      Combined_patch_name = patch_names[0].substring(0, 7) + "  " + patch_names[1].substring(0, 7);
+      LCD_shorten_string(7, patch_names[0]);
+      LCD_shorten_string(7, patch_names[1]);
+      Combined_patch_name = patch_names[0] + "  " + patch_names[1];
       break;
     case 3: // Show 4 bytes of both names
-      Combined_patch_name = patch_names[0].substring(0, 4) + "  " + patch_names[1].substring(0, 4) + "  " + patch_names[2].substring(0, 4);
+      LCD_shorten_string(4, patch_names[0]);
+      LCD_shorten_string(4, patch_names[1]);
+      LCD_shorten_string(4, patch_names[2]);
+      Combined_patch_name = patch_names[0] + "  " + patch_names[1] + "  " + patch_names[2];
       break;
     default: // More then 3 devices
       Combined_patch_name = String(number_of_active_devices) + " devices on";
       break;
   }
+}
+
+void LCD_shorten_string(uint8_t len, String &txt) {
+  if (txt.length() > len) txt = txt.substring(0, len);
 }
 
 
@@ -2108,15 +2118,6 @@ void LCD_clear_all_displays() {
   }
 #endif
 }
-
-
-#if defined(IS_VCMINI) || defined(IS_VCTOUCH)
-#define YES_SWITCH 7
-#define NO_SWITCH 9
-#else
-#define YES_SWITCH 10
-#define NO_SWITCH 11
-#endif
 
 void LCD_show_are_you_sure(String line1, String line2)
 {

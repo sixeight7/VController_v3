@@ -75,6 +75,7 @@ private:
 
 #define PAGE_SUBLIST 254
 #define MIDI_PORT_SUBLIST1 253
+#define TYPE_MODE_SUBLIST 252
 #define LAST_FIXED_CMD_PAGE_MAX 255 //!!!
 
     const QVector<Device_menu_struct> VCdeviceMenu
@@ -83,7 +84,7 @@ private:
         { "Midi channel", VALUE, 0, 1, 16, 1 }, // Switch 3
         { "Midi port", OPTION, MIDI_PORT_SUBLIST1, 0, 1, 2 }, // Switch 4
         { "Colour", OPTION, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, 0 }, // Switch 9
-        { "Is always on", OPTION, 1, 0, 1, 5 }, // Switch 10
+        { "Type/mode", OPTION, TYPE_MODE_SUBLIST, 0, 1, 11 }, // Switch 10
         { "Device page #1", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 6 },// Switch 5
         { "Device page #2", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 7 }, // Switch 6
         { "Device page #3", OPTION, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE_MAX, 8 }, // Switch 7

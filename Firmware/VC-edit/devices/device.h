@@ -15,6 +15,8 @@ public:
     virtual void init();
     uint8_t get_setting(uint8_t variable);
     void set_setting(uint8_t variable, uint8_t value);
+    virtual uint8_t get_number_of_dev_types();
+    virtual QString get_dev_type_name(uint8_t number);
     QString get_setting_name(uint8_t variable);
     virtual QString get_patch_info(uint16_t number);
     virtual void rename_patch(uint16_t number);
@@ -64,11 +66,12 @@ public:
     uint8_t my_device_page3;
     uint8_t my_device_page4;
     uint8_t enabled;
+    uint8_t dev_type = 0;
 
 protected:
     uint8_t MIDI_port_number(uint8_t port);
 
-#define NUMBER_OF_DEVICE_SETTINGS 11
+#define NUMBER_OF_DEVICE_SETTINGS 12
 };
 
 #endif // DEVICE_H

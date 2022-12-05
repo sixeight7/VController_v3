@@ -101,6 +101,7 @@ struct menu_struct {
 #define SONG_ITEM3_SUBLIST 239
 #define SONG_ITEM4_SUBLIST 238
 #define SONG_ITEM5_SUBLIST 237
+#define TYPE_MODE_SUBLIST 236
 
 // The table below has an edited copy in VC-edit/Headers/vcsettings.h
 // Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty.
@@ -138,7 +139,7 @@ const PROGMEM menu_struct menu[][15] = {
     { "Glob.tempo on PC", SET, 1, 0, 1, &Setting.Send_global_tempo_after_patch_change }, // Switch 6
     { "Hide tempo LED", SET, 1, 0, 1, &Setting.Hide_tap_tempo_LED }, // Switch 7
     { "Backlight Type", SET, 51, 0, 1, &Setting.RGB_Backlight_scheme }, // Switch 8
-    { "Katana type", SET, 90, 0, 1, &Setting.Is_katana50 }, // Switch 9
+    { "", NONE }, // Switch 9
     { "", NONE }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
@@ -156,8 +157,8 @@ const PROGMEM menu_struct menu[][15] = {
     { "Page #2", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 7 }, // Switch 6
     { "Page #3", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 8 }, // Switch 7
     { "Page #4", DEVICE_SET, PAGE_SUBLIST, 0, LAST_FIXED_CMD_PAGE, (void*) 9 }, // Switch 8
-    { "Colour", DEVICE_SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, (void*) 0 }, // Switch 9
-    { "Is always on", DEVICE_SET, 1, 0, 1, (void*) 5 }, // Switch 10
+    { "Type/mode", DEVICE_SET, TYPE_MODE_SUBLIST, 0, 0, (void*) 11 }, // Switch 9
+    { "Colour", DEVICE_SET, 4, 0, NUMBER_OF_SELECTABLE_COLOURS - 1, (void*) 0 }, // Switch 10
     { "SAVE & EXIT", SAVE_AND_EXIT, 1 }, // Switch 11
     { "Cancel", SAVE_AND_EXIT, 0 }, // Switch 12 (should not be of type NONE)
     { "", NONE }, // Switch 13 (LEFT)
@@ -573,9 +574,6 @@ const PROGMEM char menu_sublist[][17] = {
 
   // Sublist 82 - 89: MIDI forwarding bidirectional settings
   "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
-
-  // Sublist 90 - 91: Katana type
-  "Katana100 (8 CH)", "Katana50 (4 CH)",
 };
 
 #define SUBLIST_COLOUR 4
@@ -583,9 +581,7 @@ const PROGMEM char menu_sublist[][17] = {
 // ********************************* Section 2: Functions called from menu ********************************************
 void initialize_settings() {
   if (menu_are_you_sure("Reset settings?", "Sure?")) {
-    EEP_initialize_internal_eeprom_data();
-    EEP_read_eeprom_common_data();
-    EEPROM_init_misc();
+    EEPROM_init_settings_from_menu();
   }
 }
 
@@ -801,7 +797,6 @@ void menu_open(uint8_t prev_page) { // Called when the menu is started the first
 
 void menu_exit() {
   SC_set_enc1_acceleration(true);
-  //if (Previous_page == PAGE_MENU) Previous_page = PAGE_DEFAULT;
   if (Current_mode == DEVICE_MODE) set_current_device(current_device_when_menu_was_opened);
   SCO_select_page(current_page_when_menu_was_opened);
 }
@@ -933,6 +928,10 @@ void menu_load(uint8_t Sw) {
         if (value == 0)  msg = "---";
         else EEPROM_read_title(value, 0, msg); // Read page name from EEPROM
         //LCD_set_SP_label(Sw, msg);
+        msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
+      }
+      else if (menu[current_menu][number].Sublist == TYPE_MODE_SUBLIST) {
+        if (Current_device < NUMBER_OF_DEVICES) Device[Current_device]->get_dev_type_name(value, msg);
         msg.toCharArray(menu_label, LCD_DISPLAY_SIZE + 1);
       }
       else if (menu[current_menu][number].Sublist > 0) { // Show sublist if neccesary
@@ -1085,98 +1084,101 @@ void menu_set_menu_label(String & lbl) { // Will set the Label string in the SP 
 
 void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is pressed
   uint8_t number = SP[Sw].PP_number;
-  if (number == MENU_BACK) {
-    if (current_menu == KEYBOARD_MENU) {
-      save_and_close_keyboard();
-      return;
-    }
-    if (current_menu == SELECT_MENU) {
-      // Exit menu
-      menu_exit();
-      return;
-    }
-    if (current_menu == COMMAND_EDIT_MENU) {
-      // Save the command first
-      go_save_cmd();
-      return;
-    }
-    if (current_menu == SETLIST_MENU) {
-      SCO_save_current_setlist();
-      menu_exit();
-      return;
-    }
-    if (current_menu == SONG_MENU) {
-      SCO_save_current_song();
-      menu_exit();
-      return;
-    }
-    if ((current_menu == SONG_PART_EDIT_MENU) || (current_menu == SONG_PART_MIDI_MENU)) {
-      menu_select(SONG_MENU);
-      return;
-    }
-    if (current_menu == KATANA_MENU) {
-      if (current_menu_switch == 1) KTN_save();
-      else menu_exit();
-      return;
-    }
-    if (current_menu == SY1000_MENU) {
-      if (current_menu_switch == 1) SY1000_save();
-      else menu_exit();
-      return;
-    }
-    number = current_menu_switch;
-    if ((menu[current_menu][number].Type != SAVE_AND_EXIT) && (menu[current_menu][number].Type != EXIT_MENU)) {
-      //save current item
-      if (current_menu == CALIBRATION_MENU) SC_check_calibration();
-      EEP_write_eeprom_common_data();
-      check_all_devices_for_manual_connection();
-      menu_select(SELECT_MENU);
-      return;
-    }
-  }
-  
-  if (number == MENU_SET_VALUE) {
-    if (current_menu == KEYBOARD_MENU) {
+  switch (number) {
+    case MENU_BACK:
+      if (current_menu == KEYBOARD_MENU) {
+        save_and_close_keyboard();
+        return;
+      }
+      if (current_menu == SELECT_MENU) {
+        // Exit menu
+        menu_exit();
+        return;
+      }
+      if (current_menu == COMMAND_EDIT_MENU) {
+        // Save the command first
+        go_save_cmd();
+        return;
+      }
+      if (current_menu == SETLIST_MENU) {
+        SCO_save_current_setlist();
+        menu_exit();
+        return;
+      }
+      if (current_menu == SONG_MENU) {
+        SCO_save_current_song();
+        menu_exit();
+        return;
+      }
+      if ((current_menu == SONG_PART_EDIT_MENU) || (current_menu == SONG_PART_MIDI_MENU)) {
+        menu_select(SONG_MENU);
+        return;
+      }
+      if (current_menu == KATANA_MENU) {
+        if (current_menu_switch == 1) KTN_save();
+        else menu_exit();
+        return;
+      }
+      if (current_menu == SY1000_MENU) {
+        if (current_menu_switch == 1) SY1000_save();
+        else menu_exit();
+        return;
+      }
+      number = current_menu_switch;
+      if ((menu[current_menu][number].Type != SAVE_AND_EXIT) && (menu[current_menu][number].Type != EXIT_MENU)) {
+        //save current item
+        if (current_menu == CALIBRATION_MENU) SC_check_calibration();
+        EEP_write_eeprom_common_data();
+        check_all_devices_for_manual_connection();
+        menu_select(SELECT_MENU);
+        return;
+      }
+      break;
+
+    case MENU_SET_VALUE:
+      if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
-      key_jump_category();
+        key_jump_category();
 #else
-      key_encoder_edit_character(true);
+        key_encoder_edit_character(true);
 #endif
-      return;
-    }
-    number = current_menu_switch;
-  }
-  if (number == MENU_PREV) {
-    if (current_menu == KEYBOARD_MENU) {
+        return;
+      }
+      number = current_menu_switch;
+      break;
+    case MENU_PREV:
+      if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
-      save_and_close_keyboard();
+        save_and_close_keyboard();
 #else
-      cursor_left_page_name();
+        cursor_left_page_name();
 #endif
+        return;
+      }
+      menu_select_prev();
+      //menu_load(Sw);
+      update_page = REFRESH_PAGE;
       return;
-    }
-    menu_select_prev();
-    //menu_load(Sw);
-    update_page = REFRESH_PAGE;
-  }
-  if (number == MENU_NEXT) {
-    if (current_menu == KEYBOARD_MENU) {
+    case MENU_NEXT:
+      if (current_menu == KEYBOARD_MENU) {
 #ifdef IS_VCMINI
-      save_and_close_keyboard();
+        save_and_close_keyboard();
 #else
-      cursor_right_page_name();
+        cursor_right_page_name();
 #endif
+        return;
+      }
+      menu_select_next();
+      //menu_load(Sw);
+      update_page = REFRESH_PAGE;
       return;
-    }
-    menu_select_next();
-    //menu_load(Sw);
-    update_page = REFRESH_PAGE;
   }
 
   uint8_t cmd_byte_no;
   uint16_t *val;
   uint8_t vnumber;
   uint8_t value;
+  uint8_t max;
   signed int delta;
   if (go_up) delta = 1;
   else delta = -1;
@@ -1224,15 +1226,9 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
         val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         value = Device[Current_device]->get_setting(vnumber);
-        /*if (go_up) {
-          if (value < menu[current_menu][number].Max) value = value + 1;
-          else value = menu[current_menu][number].Min;
-          }
-          else {
-          if (value > menu[current_menu][number].Min) value = value - 1;
-          else value = menu[current_menu][number].Max;
-          }*/
-        value = update_encoder_value(delta, value, menu[current_menu][number].Min, menu[current_menu][number].Max);
+        max = menu[current_menu][number].Max;
+        if (menu[current_menu][number].Sublist == TYPE_MODE_SUBLIST) max = Device[Current_device]->get_number_of_dev_types() - 1;
+        value = update_encoder_value(delta, value, menu[current_menu][number].Min, max);
         if (menu[current_menu][number].Sublist == PAGE_SUBLIST) { // Hop over gap in pages
           if ((value > Number_of_pages) && (value < FIRST_SELECTABLE_FIXED_CMD_PAGE)) {
             if (go_up) value = FIRST_SELECTABLE_FIXED_CMD_PAGE;
@@ -1324,6 +1320,7 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
   uint16_t *val;
   uint8_t vnumber;
   uint8_t value;
+  uint8_t max;
 
   if (!no_hold) {
     switch (menu[current_menu][number].Type) {
@@ -1351,8 +1348,10 @@ void menu_press_hold(uint8_t Sw) { // Called when button for this menu is held
         if (Current_device < NUMBER_OF_DEVICES) {
           val = reinterpret_cast<uint16_t*>(menu[current_menu][number].Target);
           vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
+          max = menu[current_menu][number].Max;
+          if (menu[current_menu][number].Sublist == TYPE_MODE_SUBLIST) max = Device[Current_device]->get_number_of_dev_types() - 1;
           value = Device[Current_device]->get_setting(vnumber);
-          if (value < menu[current_menu][number].Max) value = value + 1;
+          if (value < max) value++;
           else value = menu[current_menu][number].Min;
           Device[Current_device]->set_setting(vnumber, value);
           menu_load(Sw); // Will update the label
@@ -1430,6 +1429,7 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
   uint8_t vnumber;
   uint8_t setting;
   uint8_t no_of_pages;
+  uint8_t max;
 
   no_hold = true;
   switch (menu[current_menu][number].Type) {
@@ -1454,7 +1454,9 @@ void menu_move_expr_pedal(uint8_t value) { // Called when the master expression 
         vnumber = uint32_t(val); // Here we have the number back that we entered in the menu
         setting = Device[Current_device]->get_setting(vnumber);
         if (menu[current_menu][number].Sublist != PAGE_SUBLIST) {
-          setting = map (value, 0, 127, menu[current_menu][number].Min, menu[current_menu][number].Max);
+          max = menu[current_menu][number].Max;
+          if (menu[current_menu][number].Sublist == TYPE_MODE_SUBLIST) max = Device[Current_device]->get_number_of_dev_types() - 1;
+          setting = map (value, 0, 127, menu[current_menu][number].Min, max);
         }
         else { // Setting PAGE_SUBLIST. Here we have a gap in the pages
           no_of_pages = LAST_FIXED_CMD_PAGE - FIRST_FIXED_CMD_PAGE + Number_of_pages;

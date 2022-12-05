@@ -129,6 +129,18 @@ FLASHMEM void MD_KTN_class::update() {
   }
 }
 
+FLASHMEM uint8_t MD_KTN_class::get_number_of_dev_types() {
+  return 2;
+}
+
+FLASHMEM void MD_KTN_class::get_dev_type_name(uint8_t number, String &name) {
+  switch (number) {
+    case TYPE_KTN_100: name = "Katana100 (8 CH)"; break;
+    case TYPE_KTN_50: name = "Katana50 (4 CH)"; break;
+    default: name = "?"; break;
+  }
+}
+
 // ********************************* Section 2: KTN common MIDI in functions ********************************************
 
 FLASHMEM void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) { // Check incoming sysex messages from  Called from MIDI:OnSysEx/OnSerialSysEx
@@ -479,7 +491,7 @@ FLASHMEM void MD_KTN_class::select_patch(uint16_t new_patch) {
     unmute();
   }
   set_patch_number(new_patch);
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   if (new_patch <= number_of_channels) {
     // Order of patches is not logical, so we have to fix it
     if (new_patch == 0) send_channel_number = 4; // PC 0 will select PANEL
@@ -520,7 +532,7 @@ FLASHMEM void MD_KTN_class::do_after_patch_selection() {
     request_sysex(KTN_FX_BASE_ADDRESS_MK1, 2);
   }
   request_current_patch_name();
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   if (patch_number <= number_of_channels) {
     if (is_mk2) request_sysex(KTN_CHAIN_ADDRESS_MK2, 20);
     else request_sysex(KTN_CHAIN_ADDRESS_MK1, 20);
@@ -536,7 +548,7 @@ FLASHMEM bool MD_KTN_class::request_patch_name(uint8_t sw, uint16_t number) {
     LCD_set_SP_label(sw, patch_name);
     return true;;
   }
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   if (number <= number_of_channels) {
     //number++;
     uint32_t Address = 0x10000000 + (number * 0x10000); //Calculate the address where the patchname is stored on the KATANA
@@ -563,10 +575,10 @@ FLASHMEM void MD_KTN_class::request_current_patch_name() {
 }
 
 FLASHMEM void MD_KTN_class::number_format(uint16_t number, String &Output) {
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   if (number == 0) Output += "PNL";
   else if (number <= number_of_channels) Output += "CH" + String(number);
-  else if ((!Setting.Is_katana50) || (KTN_BANK_SIZE == 8)) Output += "VC" + String((number - number_of_channels - 1) / KTN_BANK_SIZE) + "." + String((number - number_of_channels - 1) % KTN_BANK_SIZE + 1);
+  else if ((dev_type != TYPE_KTN_50) || (KTN_BANK_SIZE == 8)) Output += "VC" + String((number - number_of_channels - 1) / KTN_BANK_SIZE) + "." + String((number - number_of_channels - 1) % KTN_BANK_SIZE + 1);
   else if (number == 5) Output += "VC0.0";
   else Output += "VC" + String((number - number_of_channels - 2) / KTN_BANK_SIZE) + "." + String((number - number_of_channels - 2) % KTN_BANK_SIZE + 1);
 }
@@ -591,7 +603,7 @@ FLASHMEM bool MD_KTN_class::valid_direct_select_switch(uint8_t number) {
     result = ((number * KTN_BANK_SIZE) + (bank_select_number * KTN_BANK_SIZE * 10) <= (patch_max - patch_min));
   }
   else {
-    uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+    uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
     if (bank_select_number == 0) { // Show switches 1 - 8 + PANEL on second digit
       if (number <= number_of_channels) result = true;
     }
@@ -634,7 +646,7 @@ FLASHMEM void MD_KTN_class::direct_select_press(uint8_t number) {
     //bank_number = ((new_patch - patch_min - 1) / Previous_bank_size); // Set bank number to the new patch
     bank_size = Previous_bank_size;
     //bank_select_number = bank_number;
-    if ((Setting.Is_katana50) && (new_patch > 5)) new_patch -= 4;
+    if ((dev_type == TYPE_KTN_50) && (new_patch > 5)) new_patch -= 4;
     select_patch(new_patch - 1);
     update_bank_number(patch_number);
     SCO_select_page(Previous_page);
@@ -1088,12 +1100,12 @@ FLASHMEM void MD_KTN_class::store_patch() {
   }
   LCD_show_popup_label("Patch saved.", MESSAGE_TIMER_LENGTH);
   delay(30); // Allow data to settle before reading the data again.
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   select_patch(save_patch_number + number_of_channels + 1); // Select the saved patch
 }
 
 FLASHMEM bool MD_KTN_class::exchange_patch() {
-  uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+  uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
   uint8_t old_save_number = patch_number - number_of_channels - 1;
   if ((patch_number >= number_of_channels + 1) && (old_save_number != save_patch_number)) {
     EEPROM_exchange_device_patch(my_device_number + 1, save_patch_number, old_save_number, VC_PATCH_SIZE);

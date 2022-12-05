@@ -51,6 +51,20 @@ void KTN_class::init()
     //InitializePatchArea();
 }
 
+uint8_t KTN_class::get_number_of_dev_types()
+{
+  return 2;
+}
+
+QString KTN_class::get_dev_type_name(uint8_t number)
+{
+    switch (number) {
+        case TYPE_KTN_100: return "Katana100 (8 CH)";
+        case TYPE_KTN_50: return "Katana50 (4 CH)";
+        default: return "?";
+    }
+}
+
 bool KTN_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
@@ -71,10 +85,10 @@ bool KTN_class::check_command_enabled(uint8_t cmd)
 
 QString KTN_class::number_format(uint16_t patch_no)
 {
-    uint8_t number_of_channels = (Setting.Is_katana50) ? 4 : 8;
+    uint8_t number_of_channels = (dev_type == TYPE_KTN_50) ? 4 : 8;
     if (patch_no == 0) return "PANEL";
     else if (patch_no <= number_of_channels) return "CH" + QString::number(patch_no);
-    else if ((!Setting.Is_katana50) || (ktn_bank_size == 8)) return "VC" + QString::number((patch_no - number_of_channels - 1) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 1) % ktn_bank_size + 1);
+    else if ((dev_type != TYPE_KTN_50) || (ktn_bank_size == 8)) return "VC" + QString::number((patch_no - number_of_channels - 1) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 1) % ktn_bank_size + 1);
     else if (patch_no == 5) return "VC0.0";
     else return "VC" + QString::number((patch_no - number_of_channels - 2) / ktn_bank_size) + "." + QString::number((patch_no - number_of_channels - 2) % ktn_bank_size + 1);
 }

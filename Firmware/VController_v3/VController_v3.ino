@@ -35,16 +35,16 @@
 // **** Choose the correct hardware below and update the Arduino compiler settings ****
 // Current version of Arduino: 1.8.9 and TeensyDuino: 1.46
 
-// Hardware of production model
-//#include "hardware.h"
+// Hardware of VController production model
+#include "hardware.h"
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII, disable debug!
 
 // Hardware of VC-mini rev. B (Teensy 3.6)
 //#include "hardware_VCmini_b.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
 
-// Hardware of production model
-#include "hardware_VCtouch.h"
+// Hardware of VC-touch
+//#include "hardware_VCtouch.h"
 // Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
 // Hardware of VController V1 model of sixeight
@@ -57,6 +57,7 @@
 
 // Hardware of VController model of Willem Smith
 //#include "hardware_WS.h"
+//#include "hardware_VCmini_1.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast, Programmer: AVRISP mkII
 
 // In order for the Serial MIDI ports to receive larger messages the following files have to be edited:
@@ -90,7 +91,7 @@
 
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
 #define VCONTROLLER_FIRMWARE_VERSION_MINOR 10
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 2
 
 #include "debug.h"
 #include "globals.h"
@@ -391,5 +392,16 @@ void loop() {
   03-09-2022 Fixed incorrect cursor position in text entry on VC-mini
   05-09-2022 VC-touch now uses both memory chips (24LC512) and can store 3225 commands, 300 patches and 64 sequences.
   05-09-2022 Added MIDI more command with option to send MIDI start and stop or toggle them.
+  19-09-2022 Added option to Block device detect messages. Every second the VC device will send some messages to look for external devices. Enabling this option will block these messages
+             Some external devices that are not supported get confused when these messages appear. Be careful using this option, as automatic device detection no longer works on ports where this is enabled.
   21-10-2022 SY-1000: Fixed the normal input not restoring properly from scenes when Quiet scene change was active. Thanks Brad for pointing it out.
+  24-10-2022 Release of firmware 3.10.0
+  19-11-2022 Updated to Arduino 1.8.19. This has an updated bootloader for the Teensy 4.1. Hopefully these will no longer lose their programming now.
+  19-11-2022 VC-mini: fixed menu operation through the switches (menu_prev and menu_next)
+  20-12-2022 Added type/mode setting for devices.
+  20-12-2022 Helix: type/mode can now be set for Helix, HX-stomp and HX-effects, also taking the two numbering schemes into account.
+  20-12-2022 Katana: the Katana 100 / Katana 50 setting has been moved to Device Settings.
+  05-12-2022 VC-edit: fixed multiple commands in "on page select" box not selecting properly, making editing hard.
+  05-12-2022 Fixed bug that under certain conditions hangs the VController, VC-mini or VC-touch. Doing a String.substring of a string that is too small hangs the sketch!
+  05-12-2022 Release of firmware 3.10.2
   */

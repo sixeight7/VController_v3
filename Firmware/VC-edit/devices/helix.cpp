@@ -35,6 +35,26 @@ void HLX_class::init()
     }
 }
 
+uint8_t HLX_class::get_number_of_dev_types()
+{
+  return 8;
+}
+
+QString HLX_class::get_dev_type_name(uint8_t number)
+{
+  switch (number) {
+      case TYPE_HELIX_01A: return "Helix (01A)";
+      case TYPE_HELIX_000: return "Helix (000)";
+      case TYPE_HX_STOMP_01A: return "HX stomp (01A)";
+      case TYPE_HX_STOMP_000: return "HX stomp (000)";
+      case TYPE_HX_STOMP_XL_01A: return "HX stomp XL(01A)";
+      case TYPE_HX_STOMP_XL_000: return "HX stomp XL(000)";
+      case TYPE_HX_EFFECTS_01A: return "HX effects (01A)";
+      case TYPE_HX_EFFECTS_000: return "HX effects (000)";
+      default: return "?";
+    }
+}
+
 bool HLX_class::check_command_enabled(uint8_t cmd)
 {
     switch (cmd) {
@@ -55,9 +75,29 @@ bool HLX_class::check_command_enabled(uint8_t cmd)
 
 QString HLX_class::number_format(uint16_t patch_no)
 {
-    uint8_t bank_no = patch_no >> 2;
-    QChar PatchChar = (QChar)(65 + patch_no % 4);
-    return QString::number((bank_no + 1) / 10) + QString::number((bank_no + 1) % 10) + PatchChar;
+    char PatchChar;
+      uint8_t hlx_bank_size;
+      uint8_t bank_no;
+
+      switch (dev_type) {
+        case TYPE_HELIX_01A:
+        case TYPE_HX_STOMP_01A:
+        case TYPE_HX_STOMP_XL_01A:
+        case TYPE_HX_EFFECTS_01A:
+          hlx_bank_size = 4;
+          if (dev_type == TYPE_HX_STOMP_01A) hlx_bank_size = 3;
+          bank_no = patch_no / hlx_bank_size;
+          PatchChar = 65 + patch_no % hlx_bank_size;
+          return QString::number((bank_no + 1) / 10) + QString::number((bank_no + 1) % 10) + PatchChar;
+          break;
+        case TYPE_HELIX_000:
+        case TYPE_HX_STOMP_000:
+        case TYPE_HX_STOMP_XL_000:
+        case TYPE_HX_EFFECTS_000:
+          return QString::number(patch_no / 100) + QString::number((patch_no / 10) % 10) + QString::number(patch_no % 10);
+          break;
+      }
+      return "?";
 }
 
 struct HLX_CC_type_struct { // Combines all the data we need for controlling a parameter in a device

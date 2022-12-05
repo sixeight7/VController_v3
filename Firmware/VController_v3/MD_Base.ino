@@ -56,6 +56,7 @@ uint8_t MD_base_class::get_setting(uint8_t variable) {
     case 8: return my_device_page3;
     case 9: return my_device_page4;
     case 10: return enabled;
+    case 11: return dev_type;
   }
   return 0;
 }
@@ -73,8 +74,19 @@ void MD_base_class::set_setting(uint8_t variable, uint8_t value) {
     case 8: my_device_page3 = value; break;
     case 9: my_device_page4 = value; break;
     case 10: enabled = value; break;
+    case 11: dev_type = value; break;
   }
 }
+
+uint8_t MD_base_class::get_number_of_dev_types() {
+  return 1;
+}
+
+void MD_base_class::get_dev_type_name(uint8_t number, String &name) {
+  name = "Default";
+}
+
+void MD_base_class::do_after_dev_type_update() {}
 
 // ********************************* Section 2: Device common MIDI in functions ********************************************
 
@@ -236,7 +248,8 @@ uint16_t MD_base_class::calculate_patch_number(uint8_t bank_position, uint8_t ba
 bool MD_base_class::patch_select_pressed(uint16_t new_patch, uint8_t sw) {
   // Check whether the current patch needs to be switched on or whether a new patch is chosen
   if (new_patch > get_patch_max()) new_patch = get_patch_max();
-  if ((new_patch == setlist_item_number) && (!SC_switch_is_encoder())) { // Check if curnum needs to be executed.
+  bool patch_select = ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT));
+  if ((new_patch == setlist_item_number) && (patch_select) && (!SC_switch_is_encoder())) { // Check if curnum needs to be executed.
     DEBUGMSG("Executing curnum action");
     set_current_device(my_device_number);
     switch (Setting.CURNUM_action) {

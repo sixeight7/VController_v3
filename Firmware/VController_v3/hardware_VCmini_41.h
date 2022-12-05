@@ -86,6 +86,8 @@
 #define JACK_PORT_PULLUP false // There are already pull-up resistors externally
 
 #define MENU_KEY_COMBINATION B01010000 // Both encoder switches pressed
+#define YES_SWITCH 7
+#define NO_SWITCH 9
 
 // *** Neopixel LEDs
 #define NUMBER_OF_LEDS     3 // Number of neopixel LEDs connected

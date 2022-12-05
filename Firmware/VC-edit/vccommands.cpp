@@ -435,9 +435,11 @@ void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t
     current_page = pg;
     current_switch = sw;
     current_item = item;
-    if ((switchHasLabel(pg, sw)) && (item > 0)) item--;
+    if ((switchHasLabel(pg, sw)) && (sw > 0) && (item > 0)) item--; // Fix issue "Page select (switch 0) commands not handled properly by VCEditor #4": Label is not shown on page 0 even though it has a label
 
     if (count_cmds(pg, sw) == 0) return; // Exit if there are no commands for this switch
+
+    qDebug() << "Item mumber is" << item;
 
     int cmd_no = get_cmd_number(pg, sw, item);
     Cmd_struct sel_cmd = get_cmd(cmd_no);

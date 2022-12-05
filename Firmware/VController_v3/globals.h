@@ -58,7 +58,7 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t Follow_tempo_from_G2M; // Tempo is updated from playing speed using Guitar2midi
   uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
   uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
-  bool    Is_katana50; // 50W version of Katana
+  bool    Spare; // Spare
   uint8_t Main_display_top_line_mode;
   uint8_t Block_identity_messages; // To block sysex messages as it messes with certain devices
 };
@@ -124,7 +124,7 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // Disable Follow_tempo_from_G2M
   1,     // Colour of tap tempo LED when tempo following is on: green
   0,     // Forward midi in both directions
-  false, // 50W version of Katana
+  false, // Spare
   5,     // Main_display_top_line_mode
   0,     // Block_identity_messages
 };

@@ -43,11 +43,11 @@ void VCseqPattern::fillTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn)
                         //comboBox->setCurrentIndex(Device[d]->get_setting(VCseqPatternMenu[i].parameter));
                         comboBox->setCurrentIndex(getSeqPatternSetting(p,VCseqPatternMenu[i].parameter));
                     }
-                    my_tree->setItemWidget(child, 2, comboBox);
-                    connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(midiSeqPatternChanged(int, int, int)));
-                    connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
-                    connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
                 }
+                my_tree->setItemWidget(child, 2, comboBox);
+                connect(comboBox, SIGNAL(new_value(int, int, int)), this, SLOT(midiSeqPatternChanged(int, int, int)));
+                connect(comboBox,SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
+                connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
             }
             if (VCseqPatternMenu[i].type == VALUE) {
                 child->setText(0, VCseqPatternMenu[i].name + " (" + QString::number(VCseqPatternMenu[i].min) + " - " + QString::number(VCseqPatternMenu[i].max) + ")");

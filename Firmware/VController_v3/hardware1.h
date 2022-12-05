@@ -67,6 +67,8 @@
 #define JACK_PORT_PULLUP true // No pull-up resistors externally, so need the internal ones
 
 #define MENU_KEY_COMBINATION 0x9000 // Switches 13 and 16
+#define YES_SWITCH 10
+#define NO_SWITCH 11
 
 // *** Display settings of the main display - so far it is connected to a regular display board
 #define PRIMARY_MAIN_DISPLAY_ADDRESS 0x27 // If we have a PCF8745AT chip in the i2c expander

@@ -27,7 +27,7 @@
 
 // ********************************* Section 1: MD_base_class declaration (base) ********************************************
 
-#define NUMBER_OF_DEVICE_SETTINGS 11
+#define NUMBER_OF_DEVICE_SETTINGS 12
 
 class MD_base_class
 { // Base class for midi devices
@@ -41,6 +41,9 @@ class MD_base_class
     virtual void update(); // Called in loop() of sketch
     uint8_t  get_setting(uint8_t  variable);
     void set_setting(uint8_t  variable, uint8_t  value);
+    virtual uint8_t get_number_of_dev_types();
+    virtual void get_dev_type_name(uint8_t number, String &name);
+    virtual void do_after_dev_type_update();
 
     // Midi in procedures
     virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t  port);
@@ -233,6 +236,7 @@ class MD_base_class
     uint32_t  looper_end_time = 0;
     uint32_t  current_loop_length;
     uint32_t  max_looper_length;
+    uint8_t dev_type = 0; // Variable no.11
 
     // Default pages
     uint8_t  my_device_page1 = 0;  // Variable no.4
@@ -770,6 +774,9 @@ class MD_HLX_class : public MD_base_class
     // Basic procedures
     virtual void init();
     virtual void update();
+    virtual uint8_t get_number_of_dev_types();
+    virtual void get_dev_type_name(uint8_t number, String &name);
+    virtual void do_after_dev_type_update();
 
     // Midi in procedures
     //virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t  port);
@@ -797,7 +804,7 @@ class MD_HLX_class : public MD_base_class
     virtual uint16_t setlist_song_get_number_of_items();
     virtual void setlist_song_full_item_format(uint16_t item, String &Output);
     virtual void setlist_song_short_item_format(uint16_t item, String &Output);
-    
+
     // Direct select procedures
     virtual void direct_select_format(uint16_t  number, String &Output);
     virtual bool  valid_direct_select_switch(uint8_t  number);
@@ -861,6 +868,16 @@ class MD_HLX_class : public MD_base_class
     uint8_t  current_sequence_step = 0;
     uint8_t  previous_sequence_value = 0;
     bool  update_sequencer = false;
+    uint8_t number_of_snapshots = 8;
+
+#define TYPE_HELIX_01A 0
+#define TYPE_HELIX_000 1
+#define TYPE_HX_STOMP_01A 2
+#define TYPE_HX_STOMP_000 3
+#define TYPE_HX_STOMP_XL_01A 4
+#define TYPE_HX_STOMP_XL_000 5
+#define TYPE_HX_EFFECTS_01A 6
+#define TYPE_HX_EFFECTS_000 7
 };
 
 // ********************************* Section 9: MD_FAS_class declaration (derived) ********************************************
@@ -873,7 +890,7 @@ class MD_FAS_class : public MD_base_class
     // Basic procedures
     virtual void init();
     virtual void update();
-
+    
     // Midi in procedures
     virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t  port);
     virtual void check_PC_in(uint8_t  program, uint8_t  channel, uint8_t  port);
@@ -961,6 +978,8 @@ class MD_KTN_class : public MD_base_class
     // Basic procedures
     virtual void init();
     virtual void update();
+    virtual uint8_t get_number_of_dev_types();
+    virtual void get_dev_type_name(uint8_t number, String &name);
 
     // Midi in procedures
     virtual void check_SYSEX_in(const unsigned char* sxdata, short unsigned int sxlength, uint8_t  port);
@@ -1063,6 +1082,9 @@ class MD_KTN_class : public MD_base_class
     bool  editor_connected = false;
 #define KTN_IDENTITY_MESSAGE_SIZE 15
     uint8_t  identity_message[KTN_IDENTITY_MESSAGE_SIZE];
+
+#define TYPE_KTN_100 0
+#define TYPE_KTN_50 1
 };
 
 // ********************************* Section 11: MD_KPA_class declaration (derived) ********************************************
@@ -1114,11 +1136,11 @@ class MD_KPA_class : public MD_base_class
 
     // Setlist/song select
     /*virtual void setlist_song_select(uint16_t item);
-    virtual uint16_t setlist_song_get_current_item_state();
-    virtual uint16_t setlist_song_get_number_of_items();
-    virtual void setlist_song_full_item_format(uint16_t item, String &Output);
-    virtual void setlist_song_short_item_format(uint16_t item, String &Output);*/
-    
+      virtual uint16_t setlist_song_get_current_item_state();
+      virtual uint16_t setlist_song_get_number_of_items();
+      virtual void setlist_song_full_item_format(uint16_t item, String &Output);
+      virtual void setlist_song_short_item_format(uint16_t item, String &Output);*/
+
     // Direct select procedures
     virtual void direct_select_format(uint16_t  number, String &Output);
     virtual bool valid_direct_select_switch(uint8_t  number);
