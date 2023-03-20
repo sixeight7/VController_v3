@@ -1,19 +1,20 @@
 # VController_v3
 Production model of the VController, VC-mini and VC-touch
 
+The VC-touch is a MIDI footcontroller with 15 buttons and a large TFT touch screen.
+
 ![VC-touch](https://i.postimg.cc/KzftrF10/VC-touch.jpg)
 
-The VC-touch is a MIDI footcontroller with 15 buttons and a large TFT touch screen.
-It can be fully programmed both onboard and via an external editor for Mac and PC called VC-edit.
+The VC-mini is a small version of the VController with 3 buttons, 3 LEDs, 2 encoders and 1 LCD display.
 
 ![VC-mini](https://github.com/sixeight7/VController_v3/blob/master/Firmware/VC-edit/VC-mini.jpg)
 
-The VC-mini is a small version of the VController with 3 buttons, 3 LEDs, 2 encoders and 1 LCD display.
-Both the V-Controller and the VC-mini share the same code for the Teensy firmware and the editor (Qt)
+The VController is the original controller with 16 buttons, 12 LCDs and 12 LEDs.
 
 ![VController](https://github.com/sixeight7/VController_v3/blob/master/Firmware/VC-edit/VController_RGB.JPG)
 
-The VController is the original controller with 16 buttons, 12 LCDs and 12 LEDs.
+All can be fully programmed both onboard and via an external editor for Mac and PC called VC-edit.
+All devices share the same code for the Teensy firmware and the editor (Qt)
 
 # Device support
 A number of guitar modelers and synths are supported, where it actively read patch names and parameter states for the following devices:
