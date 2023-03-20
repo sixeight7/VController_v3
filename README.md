@@ -1,15 +1,15 @@
 # VController_v3
 Production model of the VController, VC-mini and VC-touch
 
-The VC-touch is a MIDI footcontroller with 15 buttons and a large TFT touch screen.
+The VC-touch is a MIDI footcontroller with 15 buttons and a large TFT touch screen:
 
 ![VC-touch](https://i.postimg.cc/KzftrF10/VC-touch.jpg)
 
-The VC-mini is a small version of the VController with 3 buttons, 3 LEDs, 2 encoders and 1 LCD display.
+The VC-mini is a small version of the VController with 3 buttons, 3 LEDs, 2 encoders and 1 LCD display:
 
 ![VC-mini](https://github.com/sixeight7/VController_v3/blob/master/Firmware/VC-edit/VC-mini.jpg)
 
-The VController is the original controller with 16 buttons, 12 LCDs and 12 LEDs.
+The VController is the original controller with 16 buttons, 12 LCDs and 12 LEDs:
 
 ![VController](https://github.com/sixeight7/VController_v3/blob/master/Firmware/VC-edit/VController_RGB.JPG)
 
