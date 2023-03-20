@@ -71,10 +71,6 @@ https://sixeightsoundcontrol.onlineweb.shop/
 # Support
 Please visit https://www.vguitarforums.com/smf/index.php?board=277.0 for additional information or for any questions you have regarding this project. Please post any questions on the board, where several users and builders can respond and help.
 
-I currently do not build any more V-Controllers to sell, so if you would like one you have to build it yourself. Visit vguitarforums.com to connect to other people who are building the same project.
-
-VC-mini's are built in small numbers. Also the PCB can be optained from me. Send me an e-mail at SixEightSoundControl@gmail.com to get more information on availability and pricing.
-
 I have invested thousands of hours in this project. You can support me here: https://www.paypal.me/sixeight
 
 
