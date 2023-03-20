@@ -196,7 +196,7 @@ void MD_base_class::check_sysex_delay() { // Will delay if last message was with
 
 // Calculate the Roland checksum
 uint8_t MD_base_class::calc_Roland_checksum(uint16_t sum) {
-  uint8_t checksum = 0x80 - (sum & 0x7F);
+  uint16_t checksum = 0x80 - (sum & 0x7F);
   return checksum & 0x7F;
 }
 

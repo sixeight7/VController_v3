@@ -36,11 +36,11 @@
 // Current version of Arduino: 1.8.9 and TeensyDuino: 1.46
 
 // Hardware of VController production model
-#include "hardware.h"
+//#include "hardware.h"
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII, disable debug!
 
 // Hardware of VC-mini rev. B (Teensy 3.6)
-//#include "hardware_VCmini_b.h"
+#include "hardware_VCmini_b.h"
 // Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
 
 // Hardware of VC-touch
@@ -90,8 +90,8 @@
 #endif
 
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 10
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 2
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 11
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 #include "debug.h"
 #include "globals.h"
@@ -341,7 +341,7 @@ void loop() {
   11-01-2021 SY-1000: all ctl, num, bank and gk ctl functions will also control the regular asdigns via CC #95
   14-01-2021 SY-1000: Expression pedals now also control assigns. There are changed to CC #94 to control
   23-01-2021 SY-1000: Added scene mode.
-  29-03-2021 SY-1000: weeks of debugging amd working around the quirks of the SY1000. Added scene assigns, use the SY1000 switches for scene selection with VC-mini and much more.
+  29-03-2021 SY-1000: weeks of debugging and working around the quirks of the SY1000. Added scene assigns, use the SY1000 switches for scene selection with VC-mini and much more.
   04-04-2021 SY-1000: Added harmony mode.
   10-04-2021 SY-1000: Added "change to all scenes" to SY1000 menu - to allow updating of changed parameter in all scenes!
   10-04-2021 Changed the memory division: now 150 patches can be stored. The number of commands is now 1737.
@@ -404,4 +404,13 @@ void loop() {
   05-12-2022 VC-edit: fixed multiple commands in "on page select" box not selecting properly, making editing hard.
   05-12-2022 Fixed bug that under certain conditions hangs the VController, VC-mini or VC-touch. Doing a String.substring of a string that is too small hangs the sketch!
   05-12-2022 Release of firmware 3.10.2
+  04-01-2023 VC-touch: Added pong game - can be controlled by expression pedal or guitar-to-midi!
+  06-01-2023 GR-55: added scene mode
+  09-01-2023 GR-55: added ctl pedal assigns and removed the regular cc assigns. The CTL and EXP SW function now fully work and also execute associated assigns.
+  07-03-2023 VC-mini: fixed MIDI PC labels not showing on BANKSELECT.
+  11-03-2023 VC-touch: fixed an issue where the switches would "hang" occasionaly if many switches were pressed at the same time.
+  13-03-2023 Added support for switch_holding for SONG, SETLIST, PAGE, ASSIGN, MIDI_PC for NEXT, PREV and bank up/down.
+  13-03-2023 GR55: VController no longer has space for the stored patch names of the lead, rhythm and other bank. Currently at 98% of FLASH memory. These patches can be selected, but the names are blank.
+  13-03-2023 VC-edit: fixed crash when opening parameter command for current device. Fixed some other minor bugs.
+  18-03-2023 VC-edit: fixed bug where user commands would be loaded double right after changing VC device in preferences.
   */

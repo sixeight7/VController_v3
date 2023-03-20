@@ -3,12 +3,17 @@
 #include "VController/leds.h"
 #include "VController/globals.h"
 
+#include <QDebug>
+#include <QJsonObject>
+#include <QJsonArray>
+
 void GR55_class::init()
 {
     device_name = "GR55";
     full_device_name = "Roland GR-55";
     patch_min = GR55_PATCH_MIN;
     patch_max = GR55_PATCH_MAX;
+    patch_max_as_stored_on_VC = 296;
     enabled = DEVICE_DETECT; // Default value
     my_LED_colour = 3; // Default value: blue
     MIDI_port_manual = MIDI_port_number(GR55_MIDI_PORT);
@@ -47,7 +52,7 @@ bool GR55_class::check_command_enabled(uint8_t cmd)
     case OPEN_NEXT_PAGE_OF_DEVICE:
     case TOGGLE_EXP_PEDAL:
     case MASTER_EXP_PEDAL:
-    //case SNAPSCENE:
+    case SNAPSCENE:
     //case LOOPER:
         return true;
     }
@@ -56,6 +61,8 @@ bool GR55_class::check_command_enabled(uint8_t cmd)
 
 QString GR55_class::number_format(uint16_t patch_no)
 {
+      bool bm = ((patch_no & BASS_MODE_NUMBER_OFFSET) == BASS_MODE_NUMBER_OFFSET);
+      patch_no &= 0x0FFF;
       QString Output = "";
       uint16_t patch_number_corrected = 0; // Need a corrected version of the patch number to deal with the funny numbering system of the GR-55
       uint16_t bank_number_corrected = 0; //Also needed, because with higher banks, we start counting again
@@ -94,10 +101,14 @@ QString GR55_class::number_format(uint16_t patch_no)
       // Finally add the patch number
       Output += "-" + QString::number((patch_number_corrected % 3) + 1);
 
+      if (bm) { // Is bass mode patch
+          Output.append("-BM");
+      }
       return Output;
 }
 
 struct GR55_parameter_struct { // Combines all the data we need for controlling a parameter in a device
+  uint8_t Ctl_function; // Control function number
   uint16_t Target; // Target of the assign as given in the assignments of the GR55 / GR55
   uint32_t Address; // The address of the parameter
   uint8_t NumVals; // The number of values for this parameter
@@ -121,57 +132,59 @@ struct GR55_parameter_struct { // Combines all the data we need for controlling 
 // All parameters that cannot be set from an assign have the target address at 0xFFF
 
 QVector<GR55_parameter_struct> GR55_parameters = {
-  {0x12B, 0x18000304, 2, "MFX", 1 | SUBLIST_FROM_BYTE2, GR55_MFX_COLOUR, false}, // 0
-  {0x12C, 0x18000305, 20, "MFX TYPE", 1, GR55_MFX_TYPE_COLOUR, false},
-  {0x0E6, 0x18000715, 2, "MOD", 63 | SUBLIST_FROM_BYTE2, GR55_MOD_COLOUR, false},
-  {0x0E7, 0x18000716, 14, "MOD TYPE", 63, GR55_MOD_TYPE_COLOUR, false},
-  {0x000, 0x18002003, 2, "SYNTH1 SW", 0, FX_GTR_TYPE, true},
-  {0x003, 0x18002005, 68, "PCM1 TONE OCT", 153, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
-  {0x03B, 0x18002103, 2, "SYNTH2 SW", 0, FX_GTR_TYPE, true},
-  {0x03E, 0x18002105, 68, "PCM2 TONE OCT", 153, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
-  {0x076, 0x1800100A, 2, "COSM GT SW", 0, FX_GTR_TYPE, true},
-  {0x081, 0x1800101D, 2, "12STRING SW", 0, FX_PITCH_TYPE, false},
-  {0x0D6, 0x18000700, 2, "AMP", 21 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, false}, // 10
-  {0xFFF, 0x18000701, 42, "AMP TP", 21, FX_AMP_TYPE, false},
-  {0x0D7, 0x18000702, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0D8, 0x18000703, 101, "AMP LVL", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0D9, 0x18000704, 3, "AMP GAIN SW", 141, FX_AMP_TYPE, false},
-  {0x0DA, 0x18000705, 2, "AMP SOLO SW", 0, FX_AMP_TYPE, false},
-  {0x0DC, 0x18000707, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0DD, 0x18000708, 101, "AMP MID", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0DE, 0x18000709, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0DF, 0x1800070A, 101, "AMP PRESC", SHOW_NUMBER, FX_AMP_TYPE, false},
-  {0x0E0, 0x1800070B, 2, "AMP BRIGHT", 0, FX_AMP_TYPE, false}, // 20
-  {0x0E1, 0x1800070C, 9, "SPKR TYPE", 144, FX_AMP_TYPE, false},
-  {0x128, 0x1800075A, 2, "NS SWITCH", 0, FX_FILTER_TYPE, false},
-  {0x1EC, 0x18000605, 2, "DLY SW", 129 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, false},
-  {0x1ED, 0x18000606, 7, "DLY TYPE", 129, FX_DELAY_TYPE, false},
-  {0x1F4, 0x1800060C, 2, "RVRB SW", 136 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, false},
-  {0x1F5, 0x1800060D, 5, "RVRB TYPE", 136, FX_REVERB_TYPE, false},
-  {0x1FC, 0x18000600, 2, "CHOR SW", 125 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE,  false},
-  {0x1FD, 0x18000601, 4, "CHOR TYPE", 125, FX_MODULATE_TYPE,  false},
-  {0x204, 0x18000611, 2, "EQ SWITCH", 0, FX_FILTER_TYPE, false},
-  {0x213, 0x18000234, 2, "TUN SW", 160 | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE, false}, // 30
-  {0x214, 0x18000235, 13, "TUNING", 160, FX_PITCH_TYPE, false},
-  {0x216, 0x18000230, 201, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_FILTER_TYPE, false},
-  {0xFFF, 0x18000011, 2, "CTL", 94 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000012, 16, "CTL SW", 94, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800001F, 10, "EXP", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000036, 10, "EXP ON", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800004D, 2, "EXP SW", 111 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800004E, 14, "EXP SW", 111, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x1800005B, 10, "GK VOL", 84, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x18000072, 14, "GK S1", 111, FX_DEFAULT_TYPE, false}, // 40
-  {0xFFF, 0x1800007F, 14, "GK S2", 111, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000007, 2, "GTR2MIDI", 0, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000008, 2, "G2M MODE", 77, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000009, 2, "G2M CHOMATIC", 0, FX_DEFAULT_TYPE, false},
-  {0xFFF, 0x02000016, 5, "GTR OUT", 79, FX_DEFAULT_TYPE, false},
-};
+    {6, 0x12B, 0x18000304,   2, "MFX", 1 | SUBLIST_FROM_BYTE2, GR55_MFX_COLOUR, false}, // 0
+    {0, 0x12C, 0x18000305,  20, "MFX TYPE", 1, GR55_MFX_TYPE_COLOUR, false},
+    {5, 0x0E6, 0x18000715,   2, "MOD", 63 | SUBLIST_FROM_BYTE2, GR55_MOD_COLOUR, false},
+    {0, 0x0E7, 0x18000716,  14, "MOD TYPE", 63, GR55_MOD_TYPE_COLOUR, false},
+    {10, 0x000, 0x18002003,   2, "SYNTH1 SW", 0, FX_GTR_TYPE, true},
+    {0, 0x003, 0x18002005,  68, "PCM1 OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
+    {11, 0x03B, 0x18002103,   2, "SYNTH2 SW", 0, FX_GTR_TYPE, true},
+    {0, 0x03E, 0x18002105,  68, "PCM2 OCT", 92, FX_GTR_TYPE, false}, // Not a perfect solution, as there is no minimal value
+    {12, 0x076, 0x1800100A,   2, "COSM GT SW", 0, FX_GTR_TYPE, true},
+    {13, 0xFFF, 0x18000232,   2, "NRML PU SW", 0, FX_GTR_TYPE, true},
+    {0, 0x081, 0x1800101D,   2, "12STR SW", 0, FX_PITCH_TYPE, false},
+    {4, 0x0D6, 0x18000700,   2, "AMP", 21 | SUBLIST_FROM_BYTE2, FX_AMP_TYPE, false}, // 10
+    {0, 0xFFF, 0x18000701,  42, "AMP TP", 21, FX_AMP_TYPE, false},
+    {0, 0x0D7, 0x18000702, 121, "AMP GAIN", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0D8, 0x18000703, 101, "AMP LVL", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0D9, 0x18000704,   3, "AMP GAIN", 141, FX_AMP_TYPE, false},
+    {0, 0x0DA, 0x18000705,   2, "AMP SOLO", 0, FX_AMP_TYPE, false},
+    {0, 0x0DC, 0x18000707, 101, "AMP BASS", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0DD, 0x18000708, 101, "AMP MID", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0DE, 0x18000709, 101, "AMP TREBLE", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0DF, 0x1800070A, 101, "AMP PRESC", SHOW_NUMBER, FX_AMP_TYPE, false},
+    {0, 0x0E0, 0x1800070B,   2, "AMP BRIGHT", 0, FX_AMP_TYPE, false}, // 20
+    {0, 0x0E1, 0x1800070C,   9, "SPKR TYPE", 144, FX_AMP_TYPE, false},
+    {0, 0x128, 0x1800075A,   2, "NS SWITCH", 0, FX_DYNAMICS_TYPE, false},
+    {7, 0x1EC, 0x18000605,   2, "DLY SW", 129 | SUBLIST_FROM_BYTE2, FX_DELAY_TYPE, false},
+    {0, 0x1ED, 0x18000606,   7, "DLY TYPE", 129, FX_DELAY_TYPE, false},
+    {0, 0x1F4, 0x1800060C,   2, "RVRB SW", 136 | SUBLIST_FROM_BYTE2, FX_REVERB_TYPE, false},
+    {0, 0x1F5, 0x1800060D,   5, "RVRB TYPE", 136, FX_REVERB_TYPE, false},
+    {8, 0x1FC, 0x18000600,   2, "CHOR SW", 125 | SUBLIST_FROM_BYTE2, FX_MODULATE_TYPE,  false},
+    {0, 0x1FD, 0x18000601,   4, "CHOR TYPE", 125, FX_MODULATE_TYPE,  false},
+    {0, 0x204, 0x18000611,   2, "EQ SWITCH", 0, FX_FILTER_TYPE, false},
+    {0, 0x213, 0x18000234,   2, "TUN SW", 160 | SUBLIST_FROM_BYTE2, FX_PITCH_TYPE, false}, // 30
+    {0, 0x214, 0x18000235,  13, "TUNING", 160, FX_PITCH_TYPE, false},
+    {0, 0x216, 0x18000230, 201, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_FILTER_TYPE, false},
+    {100, 0xFFF, 0x18000011,   2, "CTL", 94 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x18000012,  16, "CTL SW", 94, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x1800001F,  10, "EXP", 84, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x18000036,  10, "EXP ON", 84, FX_DEFAULT_TYPE, false},
+    {101, 0xFFF, 0x1800004D,   2, "EXP SW", 111 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x1800004E,  14, "EXP SW", 111, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x1800005B,  10, "GK VOL", 84, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x18000072,  14, "GK S1", 111, FX_DEFAULT_TYPE, false}, // 40
+    {0, 0xFFF, 0x1800007F,  14, "GK S2", 111, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x02000007,   2, "GTR2MIDI", 0, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x02000008,   2, "G2M MODE", 77, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x02000009,   2, "G2M CHOM", 0, FX_DEFAULT_TYPE, false},
+    {0, 0xFFF, 0x02000016,   5, "GTR OUT", 79, FX_DEFAULT_TYPE, false},
+    {0, 238, 0x1800071E,  14, "WAH PEDAL", 0, GR55_MOD_TYPE_COLOUR, false},
+  };
 
-#define GR55_EXP_SW 37
-#define GR55_EXP 35
-#define GR55_EXP_ON 36
+  #define GR55_EXP_SW 38
+  #define GR55_EXP 36
+  #define GR55_EXP_ON 37
 
 const uint16_t GR55_NUMBER_OF_PARAMETERS = GR55_parameters.size();
 
@@ -289,13 +302,18 @@ uint8_t GR55_class::min_value(uint16_t par_no)
 
 uint8_t GR55_class::get_number_of_assigns()
 {
-    return GR55_NUMBER_OF_ASSIGNS;
+    return GR55_NUMBER_OF_CONTROL_PEDALS + GR55_NUMBER_OF_SCENE_ASSIGNS;
 }
 
 QString GR55_class::read_assign_name(uint8_t assign_no)
 {
-    if (assign_no < GR55_NUMBER_OF_ASSIGNS)  return "ASSIGN " + QString::number(assign_no + 1);
-    else return "?";
+    char GR55_ctl_pedal_title[GR55_NUMBER_OF_CONTROL_PEDALS][7] = { "CTL", "EXP SW", "GK S1", "GK S2"};
+    if (assign_no < GR55_NUMBER_OF_CONTROL_PEDALS) return GR55_ctl_pedal_title[assign_no];
+
+    assign_no -= GR55_NUMBER_OF_CONTROL_PEDALS;
+    if (assign_no < GR55_NUMBER_OF_SCENE_ASSIGNS) return "SCENE ASGN " + QString::number(assign_no + 1);
+
+    return "--";
 }
 
 QString GR55_class::read_assign_trigger(uint8_t trigger_no)
@@ -307,6 +325,112 @@ QString GR55_class::read_assign_trigger(uint8_t trigger_no)
 uint8_t GR55_class::trigger_follow_assign(uint8_t assign_no)
 {
     return assign_no + 21; // Default cc numbers are 21 and up
+}
+
+QString GR55_class::get_patch_info(uint16_t number)
+{
+    uint16_t patch_no = (Device_patches[number][1] << 8) + Device_patches[number][2];
+    QString line = number_format(patch_no);
+    line.append("\t");
+    for (int s = 0; s < 8; s++) {
+        line.append("     scene ");
+        line.append(QString::number(s + 1));
+        line.append(": ");
+        line.append(read_scene_name_from_buffer(number, s));
+    }
+    return line;
+}
+
+QString GR55_class::read_scene_name_from_buffer(int number, uint8_t scene) const {
+  //if (check_snapscene_active(number, scene)) {
+    QString lbl = "";
+    int b = get_scene_index(scene) + GR55_SCENE_NAME_BYTE;
+    uint8_t last_char = 0;
+    for (uint8_t c = 0; c < 8; c++) {
+      if (Device_patches[number][b++] > 32) last_char = c;
+    }
+    b = get_scene_index(scene) + GR55_SCENE_NAME_BYTE;
+    for (uint8_t c = 0; c <= last_char; c++) {
+      if (Device_patches[number][b] < 128) lbl.append(static_cast<char>(Device_patches[number][b++]));
+      else lbl.append(' ');
+    }
+    return lbl;
+  //}
+  //else {
+  //  return "__";
+  //}
+}
+
+void GR55_class::store_scene_name_to_buffer(int number, uint8_t scene, QString lbl) {
+  int b = get_scene_index(scene) + GR55_SCENE_NAME_BYTE;
+  uint8_t len = lbl.length();
+  if (len > 8) len = 8;
+  for (uint8_t c = 0; c < len; c++) Device_patches[number][b++] = lbl.at(c).toLatin1();
+  for (uint8_t c = len; c < 8; c++) Device_patches[number][b++] = 0x20;
+}
+
+int GR55_class::get_scene_index(uint8_t scene) const {
+  //if (scene > 0) scene--;
+    return (scene * GR55_SCENE_SIZE) + GR55_COMMON_DATA_SIZE;
+}
+
+bool GR55_class::check_snapscene_active(const int number, const uint8_t scene) const {
+  if (scene > 7) return false;
+  int b = get_scene_index(scene) + GR55_SCENE_NAME_BYTE;
+  return ((Device_patches[number][b + GR55_SCENE_ACTIVE_BYTE] & (1 << scene)) != 0);
+}
+
+
+uint8_t GR55_class::supportPatchSaving()
+{
+    return 2;
+}
+
+void GR55_class::readPatchData(int index, int patch_no, const QJsonObject &json)
+{
+    Device_patches[index][0] = my_device_number + 1;
+    Device_patches[index][1] = patch_no >> 8;
+    Device_patches[index][2] = patch_no & 0xFF;
+
+    QJsonObject headerBlock = json["PatchHeader"].toObject();
+    if (!headerBlock.isEmpty()) {
+        for (int i = 3; i < 8; i++) {
+            int value = headerBlock["Header data"+ QString::number(i)].toInt();
+            Device_patches[index][i] = value;
+        }
+    }
+
+    for (uint8_t s = 0; s < 8; s++ ) {
+        QJsonObject sceneBlock = json["Scene" + QString::number(s + 1)].toObject();
+        if (!sceneBlock.isEmpty()) {
+            int b = get_scene_index(s);
+            for (int i = 0; i < GR55_SCENE_SIZE; i++) {
+                int value = sceneBlock["Data"+ numConv(i)].toInt();
+                Device_patches[index][b++] = value;
+            }
+        }
+    }
+}
+
+void GR55_class::writePatchData(int patch_no, QJsonObject &json) const
+{
+    QJsonObject headerBlock;
+    for (int i = 0; i < 8; i++) {
+        int value = Device_patches[patch_no][i];
+        headerBlock["Header data"+ QString::number(i)] = value;
+    }
+    json["PatchHeader"] = headerBlock;
+
+    QJsonObject sceneBlock;
+    for (uint8_t s = 0; s < 8; s++ ) {
+        sceneBlock["Name"] = read_scene_name_from_buffer(patch_no, s);
+        int b = get_scene_index(s);
+        for (int i = 0; i < GR55_SCENE_SIZE; i++) {
+            int value = Device_patches[patch_no][b++];
+            sceneBlock["Data"+ numConv(i)] = value;
+        }
+        json["Scene" + QString::number(s + 1)] = sceneBlock;
+    }
 }
 
 

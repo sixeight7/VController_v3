@@ -44,7 +44,7 @@ QPushButton:pressed { background-color: white; border-style: inset; }</string>
        <string notr="true"/>
       </property>
       <property name="currentIndex">
-       <number>2</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tab_PageCommands">
        <property name="autoFillBackground">

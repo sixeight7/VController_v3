@@ -23,8 +23,8 @@
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
 // Version should be the same as the version shown on the VController of VC-mini
 #define VCMINI_FIRMWARE_VERSION_MAJOR 3
-#define VCMINI_FIRMWARE_VERSION_MINOR 10
-#define VCMINI_FIRMWARE_VERSION_BUILD 2
+#define VCMINI_FIRMWARE_VERSION_MINOR 11
+#define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
 #define EXIT_CODE_REBOOT 777

@@ -71,6 +71,7 @@
 #define VC_SET_SEQ_PATTERN 19
 #define VC_INITIALIZE_DEVICE_PATCH 20
 #define VC_REQUEST_HARDWARE_VERSION 21
+#define VC_START_UPDATE_MODE 22
 
 // Communication between VC devices
 #define VC_SET_PATCH_NUMBER 101
@@ -383,6 +384,9 @@ void OnNoteOn(byte channel, byte note, byte velocity)
   SCO_bass_mode_note_on(note, velocity, channel, Current_MIDI_in_port | VCbridge_in_port[VCbridge_index]);
   MIDI_check_note_forwarding(note, velocity, channel, Current_MIDI_in_port, true);
   SCO_tempo_following_receive_note_on(note, velocity, channel, Current_MIDI_in_port | VCbridge_in_port[VCbridge_index]);
+#ifdef IS_VCTOUCH
+  if (pong_active) TFT_pong_receive_note_on(channel, note, velocity);
+#endif
 }
 
 void OnNoteOff(byte channel, byte note, byte velocity)
@@ -1506,6 +1510,9 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         break;
       case VC_REQUEST_HARDWARE_VERSION:
         MIDI_editor_send_hardware_version(VC_MODEL_NUMBER, VCedit_port);
+        break;
+      case VC_START_UPDATE_MODE:
+        reboot_program_mode();
         break;
     }
   }

@@ -81,6 +81,7 @@ struct menu_struct {
 #define SONG_PART_MIDI_MENU 19
 #define KATANA_MENU 20
 #define SY1000_MENU 21
+#define GR55_MENU 22
 
 #define DEVICE_SUBLIST 255
 #define PAGE_SUBLIST 254
@@ -102,6 +103,7 @@ struct menu_struct {
 #define SONG_ITEM4_SUBLIST 238
 #define SONG_ITEM5_SUBLIST 237
 #define TYPE_MODE_SUBLIST 236
+#define GR55_NUMBER_SUBLIST 235
 
 // The table below has an edited copy in VC-edit/Headers/vcsettings.h
 // Switch 12 should not be of type NONE or CMD_BACK. VC-mini will hang on timer in update_encoder_value when last item is empty.
@@ -370,7 +372,11 @@ const PROGMEM menu_struct menu[][15] = {
     { "Read MIDI clock", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Read_MIDI_clock_port }, // Switch 1
     { "Send MIDI clock", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Send_MIDI_clock_port }, // Switch 2
     { "Block detct msg", SET, 26, 0, NUMBER_OF_MIDI_PORTS + 1, &Setting.Block_identity_messages }, // Switch 3
+#ifdef IS_VCTOUCH
+    { "Play PONG", EXECUTE, 0, 0, 0, (void*)TFT_pong_startup }, // Switch 4
+#else
     { "", NONE }, // Switch 4
+#endif
     { "Bass mode G2M ch", SET, 0, 1, 16, &Setting.Bass_mode_G2M_channel }, // Switch 5
     { "Bass mode device", SET, DEVICE_SUBLIST, 0, NUMBER_OF_DEVICES - 1, &Setting.Bass_mode_device }, // Switch 6
     { "Bass mode CC", SET, 0, 0, 127, &Setting.Bass_mode_cc_number }, // Switch 7
@@ -527,6 +533,24 @@ const PROGMEM menu_struct menu[][15] = {
     { "", NONE }, // Switch 13 (LEFT)
     { "", NONE }, // Switch 14 (RIGHT)
   },
+
+  { // Menu 22 - GR55 menu
+    { "GR55 SCENE MNU", NONE }, // Menu title
+    { "Select scene:", SET, GR55_NUMBER_SUBLIST, 1, 8, &My_GR55.save_scene_number }, // Switch 1
+    { "Read scene",  EXECUTE, 0, 0, 0, (void*)GR55_save },// Switch 2
+    { "Change to all sc",  EXECUTE, 0, 0, 0, (void*)GR55_change_to_all_scenes }, // Switch 3
+    { "Rename",  EXECUTE, 0, 0, 0, (void*)GR55_rename }, // Switch 4
+    { "Exchange scenes", EXECUTE, 0, 0, 0, (void*)GR55_exchange }, // Switch 5
+    { "Clear scene", EXECUTE, 0, 0, 0, (void*)GR55_clear }, // Switch 6
+    { "Clear all scenes", EXECUTE, 0, 0, 0, (void*)GR55_clear_all }, // Switch 7
+    { "Quiet sc change", SET, 1, 0, 1, &My_GR55.mute_during_scene_change }, // Switch 8
+    { "Momentary inst", SET, 90, 0, 7, &My_GR55.scene_momentary_inst_state }, // Switch 9
+    { "Fix GR55 numbers", EXECUTE, 0, 0, 0, (void*)GR55_fix_numbers }, // Switch 10
+    { "", NONE }, // Switch 11
+    { "Cancel", EXECUTE, 0, 0, 0, (void*)menu_exit }, // Switch 12 (should not be of type NONE)
+    { "", NONE }, // Switch 13 (LEFT)
+    { "", NONE }, // Switch 14 (RIGHT)
+  },
 };
 
 
@@ -574,6 +598,9 @@ const PROGMEM char menu_sublist[][17] = {
 
   // Sublist 82 - 89: MIDI forwarding bidirectional settings
   "NONE", "Only rule 1", "Only rule 2", "Rule 1 and 2", "Only rule 3", "Rule 1 and 3", "Rule 2 and 3", "ALL RULES",
+
+  // Sublist 90 - 97: GR55 Momentary instruments
+  "NONE", "PCM1", "PCM2", "PCM1 + PCM2", "COSM INST", "NORMAL PU", "PCM2 + COSM", "COSM + NPU",
 };
 
 #define SUBLIST_COLOUR 4
@@ -727,6 +754,7 @@ void SY1000_change_to_all_scenes() {
 void SY1000_rename() {
   // Read scene name into Text_entry
   Text_entry = "";
+  My_SY1000.read_scene_name_from_buffer(My_SY1000.save_scene_number);
   for (uint8_t c = 0; c < 8; c++) Text_entry += My_SY1000.scene_label_buffer[c];
   Text_entry_length = 8;
   Main_menu_cursor = 1;
@@ -760,6 +788,53 @@ void SY1000_add_bass_string_assigns() {
   menu_exit();
 }
 
+void GR55_save() {
+  My_GR55.store_scene();
+  menu_exit();
+}
+
+void GR55_change_to_all_scenes() {
+  My_GR55.update_change_on_all_scenes();
+  menu_exit();
+}
+
+void GR55_rename() {
+  // Read scene name into Text_entry
+  Text_entry = "";
+  My_GR55.read_scene_name_from_buffer(My_GR55.save_scene_number);
+  for (uint8_t c = 0; c < 8; c++) Text_entry += My_GR55.scene_label_buffer[c];
+  Text_entry_length = 8;
+  Main_menu_cursor = 1;
+
+  start_keyboard(GR55_rename_done);
+}
+
+void GR55_rename_done() {
+  //My_GR55.store_scene_name_to_buffer(My_GR55.save_scene_number, Text_entry);
+  for (uint8_t c = 0; c < 8; c++) My_GR55.scene_label_buffer[c] = Text_entry[c];
+  My_GR55.store_scene_name_to_buffer(My_GR55.save_scene_number);
+}
+
+void GR55_exchange() {
+  My_GR55.exchange_scene(My_GR55.save_scene_number, My_GR55.current_snapscene);
+  menu_exit();
+}
+
+void GR55_clear() {
+  My_GR55.initialize_scene(My_GR55.save_scene_number);
+  menu_exit();
+}
+
+void GR55_clear_all() {
+  My_GR55.initialize_patch_space();
+  menu_exit();
+}
+
+void GR55_fix_numbers() {
+  My_GR55.fix_pc_in_all_patches();
+  menu_exit();
+}
+
 // ********************************* Section 3: Functions that make the menu work ********************************************
 void menu_open(uint8_t prev_page) { // Called when the menu is started the first time
   SC_set_enc1_acceleration(false);
@@ -769,6 +844,9 @@ void menu_open(uint8_t prev_page) { // Called when the menu is started the first
       break;
     case SY1000 + 1:
       current_menu = SY1000_MENU;
+      break;
+    case GR55 + 1:
+      current_menu = GR55_MENU;
       break;
     case SETLIST_ID:
       current_menu = SETLIST_MENU;
@@ -1024,6 +1102,9 @@ bool menu_find_custom_sublist_label(uint8_t sublist, uint16_t value, String &lab
     case SY1000_NUMBER_SUBLIST:
       My_SY1000.get_snapscene_title(My_SY1000.save_scene_number, label);
       return true;
+    case GR55_NUMBER_SUBLIST:
+      My_GR55.get_snapscene_title(My_GR55.save_scene_number, label);
+      return true;
     case SETLIST_SUBLIST:
       SCO_get_setlist_name(value, label);
       return true;
@@ -1121,6 +1202,11 @@ void menu_press(uint8_t Sw, bool go_up) { // Called when button for this menu is
       }
       if (current_menu == SY1000_MENU) {
         if (current_menu_switch == 1) SY1000_save();
+        else menu_exit();
+        return;
+      }
+      if (current_menu == GR55_MENU) {
+        if (current_menu_switch == 1) GR55_save();
         else menu_exit();
         return;
       }

@@ -571,6 +571,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
           case MIDI_PC:
             if (SP[Current_switch].Sel_type == BANKSELECT) {
               number = (midi_pc_bank_select_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position;
+              if (number > 0) number--;
               SP[Current_switch].PP_number = number % 128;
             }
             if (SP[Current_switch].Sel_type == NEXT) {

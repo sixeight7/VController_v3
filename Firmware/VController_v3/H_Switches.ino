@@ -136,11 +136,11 @@ uint8_t switch_released = 0; //Variable set when switch is released
 uint8_t switch_long_pressed = 0; //Variable set when switch is pressed long (check LONG_PRESS_TIMER_LENGTH for when this will happen)
 uint8_t switch_extra_long_pressed = 0; //Variable set when switch is pressed long (check LONG_PRESS_TIMER_LENGTH for when this will happen)
 uint8_t last_switch_pressed;
+uint8_t switch_for_release;
 bool switch_was_long_pressed = false;
 uint32_t multi_switch_booleans = 0;
 uint8_t multi_switch_pressed = 0;
 #define SPECIAL_KEY_COMBINATION 255 // Special value for multi_switch_pressed
-uint8_t Expr_ped_value = 0;
 signed int Enc_value = 0;
 uint8_t PC_value = 0;
 uint8_t Enc1_value = 0;
@@ -550,6 +550,7 @@ void SC_update_long_presses_and_hold() {
         }
         DEBUGMSG("Release while multiswitch_pressed > 0: " + String(switch_released));
       }
+      multi_switch_booleans = 0; // Clear them so the switch system never seems to hang when it misses a release.
     }
 
     if (switch_was_long_pressed) switch_released |= ON_LONG_PRESS; // Activate the proper release
@@ -565,7 +566,7 @@ void SC_update_long_presses_and_hold() {
     }
   }
 
-  if (switch_released > 0) {
+  if (switch_released > 0) { // Show debug info
     switch (switch_type) {
       case SW_TYPE_SWITCH:
         DEBUGMAIN("Switch released: " + String(switch_released) + " at " + String(micros() - time_switch_pressed));
@@ -582,13 +583,12 @@ void SC_update_long_presses_and_hold() {
       SP[switch_pressed].Pressed = true;
       update_LEDS = true;
       multi_switch_booleans |= (1 << (switch_pressed - 1)); // Set this bit
-
+      //switchWatchDogTimer = millis() + SWITCH_WATCHDOG_TIME;
 
       if (multi_switch_booleans & (1 << switch_pressed)) { // Switch on the right is also pressed
         DEBUGMAIN("Dual switches " + String(switch_pressed) + " and " + String(switch_pressed + 1) + " pressed");
         multi_switch_pressed = switch_pressed | ON_DUAL_PRESS;
         DEBUGMSG("MS pressed: " + String(multi_switch_pressed));
-
         switch_pressed = multi_switch_pressed;
       }
       else if ((switch_pressed > 1) && (multi_switch_booleans & (1 << (switch_pressed - 2)))) { // Switch on the left is also pressed
@@ -639,6 +639,7 @@ void SC_update_long_presses_and_hold() {
     Hold_time = 700;
     switch_held_times_triggered = 0;
     last_switch_pressed = switch_pressed; // Remember the button that was pressed
+    switch_for_release = switch_pressed;
     skip_release_and_hold_until_next_press = false;
   }
 

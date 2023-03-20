@@ -21,8 +21,8 @@
 #define SY1000_SCENE_SIZE 23
 #define SY1000_COMMON_DATA_SIZE 8
 
-#define INST_DATA_OFFSET 8
-#define SCENE_ASSIGN_BYTE_OFFSET 14
+#define SY1000_INST_DATA_OFFSET 8
+#define SY1000_SCENE_ASSIGN_BYTE_OFFSET 14
 #define SY1000_SCENE_NAME_BYTE 15
 
 class SY1000_class : public Device_class
@@ -42,6 +42,7 @@ public:
     virtual QString read_assign_name(uint8_t assign_no);
     virtual QString read_assign_trigger(uint8_t trigger_no);
     virtual uint8_t trigger_follow_assign(uint8_t assign_no);
+
     virtual QString get_patch_info(uint16_t number);
     virtual QString read_scene_name_from_buffer(int number, uint8_t scene) const;
     virtual void store_scene_name_to_buffer(int number, uint8_t scene, QString name);

@@ -164,6 +164,7 @@ bool Switchpad::update() {
     //delay(1);
 
     // Now read the row pins for this column
+    uint8_t numberOfSwitchesChanged = 0;
     for (uint8_t r = 0; r < numRows; r++) {
       uint8_t switchIndex = (r * numCols) + c;
       bool newState = digitalRead(rowPins[r]);
@@ -171,6 +172,7 @@ bool Switchpad::update() {
       if (newState != switchState[switchIndex]) {
         switchStateChanged = switchIndex + 1;
         switchState[switchIndex] = newState;
+        numberOfSwitchesChanged++;
       }
     }
 
@@ -187,7 +189,7 @@ bool Switchpad::update() {
 
     // Reset bounce delay timer
     bounceDelay = millis();
-    bitClear(SwitchPadStatusColumnChanged, c);
+    if (numberOfSwitchesChanged <= 1) bitClear(SwitchPadStatusColumnChanged, c);
     
     if (switchStateChanged > 0) {
       if (switchState[switchStateChanged - 1] == LOW) {

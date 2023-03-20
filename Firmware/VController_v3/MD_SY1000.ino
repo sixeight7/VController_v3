@@ -24,7 +24,6 @@
 #define SY1000_MIDI_PORT USBHMIDI_PORT
 #define SY1000_PATCH_MIN 0
 #define SY1000_PATCH_MAX 399
-#define SY1000_NUMBER_OF_ASSIGNS 16
 
 //Messages are abbreviated to just the address and the data bytes. Checksum is calculated automatically
 //Example: {0xF0, 0x41, 0x10, 0x00, 0x00, 0x00, 0x69, 0x12, 0x7F, 0x00, 0x00, 0x01, 0x01, 0x7F, 0xF7} is reduced to 0x7F000001, 0x01
@@ -118,7 +117,7 @@ FLASHMEM void MD_SY1000_class::init() { // Default values for variables
   INST_onoff[0] = 0;
   INST_onoff[1] = 0;
   INST_onoff[2] = 0;
-  nrml_pu_onoff = 0;
+  normal_pu_mute = 0;
   sysex_delay_length = 5; // minimum delay time between sysex messages (in msec).
   my_LED_colour = 11; // Default value: light blue
   my_snapscene_colour = 11;
@@ -237,7 +236,7 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
     }
 
     // Check for assign data
-    if (read_full_assign_number < 16) {
+    if (read_full_assign_number < SY1000_NUMBER_OF_ASSIGNS) {
       if (address == calculate_full_assign_address(read_full_assign_number)) read_full_assign(read_full_assign_number, address, sxdata, sxlength);
     }
 
@@ -835,7 +834,7 @@ FLASHMEM void MD_SY1000_class::check_inst_switch_states(const unsigned char* sxd
       DEBUGMSG("INST_type[2]:" + String(INST_type[2]));
     }
     if ((address == SY1000_GM_NORMAL_PU_SW) || (address == SY1000_BM_NORMAL_PU_SW)) {
-      nrml_pu_onoff = sxdata[sx_index(data3, 12)];  // Store the value
+      normal_pu_mute = sxdata[sx_index(data3, 12)];  // Store the value
       request_onoff = false;
       request_next_data_item();
     }
@@ -849,13 +848,13 @@ FLASHMEM void MD_SY1000_class::unmute() {
     write_sysex(SY1000_GM_INST1_SW, INST_onoff[0]); // Switch INST1 guitar on
     write_sysex(SY1000_GM_INST2_SW, INST_onoff[1]); // Switch INST2 guitar on
     write_sysex(SY1000_GM_INST3_SW, INST_onoff[2]); // Switch INST3 guitar on
-    write_sysex(SY1000_GM_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+    write_sysex(SY1000_GM_NORMAL_PU_SW, normal_pu_mute); // Switch normal pu on
   }
   else {
     write_sysex(SY1000_BM_INST1_SW, INST_onoff[0]); // Switch INST1 guitar on
     write_sysex(SY1000_BM_INST2_SW, INST_onoff[1]); // Switch INST2 guitar on
     write_sysex(SY1000_BM_INST3_SW, INST_onoff[2]); // Switch INST3 guitar on
-    write_sysex(SY1000_BM_NORMAL_PU_SW, nrml_pu_onoff); // Switch normal pu on
+    write_sysex(SY1000_BM_NORMAL_PU_SW, normal_pu_mute); // Switch normal pu on
   }
 }
 
@@ -1774,7 +1773,6 @@ const PROGMEM SY1000_assign_struct SY1000_assigns[] = {
 };
 
 const uint8_t SY1000_NUMBER_OF_CTL_FUNCTIONS = sizeof(SY1000_assigns) / sizeof(SY1000_assigns[0]);
-#define SY1000_NUMBER_OF_SCENE_ASSIGNS 8
 #define SY1000_TOTAL_NUMBER_OF_ASSIGNS SY1000_NUMBER_OF_CTL_FUNCTIONS + SY1000_NUMBER_OF_SCENE_ASSIGNS
 
 FLASHMEM uint32_t MD_SY1000_class::calculate_assign_address(uint8_t number) {
@@ -2060,7 +2058,7 @@ FLASHMEM void MD_SY1000_class::request_full_assign(uint8_t number) {
   DEBUGMSG("Requesting assign " + String(number));
   uint32_t my_address = calculate_full_assign_address(number);
   read_full_assign_number = number;
-  request_sysex(my_address, 43);
+  request_sysex(my_address, SY1000_NUMBER_OF_ASSIGN_BYTES_READ);
 }
 
 FLASHMEM void MD_SY1000_class::read_full_assign(uint8_t number, uint32_t address, const unsigned char* sxdata, short unsigned int sxlength) {
@@ -2181,11 +2179,11 @@ FLASHMEM uint32_t MD_SY1000_class::calculate_full_assign_address(uint8_t number)
 // Scene assigns - assigns used in scenes
 
 FLASHMEM void MD_SY1000_class::initialize_scene_assigns() {
-  for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) scene_assign_state[sa] = false;
+  for (uint8_t sa = 0; sa < SY1000_NUMBER_OF_SCENE_ASSIGNS; sa++) scene_assign_state[sa] = false;
 }
 
 FLASHMEM void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
-  if (number >= NUMBER_OF_SCENE_ASSIGNS) return;
+  if (number >= SY1000_NUMBER_OF_SCENE_ASSIGNS) return;
   uint8_t cc = number + SY1000_FIRST_SCENE_ASSIGN_SOURCE_CC;
   scene_assign_state[number] ^= 1; // Toggle state
 
@@ -2200,21 +2198,21 @@ FLASHMEM void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
 }
 
 FLASHMEM void MD_SY1000_class::set_scene_assign_states(uint8_t my_byte) {
-  for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
+  for (uint8_t sa = 0; sa < SY1000_NUMBER_OF_SCENE_ASSIGNS; sa++) {
     scene_assign_state[sa] = bitRead(my_byte, sa);
   }
 }
 
 FLASHMEM uint8_t MD_SY1000_class::read_scene_assign_state() {
   uint8_t my_byte = 0;
-  for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
+  for (uint8_t sa = 0; sa < SY1000_NUMBER_OF_SCENE_ASSIGNS; sa++) {
     bitWrite(my_byte, sa, scene_assign_state[sa]);
   }
   return my_byte;
 }
 
 FLASHMEM void MD_SY1000_class::check_scene_assigns_with_new_state(uint8_t new_byte) {
-  for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
+  for (uint8_t sa = 0; sa < SY1000_NUMBER_OF_SCENE_ASSIGNS; sa++) {
     bool new_state = bitRead(new_byte, sa);
     if (scene_assign_state[sa] != new_state) toggle_scene_assign(sa);
   }
@@ -2222,7 +2220,7 @@ FLASHMEM void MD_SY1000_class::check_scene_assigns_with_new_state(uint8_t new_by
 
 FLASHMEM void MD_SY1000_class::show_scene_assign_LEDs() {
   if (switch_mode != MODE_SCENE_ASSIGN) return;
-  for (uint8_t sa = 0; sa < NUMBER_OF_SCENE_ASSIGNS; sa++) {
+  for (uint8_t sa = 0; sa < SY1000_NUMBER_OF_SCENE_ASSIGNS; sa++) {
     if (scene_assign_state[sa] == 1) set_LED_colour(sa, SY1000_SCENE_ASSIGN_COLOUR);
     else set_LED_colour(sa, 0);
   }
@@ -2266,8 +2264,8 @@ FLASHMEM void MD_SY1000_class::show_scene_assign_LEDs() {
 #define SY1000_SCENE_SIZE 23
 #define SY1000_COMMON_DATA_SIZE 8
 
-#define INST_DATA_OFFSET 8
-#define SCENE_ASSIGN_BYTE_OFFSET 14
+#define SY1000_INST_DATA_OFFSET 8
+#define SY1000_SCENE_ASSIGN_BYTE 14
 #define SY1000_SCENE_NAME_BYTE 15
 
 struct SY1000_scene_parameter_struct { // Combines all the data we need for controlling a parameter in a device
@@ -2634,7 +2632,7 @@ FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene)
   INST_type[1] = read_scene_data(new_scene, INST2_TYPE_ITEM);
   INST_onoff[2] = read_scene_data(new_scene, INST3_SW_ITEM);
   INST_type[2] = read_scene_data(new_scene, INST3_TYPE_ITEM);
-  nrml_pu_onoff = read_scene_data(new_scene, NORM_GTR_ITEM);
+  normal_pu_mute = read_scene_data(new_scene, NORM_GTR_ITEM);
   uint8_t prev_inst_type[3];
   prev_inst_type[0] = read_scene_data(prev_scene, INST1_TYPE_ITEM);
   prev_inst_type[1] = read_scene_data(prev_scene, INST2_TYPE_ITEM);
@@ -2654,7 +2652,7 @@ FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene)
     if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
     bool inst_changed = (INST_type[inst] != prev_inst_type[inst]);
     for (uint8_t par = 0; par < SY1000_NUMBER_OF_INST_PARAMETERS; par++) {
-      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + INST_DATA_OFFSET;
+      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + SY1000_INST_DATA_OFFSET;
       my_shift = SY1000_scene_inst_parameters[inst_type_index][par].Bit_address & 0x0F;
       my_mask = SY1000_scene_inst_parameters[inst_type_index][par].Bit_mask << my_shift;
 
@@ -2693,7 +2691,7 @@ FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene)
   }
 
   DEBUGMAIN("Check scene assigns");
-  check_scene_assigns_with_new_state(SY1000_patch_buffer[index_new + SCENE_ASSIGN_BYTE_OFFSET]);
+  check_scene_assigns_with_new_state(SY1000_patch_buffer[index_new + SY1000_SCENE_ASSIGN_BYTE]);
   last_loaded_scene = new_scene;
 
   addr_index = 0;
@@ -2703,7 +2701,7 @@ FLASHMEM bool MD_SY1000_class::load_scene(uint8_t prev_scene, uint8_t new_scene)
     if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
     bool inst_changed = (INST_type[inst] != prev_inst_type[inst]);
     for (uint8_t par = 0; par < SY1000_NUMBER_OF_INST_PARAMETERS; par++) {
-      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + INST_DATA_OFFSET;
+      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + SY1000_INST_DATA_OFFSET;
       my_shift = SY1000_scene_inst_parameters[inst_type_index][par].Bit_address & 0x0F;
       my_mask = SY1000_scene_inst_parameters[inst_type_index][par].Bit_mask << my_shift;
 
@@ -2827,7 +2825,7 @@ FLASHMEM void MD_SY1000_class::check_delta_and_update_scenes() {
     if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
     bool inst_changed = (new_inst_type[inst] != prev_inst_type[inst]);
     for (uint8_t par = 0; par < SY1000_NUMBER_OF_INST_PARAMETERS; par++) {
-      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + INST_DATA_OFFSET;
+      my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + SY1000_INST_DATA_OFFSET;
       my_shift = SY1000_scene_inst_parameters[inst_type_index][par].Bit_address & 0x0F;
       my_mask = SY1000_scene_inst_parameters[inst_type_index][par].Bit_mask << my_shift;
 
@@ -2872,7 +2870,7 @@ FLASHMEM void MD_SY1000_class::check_delta_and_update_scenes() {
   }
 
   /*DEBUGMAIN("Check scene assigns");
-    check_scene_assigns_with_new_state(SY1000_patch_buffer[index_new + SCENE_ASSIGN_BYTE_OFFSET]);
+    check_scene_assigns_with_new_state(SY1000_patch_buffer[index_new + SY1000_SCENE_ASSIGN_BYTE]);
     last_loaded_scene = new_scene;
     DEBUGMAIN("Done!");*/
 }
@@ -2907,7 +2905,7 @@ FLASHMEM void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) 
     uint8_t inst_type_index = INST_type[inst];
     if ((bass_mode) && (inst_type_index > 2)) inst_type_index += 5; // jump from inst 3 to inst 8 for Bass mode
 
-    my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + INST_DATA_OFFSET;
+    my_byte = (SY1000_scene_inst_parameters[inst_type_index][par].Bit_address >> 4) + (inst * 2) + SY1000_INST_DATA_OFFSET;
     my_shift = SY1000_scene_inst_parameters[inst_type_index][par].Bit_address & 0x0F;
     my_mask = SY1000_scene_inst_parameters[inst_type_index][par].Bit_mask;
     DEBUGMAIN("INST" + String(inst + 1) + ": item:" + String(par) + ", my_byte:" + String(my_byte));
@@ -2929,7 +2927,7 @@ FLASHMEM void MD_SY1000_class::read_scene_message(uint8_t number, uint8_t data) 
     read_scene_midi_timer = 0;
     MIDI_enable_device_check();
 
-    scene_data_buffer[SCENE_ASSIGN_BYTE_OFFSET] = read_scene_assign_state();
+    scene_data_buffer[SY1000_SCENE_ASSIGN_BYTE] = read_scene_assign_state();
 
     if (save_scene_number == 0) return;
     if (save_scene_number < 9) { // Copy scene_data_buffer to current_scene
@@ -3059,7 +3057,7 @@ FLASHMEM void MD_SY1000_class::load_patch(uint16_t number) {
     last_loaded_scene = 0;
   }
   current_snapscene = last_loaded_scene;
-  uint8_t index = get_scene_index(current_snapscene) + SCENE_ASSIGN_BYTE_OFFSET;
+  uint8_t index = get_scene_index(current_snapscene) + SY1000_SCENE_ASSIGN_BYTE;
   set_scene_assign_states(SY1000_patch_buffer[index]);
   DEBUGMSG("SY1000 patch loaded from EEPROM");
   //MIDI_debug_sysex(SY1000_patch_buffer, VC_PATCH_SIZE, 255, true); // Show contents of patch buffer

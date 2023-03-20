@@ -90,6 +90,12 @@ void main_switch_control()  // Checks if a button has been pressed and check out
       SCO_global_tuner_stop();
       SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_LONG_PRESS | SKIP_HOLD);
     }
+#ifdef IS_VCTOUCH
+    else if (pong_active) {
+      TFT_pong_switch_pressed(switch_pressed);
+      SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_LONG_PRESS | SKIP_HOLD);
+    }
+#endif
     else { // When switch is pressed, set current_cmd_switch_action to SWITCH_PRESSED or SWITCH_PRESSED_REPEAT and let current_cmd point to the first command for this switch
       if (switch_pressed & ON_DUAL_PRESS) current_cmd_switch_action = SWITCH_DUAL_PRESSED;
       else current_cmd_switch_action = SWITCH_PRESSED;
@@ -246,6 +252,7 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Data2 = cmd->Data2;
   uint8_t new_mode;
   uint8_t pg;
+  String msg;
 
   DEBUGMAIN("Execute command " + String(Type) + " for device " + String(Dev));
 
@@ -353,6 +360,9 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if ((Data1 == NEXT) || (Data1 == PREV)) {
           MIDI_send_PC(SP[Sw].PP_number, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
           MIDI_update_PC_ledger(SP[Sw].PP_number, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2), true);
+          msg = "PC ";
+          LCD_add_3digit_number(SP[Sw].PP_number, msg);
+          LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
         }
         if (Data1 == BANKSELECT) {
           MIDI_send_PC(SP[Sw].PP_number, cmd->Value2, MIDI_set_port_number_from_menu(cmd->Value3));
@@ -712,6 +722,9 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if (Dev == SY1000) {
           My_SY1000.save_scene();
         }
+        if (Dev == GR55) {
+          My_GR55.save_scene();
+        }
         switch_controlled_by_master_exp_pedal = 0;
         break;
     }
@@ -827,19 +840,21 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
   uint8_t Type = cmd->Type;
   uint8_t Data1 = cmd->Data1;
   uint8_t Data2 = cmd->Data2;
-  uint16_t pnumber;
+  //uint16_t pnumber;
+  bool execute_held = false;
 
   DEBUGMSG("Switch held -> execute command " + String(Type) + " for device " + String(Dev));
 
   if (Dev < NUMBER_OF_DEVICES) {
     switch (Type) {
       case PATCH:
-        if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_next_patch_number(-1);
+        if ((Data1 == PREV) || (Data1 == NEXT) || (Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
+        /*if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_next_patch_number(-1);
         else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_prev_next_patch_number(1);
         else break;
         Device[Dev]->patch_select_pressed(pnumber, Sw);
         mute_all_but_me(Dev); // mute all the other devices
-        update_page = RELOAD_PAGE;
+        update_page = RELOAD_PAGE;*/
         break;
       case PARAMETER:
         if ((Data2 == STEP) || (Data2 == UPDOWN)) {
@@ -856,6 +871,14 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
           SC_skip_release_and_hold_until_next_press(SKIP_LONG_PRESS);
           if (SP[Sw].Latch == UPDOWN) updown_direction_can_change = false;
         }
+        return;
+      case PAR_BANK_UP:
+      case PAR_BANK_DOWN:
+        execute_held = true;
+        break;
+      case ASSIGN:
+        if ((Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
+        
         break;
     }
   }
@@ -863,13 +886,24 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
     switch (Type) {
       case MENU:
         menu_press_hold(Sw);
-        break;
+        return;
+      case PAGE:
+      case MIDI_PC:
+         if ((Data1 == PREV) || (Data1 == NEXT) || (Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
+         break;
       case MIDI_CC:
         if (first_cmd) SCO_CC_held(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         SC_skip_release_and_hold_until_next_press(SKIP_LONG_PRESS);
+        return;
+      case SETLIST:
+        if ((Data1 == SL_NEXT) || (Data1 == SL_PREV) || (Data1 == SL_BANKUP) || (Data1 == SL_BANKDOWN)) execute_held = true;
+        break;
+      case SONG:
+        if ((Data1 == SONG_NEXT) || (Data1 == SONG_PREV) || (Data1 == SONG_BANKUP) || (Data1 == SONG_BANKDOWN)) execute_held = true;
         break;
     }
   }
+  if (execute_held) SCO_execute_command(Sw, cmd, first_cmd);
 }
 
 void mute_all_but_me(uint8_t my_device) {
@@ -1290,7 +1324,7 @@ uint8_t SCO_get_page_min() {
 
 uint8_t SCO_get_page_max() {
   if (SCO_setlist_active(SETLIST_TARGET_PAGE)) return Number_of_setlist_items - 1;
-  return Number_of_pages - 1;
+  return Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
 }
 
 uint8_t SCO_get_page_number(uint8_t number) {
@@ -1385,9 +1419,9 @@ void SCO_page_up_down(signed int delta) {
 
 void SC_page_bank_updown(signed int delta, uint8_t bank_size) {
 
-  uint16_t page_max;
-  if (SCO_setlist_active(SETLIST_TARGET_PAGE)) page_max = Number_of_setlist_items - 1;
-  else page_max = Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
+  uint16_t page_max = SCO_get_page_max();
+  //if (SCO_setlist_active(SETLIST_TARGET_PAGE)) page_max = Number_of_setlist_items - 1;
+  //else page_max = Number_of_pages + LAST_FIXED_CMD_PAGE - FIRST_SELECTABLE_FIXED_CMD_PAGE;
 
   if (device_in_bank_selection != PAGE_BANK_SELECTION_IN_PROGRESS) {
     device_in_bank_selection = PAGE_BANK_SELECTION_IN_PROGRESS; // Use of static variable device_in_bank_selection will make sure only one device is in bank select mode.

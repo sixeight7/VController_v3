@@ -3,7 +3,6 @@
 #include "VController/config.h"
 #include "VController/leds.h"
 #include "VController/globals.h"
-#include "VController/globals.h"
 
 #include <QDebug>
 #include <QJsonObject>
@@ -64,7 +63,7 @@ QString SY1000_class::number_format(uint16_t patch_no)
 {
    bool bm = ((patch_no & BASS_MODE_NUMBER_OFFSET) == BASS_MODE_NUMBER_OFFSET);
    patch_no &= 0x0FFF;
-    QString numberString = "";
+   QString numberString = "";
    if (patch_no < 200) numberString.append("U");
    else numberString.append("P");;
    uint8_t bank_no = ((patch_no % 200) / 4) + 1;

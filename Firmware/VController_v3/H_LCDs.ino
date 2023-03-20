@@ -8,6 +8,7 @@
 // Section 5: Virtual LED functions
 // Section 6: TFT functions
 // Section 7: TFT On-screen Keyboard
+// Section 8: TFT pong game
 
 // Functions for LCD control
 // Main LCD is a large 16x2 LCD display with a serial i2c module attached
@@ -241,7 +242,7 @@ String Current_device_name = "";
 DMAMEM char main_lcd_title[MAIN_LCD_DISPLAY_SIZE + 1] = { ' ' }; // Text that is show on the main display from the menu on line 1
 DMAMEM char main_lcd_label[MAIN_LCD_DISPLAY_SIZE + 1] = { ' ' }; // Text that is show on the main display from the menu on line 2
 uint8_t Main_menu_cursor = 0; // Position of main menu cursor. Zero = off.
-DMAMEM char lcd_title[LCD_DISPLAY_SIZE + 1]= { ' ' }; // char array reserved for individual display titles
+DMAMEM char lcd_title[LCD_DISPLAY_SIZE + 1] = { ' ' }; // char array reserved for individual display titles
 DMAMEM char lcd_label[LCD_DISPLAY_SIZE + 1] = { ' ' }; // char array reserved for individual display labels
 DMAMEM char lcd_mem[NUMBER_OF_DISPLAYS + 1][2][LCD_DISPLAY_SIZE + 1] = { ' ' }; // Memory for individual displays
 
@@ -251,6 +252,7 @@ uint16_t Current_patch_number = 0;              // Patchnumber displayed in the 
 String Display_number_string; // Placeholder for patchnumbers on display
 uint8_t my_looper_lcd = 0; // The LCD that will show the looper progress bar (0 is no display)
 bool backlight_on[NUMBER_OF_DISPLAYS] = {false}; // initialize all backlights off
+bool pong_active = false;
 
 byte arrow_up[8] = { // The character for the UP arrow
   0b00100,
@@ -401,7 +403,7 @@ void setup_LCD_control()
 
 void main_LCD_control()
 {
-  if (!on_screen_keyboard_active) {
+  if ((!on_screen_keyboard_active) && (!pong_active)) {
 
     if (update_main_lcd) {
       DEBUGMSG("Refreshing main display");
@@ -451,6 +453,7 @@ void main_LCD_control()
 
 #ifdef IS_VCTOUCH
   touch.loop();
+  if (pong_active) TFT_pong_update();
 #endif
 }
 
@@ -489,7 +492,6 @@ void LCD_update_top_line() {
   }
 
   // Show patchnumbers and device name on top line
-  LCD_set_combined_patch_number_and_name();
   String topline = "";
   String msg = "";
 
@@ -607,6 +609,7 @@ void LCD_fill_line_main_display(uint8_t setting, String &line) {
       if (Current_device < NUMBER_OF_DEVICES) line += Device[Current_device]->current_patch_name;
       break;
     case MD_SHOW_PATCHES_COMBINED:
+      LCD_set_combined_patch_name();
       line += Combined_patch_name; // Show the combined patchname
       break;
     case MD_SHOW_3_SWITCH_LABELS:
@@ -630,6 +633,7 @@ void LCD_fill_line_main_display(uint8_t setting, String &line) {
       if (l1 > 0) Device[Current_device]->get_snapscene_label(l1, line);
       break;
     case MD_SHOW_ALL_PATCH_NUMBERS:
+      LCD_set_combined_patch_number();
       line = Current_patch_number_string;
       break;
     case MD_SHOW_PAGE_NUMBER:
@@ -690,17 +694,15 @@ bool LCD_check_main_display_show_patchname() {
   return false;
 }
 
-void LCD_set_combined_patch_number_and_name() {
+void LCD_set_combined_patch_number() {
   // Here we determine what to show on the main display, based on what devices are active
   uint8_t number_of_active_devices = 0;
   Current_patch_number_string = "";
-  String patch_names[NUMBER_OF_DEVICES]; //Array of strings for the patchnames
 
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
     if (Device[d]->is_on) {
       Device[d]->display_patch_number_string(); // Adds the device name to patch number string
       Current_patch_number_string += PATCH_NUMBER_SEPERATOR; //Add a seperation sign in between
-      patch_names[number_of_active_devices] = Device[d]->current_patch_name; //Add patchname to string
       number_of_active_devices++;
     }
   }
@@ -718,6 +720,20 @@ void LCD_set_combined_patch_number_and_name() {
   if ((device_in_bank_selection > 0) && (device_in_bank_selection <= NUMBER_OF_DEVICES)) {
     Current_patch_number_string = "";
     Device[device_in_bank_selection - 1]->display_patch_number_string();
+  }
+}
+
+
+void LCD_set_combined_patch_name() {
+  // Here we determine what to show on the main display, based on what devices are active
+  uint8_t number_of_active_devices = 0;
+  String patch_names[NUMBER_OF_DEVICES]; //Array of strings for the patchnames
+
+  for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    if (Device[d]->is_on) {
+      patch_names[number_of_active_devices] = Device[d]->current_patch_name; //Add patchname to string
+      number_of_active_devices++;
+    }
   }
 
   // Set combined patchname
@@ -887,15 +903,15 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         msg = char(CHAR_QUARTER_NOTE) + String(SP[sw].PP_number);
         break;
       case MIDI_PC:
-        if (SP[sw].Sel_type == SELECT) {
+        if ((SP[sw].Sel_type == SELECT) || (SP[sw].Sel_type == BANKSELECT)) {
           msg = 'P';
           LCD_add_3digit_number(SP[sw].PP_number, msg);
         }
         if (SP[sw].Sel_type == NEXT) {
-          msg = "NEXT ";
+          msg = "PC+  ";
         }
         if (SP[sw].Sel_type == PREV) {
-          msg = "PREV ";
+          msg = "PC-  ";
         }
         break;
       case MIDI_CC:
@@ -986,6 +1002,8 @@ void LCD_set_length(String & msg, uint8_t length) {
 void LCD_show_popup_label(String message, uint16_t time)
 // Will display a status message on the main display
 {
+  if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   LCD_main_set_label(message);
   LCD_print_main_lcd_txt();
   if (SC_switch_is_expr_pedal()) messageTimer = millis() + LEDBAR_TIMER_LENGTH;
@@ -996,6 +1014,8 @@ void LCD_show_popup_label(String message, uint16_t time)
 void LCD_show_popup_title(String message, uint16_t time)
 // Will display a status message on the main display
 {
+  if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   LCD_main_set_title(message);
   LCD_print_main_lcd_txt();
   if (SC_switch_is_expr_pedal()) messageTimer = millis() + LEDBAR_TIMER_LENGTH;
@@ -1163,6 +1183,7 @@ const char LCD_End[] = "END";
 
 void LCD_update(uint8_t sw, bool do_show) {
   if (on_screen_keyboard_active) return;
+  if (pong_active) return;
 
   // Will update a specific display based on the data in the SP array
   if (sw == 0) return;
@@ -1386,7 +1407,7 @@ void LCD_update(uint8_t sw, bool do_show) {
         //LCD_print_lcd_txt(sw);
         break;
       case SAVE_PATCH:
-        if (Dev == SY1000) LCD_add_title("<SCENE MENU>");
+        if ((Dev == SY1000) || (Dev == GR55)) LCD_add_title("<SCENE MENU>");
         else LCD_add_title("<SAVE PATCH>");
         LCD_add_label(Device[Dev]->device_name);
         //LCD_print_lcd_txt(sw);
@@ -1621,7 +1642,7 @@ void LCD_update(uint8_t sw, bool do_show) {
           else LCD_add_title(" START [STOP]");
         }
         LCD_add_label(SP[sw].Label);
-        
+
         break;
       default:
         //LCD_print_lcd_txt(sw);
@@ -2242,7 +2263,7 @@ void TFT_handleTouch(int8_t contacts, GTPoint *points) {
   if (contacts > 0) {
     if ((!touch_active) && (contacts == 1)) {
       touch_active = true;
-      if (!on_screen_keyboard_active) {
+      if ((!on_screen_keyboard_active) && (!pong_active)) {
         last_touch_x_pos = points[0].x_lsb + (points[0].x_msb << 8);
         last_touch_y_pos = points[0].y_lsb + (points[0].y_msb << 8);
         uint8_t sw = TFT_checkTouchButton(last_touch_x_pos, last_touch_y_pos);
@@ -2281,7 +2302,7 @@ void TFT_handleTouch(int8_t contacts, GTPoint *points) {
     }
   }
   else {
-    if (!on_screen_keyboard_active) {
+    if ((!on_screen_keyboard_active) && (!pong_active)) {
       SC_remote_switch_released(last_touch_switch_pressed, true);
     }
     touch_active = false;
@@ -2346,6 +2367,7 @@ void TFT_switch_off_main_window() {
 
 void TFT_update_LED(uint8_t number, uint16_t colour) {
   if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   if (TFT_label_colour[number] == colour) return;
   tft.Canvas_Image_Start_address(layer1_start_addr);
   tft.Main_Window_Start_XY(0, 0);
@@ -2582,6 +2604,7 @@ bool TFT_check_menu_pressed(uint16_t x_pos, uint16_t y_pos) {
 
 void TFT_show_bluetooth_state() {
   if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   char bt_char;
   uint16_t bt_colour;
   if (Setting.BLE_mode != 0) bt_char = '"';
@@ -2593,6 +2616,7 @@ void TFT_show_bluetooth_state() {
 
 void TFT_show_wifi_state() {
   if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   char wifi_char;
   uint16_t wifi_colour;
   if (Setting.WIFI_mode == 1) wifi_char = '!';
@@ -2605,6 +2629,7 @@ void TFT_show_wifi_state() {
 
 void TFT_show_rtpmidi_state() {
   if (on_screen_keyboard_active) return;
+  if (pong_active) return;
   char rtpmidi_char;
   if (Setting.WIFI_mode > 0) rtpmidi_char = '#';
   else rtpmidi_char = ' ';
@@ -3112,6 +3137,407 @@ void write_hex_code(uint8_t number) {
   Serial.print(String(number & 0xF, HEX));
   Serial.print(", ");
 }
+
+
+// ********************************* Section 8: TFT Pong game ********************************************
+
+// Thanks to Chinzin Nazar, https://hackernoon.com/how-i-developed-the-classic-pong-game-on-an-arduino-board
+// GAME vars:
+
+#define PONG_FIELD_X_TOP 256
+#define PONG_FIELD_Y_TOP 0
+#define PONG_FIELD_X_BOTTOM 1023
+#define PONG_FIELD_Y_BOTTOM 398
+#define PONG_BAT_WIDTH 8
+#define PONG_BAT_HEIGHT 40
+#define PONG_BAT_X_OFFSET 50
+#define PONG_BALL_RADIUS 5
+#define PONG_SCORE_MARGIN 25
+
+#define TFT_PONG_CLEAR_HINT 10000
+
+// scores:
+int player_score;
+int enemy_score;
+
+// player:
+const int player_position_X = PONG_FIELD_X_TOP + PONG_BAT_X_OFFSET; // static
+int player_position_Y, player_new_position_Y;
+uint32_t player_last_move_time;
+uint32_t player_speed_of_moving; // update time in ms
+
+// enemy:
+const int enemy_position_X = PONG_FIELD_X_BOTTOM - PONG_BAT_X_OFFSET - PONG_BAT_WIDTH; // static
+int enemy_position_Y;
+uint8_t enemy_skill;
+int enemy_random_deviation;
+
+uint32_t enemy_last_move_time;
+uint32_t enemy_speed_of_moving; // update time in ms
+
+// ball:
+int ball_position_X;
+float ball_position_Y;
+int ball_direction_X;
+float ball_direction_Y;
+int pong_speed;
+uint32_t ball_last_move_time;
+uint32_t ball_speed_of_moving;
+float ball_acceleration;
+int hint_position;
+bool hint_as_note;
+
+void TFT_pong_startup() {
+  pong_active = true;
+  player_score = 0;
+  player_speed_of_moving = 2000;
+  enemy_score = 0;
+  enemy_speed_of_moving = 20000; //update time in ms
+  pong_speed = 1;
+  enemy_skill = 5;
+  enemy_random_deviation = 0;
+  ball_speed_of_moving = 20000;
+  player_position_Y = PONG_FIELD_Y_TOP + 1;
+  player_new_position_Y = player_position_Y;
+  player_last_move_time = 0;
+  enemy_position_Y = PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT - 1;
+  enemy_last_move_time = 0;
+  ball_position_X = PONG_FIELD_X_BOTTOM - PONG_BAT_X_OFFSET - PONG_BAT_WIDTH - (PONG_BALL_RADIUS * 2);
+  ball_position_Y = (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP) / 2.0 + PONG_FIELD_Y_TOP;
+  ball_direction_X = -3;
+  TFT_pong_restart_game();
+  hint_position = TFT_pong_predict_position();
+  hint_as_note = true;
+  //TFT_pong_draw_bat(hint_position, player_position_X - 40, Blue);
+  TFT_pong_show_hint(hint_position);
+}
+
+void TFT_pong_restart_game() {
+  // ball:
+
+  ball_direction_Y = map(generate_random_number(), 0, 127, -50, 50);
+  ball_last_move_time = micros() + 3000000; // Wait three seconds before starting
+  ball_acceleration = 1;
+  //enemy_last_move_time = ball_last_move_time;
+
+  TFT_pong_draw_field();
+  TFT_pong_draw_center_line();
+  TFT_pong_show_score(player_score, PONG_FIELD_X_TOP - 128 - PONG_SCORE_MARGIN);
+  TFT_pong_show_score(enemy_score, PONG_FIELD_X_BOTTOM + PONG_SCORE_MARGIN);
+  TFT_pong_show_speed();
+  TFT_pong_move_player_bat();
+  TFT_pong_move_enemy_bat();
+}
+
+void TFT_pong_close() {
+  TFT_fillScreen(Black);
+  TFT_draw_main_grid();
+  LCD_clear_memory();
+  pong_active = false;
+  TFT_current_device_for_pic = 255; // Triggers a refresh of the device pic
+  update_page = RELOAD_PAGE;
+  update_main_lcd = true;
+}
+
+void TFT_pong_update() {
+  TFT_pong_move_player_bat();
+  TFT_pong_move_enemy_bat();
+  TFT_pong_move_ball();
+}
+
+void TFT_pong_switch_pressed(uint8_t sw) {
+  if (SC_switch_is_expr_pedal()) {
+    player_new_position_Y = map(Expr_ped_value, 127, 0, PONG_FIELD_Y_TOP + 1, PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT - 1);
+    hint_as_note = false;
+  }
+  if ((sw == 1) && (pong_speed > 1)) {
+    pong_speed--;
+    player_speed_of_moving /= 0.8;
+    enemy_speed_of_moving /= 0.8;
+    ball_speed_of_moving /= 0.8;
+    TFT_pong_show_speed();
+  }
+  if ((sw == 6) && (pong_speed < 9)) {
+    pong_speed++;
+    player_speed_of_moving *= 0.8;
+    enemy_speed_of_moving *= 0.8;
+    ball_speed_of_moving *= 0.8;
+    TFT_pong_show_speed();
+  }
+  if ((sw >= 11) && (sw <= 15)) TFT_pong_close();
+}
+
+#define PONG_NOTE_MIN 40
+#define PONG_NOTE_MAX 76
+
+void TFT_pong_receive_note_on(byte channel, byte note, byte velocity) {
+  if (velocity > 0) {
+    if (note < PONG_NOTE_MIN) note = PONG_NOTE_MIN;
+    if (note > PONG_NOTE_MAX) note = PONG_NOTE_MAX;
+    player_new_position_Y = map(note, PONG_NOTE_MAX, PONG_NOTE_MIN, PONG_FIELD_Y_TOP + 1, PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT - 1);
+    hint_as_note = true;
+  }
+}
+
+void TFT_pong_move_player_bat() {
+  if (micros() > player_speed_of_moving + player_last_move_time) {
+    TFT_pong_draw_bat(player_position_Y, player_position_X, Black);
+    if (player_new_position_Y < player_position_Y) {
+      player_position_Y --;
+    }
+    if (player_new_position_Y > player_position_Y) {
+      player_position_Y ++;
+    }
+    TFT_pong_draw_bat(player_position_Y, player_position_X, White);
+    player_last_move_time = micros();
+  }
+}
+
+void TFT_pong_move_enemy_bat() {
+  if (micros() > enemy_speed_of_moving + enemy_last_move_time) {
+    TFT_pong_draw_bat(enemy_position_Y, enemy_position_X, Black);
+
+    int pos;
+    pos = ball_position_Y - PONG_FIELD_Y_TOP;
+    if (ball_direction_X > 0) { 
+      pos = abs(ball_position_Y + (enemy_position_X - ball_position_X) / ball_direction_X * (ball_direction_Y / 10.0));
+      if (pos < (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP)) pos %= (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP);
+      else {
+        pos %= (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP) ;
+        pos = PONG_FIELD_Y_BOTTOM - pos;
+      }
+      pos += enemy_random_deviation * (9 - enemy_skill);
+    }
+    else { // Follow the ball
+      pos = ball_position_Y;
+    }
+    if (pos < enemy_position_Y + PONG_BAT_HEIGHT / 2) {
+      enemy_position_Y --;
+    }
+    if (pos > enemy_position_Y + PONG_BAT_HEIGHT / 2) {
+      enemy_position_Y ++;
+    }
+
+    //checking if enemy is within the wall:
+    if (enemy_position_Y > PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT) enemy_position_Y = PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT;
+    if (enemy_position_Y < PONG_FIELD_Y_TOP + 1) enemy_position_Y = PONG_FIELD_Y_TOP + 1;
+
+    TFT_pong_draw_bat(enemy_position_Y, enemy_position_X, White);
+    enemy_last_move_time = micros();
+  }
+}
+
+void TFT_pong_move_ball() {
+  if (micros() > ((ball_speed_of_moving * ball_acceleration * (5 + abs(ball_direction_Y / 10)) / 5) + ball_last_move_time)) {
+    //erase ball on old position:
+    TFT_pong_draw_ball(ball_position_Y, ball_position_X, Black);
+    TFT_pong_draw_center_line();
+
+    //set new posion of the ball:
+    ball_position_X += ball_direction_X;
+
+    if (ball_position_Y + (ball_direction_Y / 10.0) <= PONG_FIELD_Y_TOP) ball_direction_Y *= -1;
+    if (ball_position_Y + (ball_direction_Y / 10.0) >= PONG_FIELD_Y_BOTTOM - (2 * PONG_BALL_RADIUS)) ball_direction_Y *= -1;
+
+    ball_position_Y += (ball_direction_Y / 10.0);
+
+    //draw ball on new position:
+    TFT_pong_draw_ball(ball_position_Y, ball_position_X, White);
+    ball_last_move_time = micros();
+
+    //Check for player loose:
+    if (ball_position_X <= PONG_FIELD_X_TOP) {
+      TFT_pong_new_round(1); // enemy wins
+    }
+    //check for collision of the ball and the player:
+    if ((ball_position_X < player_position_X + PONG_BAT_WIDTH) && (ball_position_X > player_position_X)
+        && (ball_position_Y + (2 * PONG_BALL_RADIUS) > player_position_Y) && (ball_position_Y < player_position_Y + PONG_BAT_HEIGHT)) {
+      //send the ball to enemy with random values:
+      ball_direction_X = 3;
+      ball_direction_Y = map(generate_random_number(), 0, 127, -50, 50);
+      ball_acceleration *= 0.9;
+      TFT_pong_show_hint(TFT_PONG_CLEAR_HINT);
+    }
+    //check for enemy loose:
+    if (ball_position_X >= PONG_FIELD_X_BOTTOM - (2 * PONG_BALL_RADIUS)) {
+      TFT_pong_new_round(0); // player wins
+    }
+    //check for collision of the ball and the enemy:
+    if ((ball_position_X + (2 * PONG_BALL_RADIUS) >= enemy_position_X) && (ball_position_X + (2 * PONG_BALL_RADIUS) <= enemy_position_X + PONG_BAT_WIDTH)
+        && (ball_position_Y + (2 * PONG_BALL_RADIUS) > enemy_position_Y) && (ball_position_Y < enemy_position_Y + PONG_BAT_HEIGHT)) {
+      //send the ball to player with random values:
+      ball_direction_X = -3;
+      ball_direction_Y = map(generate_random_number(), 0, 127, -50, 50);
+      enemy_random_deviation = map(generate_random_number(), 0, 127, -10, 10);
+      //TFT_pong_draw_bat(hint_position, player_position_X - 40, Black);
+      hint_position = TFT_pong_predict_position();
+      //TFT_pong_draw_bat(hint_position, player_position_X - 40, Blue);
+      if (micros() > ball_last_move_time - 2000000) TFT_pong_show_hint(hint_position);
+    }
+  }
+}
+
+uint16_t TFT_pong_predict_position() {
+  float y = (float) ball_position_Y;
+  float y_dir = (float) ball_direction_Y / 10.0;
+  for (uint16_t x = player_position_X + PONG_BAT_WIDTH; x < enemy_position_X - (2 * PONG_BALL_RADIUS); x += 3) {
+    y += y_dir;
+    if (y + y_dir <= PONG_FIELD_Y_TOP) y_dir *= -1.0;
+    if (y + y_dir >= PONG_FIELD_Y_BOTTOM - (2 * PONG_BALL_RADIUS)) y_dir *= -1.0;
+  }
+  if (y > (PONG_BAT_HEIGHT / 2)) y -= PONG_BAT_HEIGHT / 2;
+  return y;
+}
+
+void TFT_pong_new_round(uint8_t winner) {
+  //Update scores:
+  if (winner == 1) { // Enemy wins
+    enemy_score++;
+    ball_position_X = PONG_FIELD_X_BOTTOM - PONG_BAT_X_OFFSET - (PONG_BALL_RADIUS * 2); // Ball comes from enemy
+    ball_position_Y = enemy_position_Y + (PONG_BAT_HEIGHT / 2);
+    ball_direction_X = -3;
+    if (enemy_skill > 0) enemy_skill--;
+  } else {
+    player_score++;
+    ball_position_X = PONG_FIELD_X_TOP + PONG_BAT_X_OFFSET + PONG_BAT_WIDTH; // Ball comes from player
+    ball_position_Y = player_position_Y + (PONG_BAT_HEIGHT / 2);
+    ball_direction_X = 3;
+    if (enemy_skill < 9) enemy_skill++;
+  }
+  TFT_pong_show_score(player_score, PONG_FIELD_X_TOP - 153);
+  TFT_pong_show_score(enemy_score, PONG_FIELD_X_BOTTOM + 25);
+  TFT_pong_restart_game();
+
+  //checking for if we need to update enemy_speed_of_moving and ball_speed
+  if (((player_score + enemy_score) % 5 == 0) && (pong_speed < 9)) {
+    pong_speed++;
+    player_speed_of_moving *= 0.8;
+    enemy_speed_of_moving *= 0.8;
+    ball_speed_of_moving *= 0.8;
+    TFT_pong_show_speed();
+  }
+  //if (winner == 0) enemy_speed_of_moving *= 0.95;
+  //else enemy_speed_of_moving /= 0.93;
+}
+
+void TFT_pong_draw_field() {
+  TFT_fillScreen(Black);
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer1_start_addr);
+  tft.Main_Image_Width(400);
+  tft.Main_Window_Start_XY(0, 0);
+  tft.Foreground_color_65k(Grey);
+  tft.Line_Start_XY(PONG_FIELD_Y_TOP, PONG_FIELD_X_TOP);
+  tft.Line_End_XY(PONG_FIELD_Y_BOTTOM, PONG_FIELD_X_BOTTOM);
+  tft.Start_Square();
+}
+
+void TFT_pong_draw_center_line() {
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer1_start_addr);
+  tft.Main_Image_Width(400);
+  tft.Main_Window_Start_XY(0, 0);
+  tft.Foreground_color_65k(Grey);
+  tft.Line_Start_XY(PONG_FIELD_Y_TOP, (PONG_FIELD_X_BOTTOM + PONG_FIELD_X_TOP) / 2);
+  tft.Line_End_XY(PONG_FIELD_Y_BOTTOM, (PONG_FIELD_X_BOTTOM + PONG_FIELD_X_TOP) / 2);
+  tft.Start_Line();
+}
+
+void TFT_pong_draw_bat(uint16_t y, uint16_t x, uint16_t colour) {
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer1_start_addr);
+  tft.Main_Image_Width(400);
+  tft.Main_Window_Start_XY(0, 0);
+  tft.Foreground_color_65k(colour);
+  tft.Line_Start_XY(y, x);
+  tft.Line_End_XY(y + PONG_BAT_HEIGHT, x + PONG_BAT_WIDTH);
+  tft.Start_Square_Fill();
+}
+
+void TFT_pong_draw_ball(uint16_t y, uint16_t x, int16_t colour) {
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Select_Main_Window_16bpp();
+  tft.Main_Image_Start_Address(layer1_start_addr);
+  tft.Main_Image_Width(400);
+  tft.Main_Window_Start_XY(0, 0);
+  tft.Foreground_color_65k(colour);
+  tft.Circle_Center_XY(PONG_BALL_RADIUS + y, PONG_BALL_RADIUS + x);
+  tft.Circle_Radius_R(PONG_BALL_RADIUS);
+  tft.Start_Circle_or_Ellipse_Fill();
+}
+
+void TFT_pong_show_score(int value, int x) {
+  String score = "";
+  LCD_add_3digit_number(value, score);
+#ifdef USE_TFT_USER_FONT
+  TFT_show_user_font(Grotesk32x64, score, x, PONG_FIELD_Y_TOP + 10, Yellow, Black, false);
+#else
+  char text[3];
+  score.toCharArray(text, 4);
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Foreground_color_65k(Yellow);
+  tft.Background_color_65k(Black);
+  tft.CGROM_Select_Internal_CGROM();
+  tft.Font_Select_16x32_32x32();
+  tft.Font_Width_X2();
+  tft.Font_Height_X2();
+  tft.Goto_Text_XY(PONG_FIELD_Y_TOP + 10, x);
+  tft.Show_String(text);
+#endif
+}
+
+void TFT_pong_show_speed() {
+  String score = "SPEED: " + String(pong_speed);
+#ifdef USE_TFT_USER_FONT
+  TFT_show_user_font(Grotesk16x32, score, PONG_FIELD_X_TOP - 138, PONG_FIELD_Y_BOTTOM - 42, Yellow, Black, false);
+#else
+  char text[9];
+  score.toCharArray(text, 9);
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Foreground_color_65k(Yellow);
+  tft.Background_color_65k(Black);
+  tft.CGROM_Select_Internal_CGROM();
+  tft.Font_Select_16x32_32x32();
+  tft.Font_Width_X2();
+  tft.Font_Height_X2();
+  tft.Goto_Text_XY(PONG_FIELD_Y_BOTTOM - 42, PONG_FIELD_X_TOP - 128 - PONG_SCORE_MARGIN);
+  tft.Show_String(text);
+#endif
+}
+
+void TFT_pong_show_hint(int value) {
+  String hint;
+  if (hint_as_note) {
+    uint8_t note_val = map(value, PONG_FIELD_Y_TOP, PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT, PONG_NOTE_MAX, PONG_NOTE_MIN) - 24;
+    const char note_name[12][3] = { "C ", "C#", "D ", "Eb", "E ", "F ", "F#", "G ", "G#", "A ", "Bb", "B " };
+    hint = note_name[note_val % 12] + String(note_val / 12);
+  }
+  else {
+    uint8_t percentage = map(value, PONG_FIELD_Y_TOP, PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT, 99, 0);
+    //if (percentage < 100) 
+    hint = String(percentage / 10) + String(percentage % 10) + "%";
+  }
+  if (value == TFT_PONG_CLEAR_HINT) hint = "   ";
+#ifdef USE_TFT_USER_FONT
+  TFT_show_user_font(Grotesk32x64, hint, PONG_FIELD_X_BOTTOM + PONG_SCORE_MARGIN, PONG_FIELD_Y_BOTTOM - 74, Yellow, Black, false);
+#else
+  char text[3];
+  hint.toCharArray(text, 4);
+  tft.Canvas_Image_Start_address(layer1_start_addr);
+  tft.Foreground_color_65k(Yellow);
+  tft.Background_color_65k(Black);
+  tft.CGROM_Select_Internal_CGROM();
+  tft.Font_Select_16x32_32x32();
+  tft.Font_Width_X2();
+  tft.Font_Height_X2();
+  tft.Goto_Text_XY(PONG_FIELD_Y_BOTTOM - 74, PONG_FIELD_X_BOTTOM + PONG_SCORE_MARGIN);
+  tft.Show_String(text);
+#endif
+}
+
 #endif
 
 #endif

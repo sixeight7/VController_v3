@@ -185,6 +185,8 @@ void MainWindow::loadAppSettings() {
             booted = true;
         }
         else {
+            MyMidi->closeMidiIn(); // Bugfix: must close MIDI ports first, otherwise MIDI data will be read double!!!
+            MyMidi->closeMidiOut();
 #ifdef Q_OS_WIN
             // reboot VC-edit for windows
             QString program = qApp->arguments()[0];
@@ -695,11 +697,15 @@ void MainWindow::on_actionOpen_triggered()
 
     if (jsonType == "PageData") {
         if (currentPage < Number_of_pages) {
-            if (QMessageBox::Yes == QMessageBox(QMessageBox::Information, "Loading page data", "Overwrite current page? Choose no to save data to a new page.",
-                                                QMessageBox::Yes|QMessageBox::No).exec()) {
-                MyVCcommands->clearPage(currentPage);
-            }
-            else currentPage = Number_of_pages;
+            QMessageBox msgBox; msgBox.setText(tr("Loading page data\nAdd to a new page or overwrite current page?"));
+            QAbstractButton* pButtonAddNew = msgBox.addButton(tr("Add to new page"), QMessageBox::ApplyRole); // Role determines order of buttons! ApplyRole is default and one the left
+            QAbstractButton* pButtonOverwrite = msgBox.addButton(tr("Overwrite current page"), QMessageBox::NoRole);
+            QAbstractButton* pButtonCancel = msgBox.addButton(tr("Cancel"), QMessageBox::YesRole);
+            msgBox.setEscapeButton(pButtonCancel);
+            msgBox.exec();
+            if (msgBox.clickedButton()==pButtonAddNew) currentPage = Number_of_pages;
+            else if (msgBox.clickedButton()==pButtonOverwrite) MyVCcommands->clearPage(currentPage);
+            else return;
         }
         else {
             currentPage = MyVCcommands->addPage();
@@ -1036,8 +1042,7 @@ void MainWindow::on_currentPageComboBox_activated(int index)
     if (newPage != currentPage) {
         currentPage = newPage;
         ui->currentPageComboBox2->setCurrentIndex(index);
-        fillListBoxes(false);
-        checkMenuItems();
+        updateCommandScreens(false);
     }
 }
 
@@ -1181,8 +1186,7 @@ void MainWindow::on_currentPageComboBox2_activated(int index)
     if (newPage != currentPage) {
         currentPage = newPage;
         ui->currentPageComboBox->setCurrentIndex(index);
-        fillListBoxes(false);
-        checkMenuItems();
+        updateCommandScreens(false);
     }
 }
 
@@ -1445,7 +1449,7 @@ void MainWindow::on_actionEditPatch_triggered()
       }
     }
 
-    if (my_type == SY1000 + 1) {
+    if ((my_type == GR55 + 1) || (my_type == SY1000 + 1)) {
         scenedialog sd(this, index);
         sd.exec();
         sd.close();

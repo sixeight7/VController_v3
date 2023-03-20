@@ -47,6 +47,8 @@ public:
     explicit Midi(QObject *parent = 0);
     void openMidiIn(QString port);
     void openMidiOut(QString port);
+    void closeMidiIn();
+    void closeMidiOut();
     void checkForVCmidi();
     bool checkMidiPortStillAvailable(QString inPort, QString outPort);
     QStringList fillMidiInPortItems();

@@ -300,6 +300,7 @@ private:
         "START", "STOP", "START/STOP",
     };
 
+#define INDEX_PAR_TOGGLE_TYPE 50
 #define INDEX_CC_TOGGLE_TYPE 85
 
     struct cmdbyte_struct {

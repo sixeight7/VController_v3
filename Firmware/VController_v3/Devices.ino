@@ -5,6 +5,10 @@
 // Section 2: Common device settings
 // Section 3: Device Object Creation and Initialization
 
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+#include <Entropy.h>
+#endif
+
 // ********************************* Section 1: Common settings ********************************************
 
 // Here are variables from various parts of the code that have been moved here, because they are used early on.
@@ -155,6 +159,7 @@ bool do_not_forward_after_Helix_PC_message = false;
 #define SKIP_HOLD 4
 
 bool on_looper_page = false;
+uint8_t Expr_ped_value = 0;
 
 // ********************************* Section 2: Common device settings ********************************************
 // Default values have been moved to the device classes. All values should be set in the VController menu or VC-edit
@@ -185,6 +190,7 @@ void setup_devices() { // Trigger the initialization of  the devices
     DEBUGMSG("Init device " + String(d));
     Device[d]->init();
   }
+  setup_random_number_generator();
   device_sequencer_start();
 }
 
@@ -227,6 +233,51 @@ void device_sequencer_update(uint8_t steps, uint8_t divider) {
 void device_sequencer_timer_expired() {
   __disable_irq();
   My_HLX.update_sequencer = true;
-  __enable_irq();
-  
+  __enable_irq(); 
+}
+
+// Random number generator
+
+// T3.6/T3.5 Random Number Generator
+//==================================
+//Thanks and acknowledgement to "manitou" for original test code
+//Modifications by "TelephoneBill" dated 23 FEB 2017
+#define RNG_CR_GO_MASK          0x1u
+#define RNG_CR_HA_MASK          0x2u
+#define RNG_CR_INTM_MASK        0x4u
+#define RNG_CR_CLRI_MASK        0x8u
+#define RNG_CR_SLP_MASK         0x10u
+#define RNG_SR_OREG_LVL_MASK    0xFF00u
+#define RNG_SR_OREG_LVL_SHIFT   8
+#define RNG_SR_OREG_LVL(x)      (((uint32_t)(((uint32_t)(x))<<RNG_SR_OREG_LVL_SHIFT))&RNG_SR_OREG_LVL_MASK)
+#define SIM_SCGC6_RNGA          ((uint32_t)0x00000200)
+
+void setup_random_number_generator() {
+
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+  Entropy.Initialize();
+#elif defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
+  SIM_SCGC6 |= SIM_SCGC6_RNGA;                  //enable RNG
+  RNG_CR &= ~RNG_CR_SLP_MASK;
+  RNG_CR |= RNG_CR_HA_MASK;                     //high assurance, not needed
+#else
+  // Teensy 3.2
+  // A10 is an unconnected pad on Teensy 3.2, random analog
+  // noise will cause the call to randomSeed() to generate
+  // different seed numbers each time the sketch runs.
+  // randomSeed() will then shuffle the random function.
+  randomSeed(analogRead(A10));
+#endif
+}
+
+uint8_t generate_random_number() {
+#if defined(__IMXRT1062__) // Teensy 4.0 and 4.1
+  return Entropy.random(127);
+#elif defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
+  RNG_CR |= RNG_CR_GO_MASK;
+  while ((RNG_SR & RNG_SR_OREG_LVL(0xF)) == 0); //wait for RN to be generated
+  return RNG_OR & 0x7F;                                //return RN
+#else
+  return random(127);
+#endif
 }

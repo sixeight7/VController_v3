@@ -177,7 +177,7 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
             cmdString.append(Device[cmd.Device]->read_parameter_name(cmd.Data1));
         if (cmd.Device == CURRENT) cmdString.append(QString::number(cmd.Data1));
         cmdString.append(" ");
-        cmdString.append(cmd_sublist.at(cmd.Data2 + 47));
+        cmdString.append(cmd_sublist.at(cmd.Data2 + INDEX_PAR_TOGGLE_TYPE - 1));
         break;
     case ASSIGN:
         cmdString.append(ShortCmdTypes[cmd.Data1]); // Pick it from the sublist...
@@ -185,8 +185,8 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
         if (cmd.Data1 == SELECT) {
             cmdString.append("(");
             if (cmd.Device < NUMBER_OF_DEVICES)
-                cmdString.append(Device[cmd.Device]->read_assign_name(cmd.Data1));
-            if (cmd.Device == CURRENT) cmdString.append(QString::number(cmd.Data1));
+                cmdString.append(Device[cmd.Device]->read_assign_name(cmd.Data2));
+            if (cmd.Device == CURRENT) cmdString.append(QString::number(cmd.Data2));
             cmdString.append(")");
         }
         if (cmd.Data1 == BANKSELECT) {
@@ -484,7 +484,9 @@ void VCcommands::fillCommandTableWidget(QTableWidget *table, uint8_t pg, uint8_t
     qDebug() << "Command" << cmd_no << "loaded";
 
     for (uint8_t i = 0; i < NUMBER_OF_CMD_BYTES; i++) {
+        qDebug() << "byte: " << i;
         build_command_structure(i, cmdbyte[i].Type, false);
+        qDebug() << "built!!!";
         load_cmd_byte(table, i);
     }
 }
@@ -1348,6 +1350,8 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
         uint16_t patch_no = 0;
         selected_device_cmd = cmdbyte[cmd_byte_no].Value;
         dev = cmdbyte[CB_DEVICE].Value;
+        if (dev >= NUMBER_OF_DEVICES) dev = 0; // Fixes crash when trying to load command for current_device
+
         switch (selected_device_cmd + 100) {
           case PATCH:
             // Command: <selected device>, PATCH, SELECT, <current_patch_number>
@@ -1372,12 +1376,15 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
                 cmdbyte[CB_DATA1].Min = 0;
             }
             set_type_and_value(CB_DATA2, TYPE_TOGGLE, 1, in_edit_mode);
-            set_type_and_value(CB_VAL1, TYPE_PAR_VALUE, Device[dev]->min_value(cmdbyte[CB_DATA1].Value), in_edit_mode);
+            if (dev < NUMBER_OF_DEVICES) {
+                set_type_and_value(CB_VAL1, TYPE_PAR_VALUE, Device[dev]->min_value(cmdbyte[CB_DATA1].Value), in_edit_mode);
+            }
             if (dev < NUMBER_OF_DEVICES) {
                 cmdbyte[CB_VAL1].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
                 cmdbyte[CB_VAL1].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
             }
             set_type_and_value(CB_VAL2, TYPE_PAR_VALUE, Device[dev]->max_value(cmdbyte[CB_DATA1].Value), in_edit_mode);
+
             if (dev < NUMBER_OF_DEVICES) {
                 cmdbyte[CB_VAL2].Max = Device[dev]->max_value(cmdbyte[CB_DATA1].Value);
                 cmdbyte[CB_VAL2].Min = Device[dev]->min_value(cmdbyte[CB_DATA1].Value);
@@ -1849,7 +1856,6 @@ void VCcommands::load_cmd_byte(QTableWidget *table, uint8_t cmd_byte_no)
         connect(comboBox, SIGNAL(currentIndexChanged(int)), slider, SLOT(setValue(int)));
         connect(slider, SIGNAL(valueChanged(int)), comboBox, SLOT(setCurrentIndex(int)));
     }
-
 }
 
 QString VCcommands::read_cmd_sublist(uint8_t cmd_byte_no, uint16_t value)

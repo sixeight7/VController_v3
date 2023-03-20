@@ -16,6 +16,9 @@
 //#define CONFIG_CUSTOM
 #define MENU_ON_INDIVIDUAL_DISPLAYS
 
+#define SKIP_GR55_PRESET_NAMES // Will not compile the hardcoded preset names for the preset patches - will save around 8k of space (3% on Teensy 3.2)
+
+
 // Allowable i2c rates:
 // I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200, 
 // I2C_RATE_1500, I2C_RATE_1800, I2C_RATE_2000, I2C_RATE_2400, I2C_RATE_2800, I2C_RATE_3000

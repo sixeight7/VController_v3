@@ -100,7 +100,6 @@ FLASHMEM void MD_HLX_class::init() { // Default values for variables
 #endif
   tuner_active = false;
   max_looper_length = 30000000; // Normal stereo looper time is 30 seconds - time given in microseconds
-  setup_random_number_generator();
 
 #ifdef IS_VCTOUCH
   device_pic = img_HLX;
@@ -729,48 +728,6 @@ FLASHMEM void MD_HLX_class::send_sequence_step_CC() {
   }
   current_sequence_step++;
   if (current_sequence_step >= number_of_sequence_steps) current_sequence_step = 0;
-}
-
-// Random number generator
-
-// T3.6/T3.5 Random Number Generator
-//==================================
-//Thanks and acknowledgement to "manitou" for original test code
-//Modifications by "TelephoneBill" dated 23 FEB 2017
-#define RNG_CR_GO_MASK          0x1u
-#define RNG_CR_HA_MASK          0x2u
-#define RNG_CR_INTM_MASK        0x4u
-#define RNG_CR_CLRI_MASK        0x8u
-#define RNG_CR_SLP_MASK         0x10u
-#define RNG_SR_OREG_LVL_MASK    0xFF00u
-#define RNG_SR_OREG_LVL_SHIFT   8
-#define RNG_SR_OREG_LVL(x)      (((uint32_t)(((uint32_t)(x))<<RNG_SR_OREG_LVL_SHIFT))&RNG_SR_OREG_LVL_MASK)
-#define SIM_SCGC6_RNGA          ((uint32_t)0x00000200)
-
-FLASHMEM void MD_HLX_class::setup_random_number_generator() {
-
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
-  SIM_SCGC6 |= SIM_SCGC6_RNGA;                  //enable RNG
-  RNG_CR &= ~RNG_CR_SLP_MASK;
-  RNG_CR |= RNG_CR_HA_MASK;                     //high assurance, not needed
-#else
-  // Teensy 3.2
-  // A10 is an unconnected pad on Teensy 3.2, random analog
-  // noise will cause the call to randomSeed() to generate
-  // different seed numbers each time the sketch runs.
-  // randomSeed() will then shuffle the random function.
-  randomSeed(analogRead(A10));
-#endif
-}
-
-FLASHMEM uint8_t MD_HLX_class::generate_random_number() {
-#if defined(__MK64FX512__) || defined(__MK66FX1M0__) // Teensy 3.5 or 3.6
-  RNG_CR |= RNG_CR_GO_MASK;
-  while ((RNG_SR & RNG_SR_OREG_LVL(0xF)) == 0); //wait for RN to be generated
-  return RNG_OR & 0x7F;                                //return RN
-#else
-  return random(127);
-#endif
 }
 
 // ********************************* Section 7: HELIX MIDI forward messaging ********************************************

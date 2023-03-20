@@ -50,6 +50,16 @@ void Midi::openMidiOut(QString port){
     }
 }
 
+void Midi::closeMidiIn()
+{
+    _midiIn->closePort();
+}
+
+void Midi::closeMidiOut()
+{
+    _midiOut->closePort();
+}
+
 void Midi::checkForVCmidi()
 {
     std::string portName;

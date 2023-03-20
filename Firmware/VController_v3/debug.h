@@ -102,7 +102,7 @@ void MIDI_debug_sysex(const unsigned char* sxdata, short unsigned int sxlength, 
       Serial.print("USBH_M:" + String(VCbridge_port) + ' ');
       break;
     default:
-      Serial.print("multiple:" + String(VCbridge_port) + ' ');
+      Serial.print("Port " + String(port & 0xF0) + ":" + String(VCbridge_port) + ' ');
   }
   Serial.print('(' + String(sxlength) + " bytes) ");
   if (sxlength > DEBUG_SYSEX_MAX_LENGTH) {
