@@ -190,7 +190,7 @@ FLASHMEM void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t 
         set_sequence_beats(value);
         break;
       case 32: // Current setlist
-        current_setlist = value;
+        current_device_setlist = value;
         break;
       case 60: // Looper REC / OVERDUB
         if (value < 64) looper_press(LOOPER_OVERDUB, false);
@@ -211,11 +211,11 @@ FLASHMEM void MD_HLX_class::check_CC_in(uint8_t control, uint8_t value, uint8_t 
         update_page = REFRESH_PAGE;
         break;
       case 65: // Looper FWD/REV
-        looper_press(LOOPER_REVERSE, false);
+        looper_press(LOOPER_FORWARD_REVERSE, false);
         update_page = REFRESH_PAGE;
         break;
       case 66: // Looper SPEED
-        looper_press(LOOPER_HALF_SPEED, false);
+        looper_press(LOOPER_HALF_FULL_SPEED, false);
         update_page = REFRESH_PAGE;
         break;
       case 69: // Set current snapshot
@@ -334,16 +334,16 @@ void MD_HLX_class::setlist_song_select(uint16_t item) { // This may require more
   if (item > setlist_song_get_number_of_items()) return;
   uint8_t new_setlist = item / 128;
   uint8_t new_patch = item % 128;
-  if (current_setlist != new_setlist) {
+  if (current_device_setlist != new_setlist) {
     MIDI_send_CC(32, new_setlist, MIDI_channel, MIDI_out_port);
-    current_setlist = new_setlist;
+    current_device_setlist = new_setlist;
   }
   select_patch(new_patch);
   patch_number = new_patch;
 }
 
 uint16_t MD_HLX_class::setlist_song_get_current_item_state() {
-  return (current_setlist * HLX_NUMBER_OF_SETLISTS) + patch_number;
+  return (current_device_setlist * HLX_NUMBER_OF_SETLISTS) + patch_number;
 }
 
 uint16_t MD_HLX_class::setlist_song_get_number_of_items() {
@@ -469,7 +469,7 @@ FLASHMEM void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_
     MIDI_send_CC(HLX_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   }
 
-  if (number == HLX_SETLIST) current_setlist = value;
+  if (number == HLX_SETLIST) current_device_setlist = value;
   if (number == HLX_SNAPSHOT) current_snapscene = value;
 
   String msg = HLX_CC_types[number].Name;
@@ -481,7 +481,7 @@ FLASHMEM void MD_HLX_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_
     msg += ':';
     msg += String(value);
   }
-  LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
@@ -498,7 +498,7 @@ FLASHMEM bool MD_HLX_class::request_parameter(uint8_t sw, uint16_t number) {
   SP[sw].Colour = my_LED_colour;
 
   if ((number == HLX_SETLIST) || (number == HLX_SNAPSHOT)) {
-    if (number == HLX_SETLIST) SP[sw].Target_byte1 = current_setlist;
+    if (number == HLX_SETLIST) SP[sw].Target_byte1 = current_device_setlist;
     if (number == HLX_SNAPSHOT) SP[sw].Target_byte1 = current_snapscene;
     if (SP[sw].Latch == STEP) msg += String(SP[sw].Target_byte1 + 1);
     else msg += String(SP[sw].Value1 + 1);
@@ -587,7 +587,7 @@ FLASHMEM void MD_HLX_class::get_snapscene_title(uint8_t number, String &Output) 
   Output += "SNAPSHOT " + String(number);
 }
 
-/*FLASHMEM void MD_HLX_class::set_snapscene_name(uint8_t number, String &Output) {
+/*FLASHMEM void MD_HLX_class::get_snapscene_label(uint8_t number, String &Output) {
   Output += "SNAPSHOT " + String(number);
   }*/
 
@@ -599,7 +599,7 @@ FLASHMEM void MD_HLX_class::set_snapscene(uint8_t sw, uint8_t number) {
   MIDI_send_current_snapscene(my_device_number, current_snapscene);
 }
 
-FLASHMEM void MD_HLX_class::show_snapscene(uint8_t  number) {
+FLASHMEM void MD_HLX_class::show_snapscene(uint8_t number) {
   if ((number < 1) || (number > 8)) return;
   if (number == current_snapscene) return;
   current_snapscene = number;
@@ -640,10 +640,11 @@ const PROGMEM HLX_looper_cc_struct HLX_looper_cc[] = { // Table with the cc mess
 
 const uint8_t HLX_LOOPER_NUMBER_OF_CCS = sizeof(HLX_looper_cc) / sizeof(HLX_looper_cc[0]);
 
-FLASHMEM void MD_HLX_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM bool MD_HLX_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < HLX_LOOPER_NUMBER_OF_CCS) {
     if (HLX_looper_cc[cmd].cc > 0) MIDI_send_CC(HLX_looper_cc[cmd].cc, HLX_looper_cc[cmd].value, MIDI_channel, MIDI_out_port);
   }
+  return true;
 }
 
 // ********************************* Section 6: HLX special MIDI functions **********************************************
@@ -763,14 +764,14 @@ FLASHMEM void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint
         HLX_messages[m][1] = 0;
         HLX_messages[m][2] = 0;
       }
-      EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_setlist); // Store updated messages in EEPROM
+      EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_device_setlist); // Store updated messages in EEPROM
       DEBUGMSG("Cleared location  " + String(MIDI_Helix_current_program));
     }
 
     // Forward messages from EEPROM memory
     EEPROM_load_HELIX_message(Program);
-    //DEBUGMSG("Stored Helix setlist: " + String(HLX_message_setlist) + " == HLX setlist: " + String(current_setlist));
-    if (current_setlist == HLX_message_setlist) {
+    //DEBUGMSG("Stored Helix setlist: " + String(HLX_message_setlist) + " == HLX setlist: " + String(current_device_setlist));
+    if (current_device_setlist == HLX_message_setlist) {
       MIDI_Helix_sent_msg_no = 0;
       for (uint8_t m = 0; m < MIDI_HLX_MESSAGES; m++) {
         if (HLX_messages[m][0] != 0) {
@@ -799,13 +800,13 @@ FLASHMEM void MD_HLX_class::PC_forwarding(uint8_t Program, uint8_t Channel, uint
     if ((millis() < MIDI_Helix_IC_timer) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
       // Check message with stored message in EEPROM
       DEBUGMSG("Checking PC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
-      if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Program != HLX_messages[MIDI_Helix_received_msg_no][1]) || (current_setlist != HLX_message_setlist)) {
+      if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Program != HLX_messages[MIDI_Helix_received_msg_no][1]) || (current_device_setlist != HLX_message_setlist)) {
         DEBUGMSG("PC message does not match - Channel:" + String(Channel) + "!=" + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
         MIDI_forward_PC_to_all_ports_but_mine(Program, Channel, MIDI_out_port);
         //MIDI_send_PC(Program, Channel, My_VG99.MIDI_out_port); // Forward the message
         HLX_messages[MIDI_Helix_received_msg_no][1] = Program;
         HLX_messages[MIDI_Helix_received_msg_no][0] = 0xC0 | Channel;
-        EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_setlist); // Store it in EEPROM
+        EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_device_setlist); // Store it in EEPROM
       }
       MIDI_Helix_received_msg_no++;
     }
@@ -821,7 +822,7 @@ FLASHMEM void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uin
   if ((millis() < MIDI_Helix_IC_timer) && (Channel != MIDI_channel) && (MIDI_Helix_received_msg_no < MIDI_HLX_MESSAGES)) { // Check timer running
     // Check message with stored message in EEPROM
     DEBUGMSG("Checking CC message " + String(MIDI_Helix_received_msg_no) + " at " + String(millis()));
-    if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Controller != HLX_messages[MIDI_Helix_received_msg_no][1]) || (Value != HLX_messages[MIDI_Helix_received_msg_no][2]) || (current_setlist != HLX_message_setlist)) {
+    if ((Channel != (HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F)) || (Controller != HLX_messages[MIDI_Helix_received_msg_no][1]) || (Value != HLX_messages[MIDI_Helix_received_msg_no][2]) || (current_device_setlist != HLX_message_setlist)) {
       DEBUGMSG("CC message does not match message #" + String(MIDI_Helix_received_msg_no));
       DEBUGMSG("Received: CC#" + String(Controller) + ", value: " + String(Value) + " on channel " + String(Channel));
       DEBUGMSG("Stored:   CC#" + String(HLX_messages[MIDI_Helix_received_msg_no][1]) + ", value: " + String(HLX_messages[MIDI_Helix_received_msg_no][2]) + " on channel " + String(HLX_messages[MIDI_Helix_received_msg_no][0] & 0x0F));
@@ -829,7 +830,7 @@ FLASHMEM void MD_HLX_class::CC_forwarding(uint8_t Controller, uint8_t Value, uin
       HLX_messages[MIDI_Helix_received_msg_no][1] = Controller;
       HLX_messages[MIDI_Helix_received_msg_no][2] = Value;
       HLX_messages[MIDI_Helix_received_msg_no][0] = 0xB0 | Channel;
-      EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_setlist); // Store it in EEPROM
+      EEPROM_store_HELIX_message(MIDI_Helix_current_program, current_device_setlist); // Store it in EEPROM
     }
     MIDI_Helix_received_msg_no++;
   }

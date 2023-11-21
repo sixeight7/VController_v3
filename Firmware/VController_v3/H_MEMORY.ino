@@ -10,7 +10,11 @@
 // Section 7: HELIX forward messaging storage
 // Section 8: MG300 effect type storage
 // Section 9: Sequencer patterns storage
-// Section 10: Memory test
+// Section 10: User device data storage
+// Section 11: Memory test
+
+// Fo debuggng purposes
+//#define LOW_LEVEL_INITIALIZE_MEMORY
 
 #include "globals.h"
 
@@ -36,15 +40,20 @@ extEEPROM eep(kbits_512, 2, 128);
 #define CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION 2 // Increase this value whenever there is an update of the Helix EEPROM structure - data will be overwritten!!!!
 #define CURRENT_EXT_EEPROM_MG300_DATA_VERSION 2 // Increase this value whenever there is an update of the MG300 EEPROM structure - data will be overwritten!!!!
 #define CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION 1 // Increase this value whenever there is an update of the sequencer patterns structure - data will be overwritten!!!!
+#define CURRENT_EXP_EEPROM_USER_DEVICE_DATA_VERSION 1 // Increase this value whenever there is an update of the user device data structure - data will be overwritten!!!!
 
 // ************************ Internal EEPROM data addresses ***********************
 // Total size: 2048 bytes (Teensy 3.2), 4096 bytes (Teensy 3.6)
+#define EEPROM_TOTAL_SIZE 4096
 
 // Common data (max 16 bytes)
 #define EEPROM_VERSION_ADDR 0x00 // Address!!! Version update must be done above!!!
 #define EEPROM_CURRENT_PAGE_ADDR 0x02
 #define EEPROM_CURRENT_DEVICE_ADDR 0x03
 #define EEPROM_CURRENT_MODE_ADDR 0x04
+#define EEPROM_CURRENT_SONG_ADDR 0x05
+#define EEPROM_CURRENT_PART_ADDR 0x06
+#define EEPROM_CURRENT_SETLIST_ADDR 0x07
 
 // Settings data (max 112 bytes)
 #define EEPROM_GENERAL_SETTINGS_BASE_ADDRESS 16 // Number of settings determined by size of settings array (see globals.h) - currently 64.
@@ -77,7 +86,7 @@ extEEPROM eep(kbits_512, 2, 128);
 // Page 370 - 374 MG-300 FX data
 // Page 375 - 390 Helix messages
 // Page 391 - 399 Sequencer patterns
-// Page 400 - 499 Spare
+// Page 400 - 499 User device settings
 
 // Vc-touch has two chips = 1000 pages
 // Page 0 - 269:  Commands (3225)
@@ -85,7 +94,7 @@ extEEPROM eep(kbits_512, 2, 128);
 // Page 720 - 724 MG-300 FX data
 // Page 725 - 740 Helix messages
 // Page 741 - 759 Sequencer patterns
-// Page 760 - 999 Spare
+// Page 760 - 999 User device settings
 
 #define EEPROM_ADDRESS 0x50    // i2c address of 24LC512 eeprom chip
 #define EEPROM_DELAY_LENGTH 5  // time between EEPROM writes (usually 5 ms is OK)
@@ -101,10 +110,11 @@ unsigned long WriteDelay = 0;
 #define EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR 5
 #define EXT_EEP_MG300_DATA_VERSION_ADDR 6
 #define EXP_EEP_SEQ_PATTERNS_ADDR 7
-#define CMD_IS_FIXED 0X8000 // MSB of index is set to 1 for fixed commands
+#define EXP_EEP_USER_DEVICE_DATA_ADDR 8
 
 #ifndef IS_VCTOUCH
 // ****** 24LC512 memory structure for VController and VC-mini ***********
+#define NUMBER_OF_MEMORY_PAGES 500
 
 // Commands are stored from address 32 - 18559 (32 bytes store 3 commands - 1737 commands of 10 bytes + 1158 unused bytes)
 #define EXT_EEP_CMD_BASE_ADDRESS 32
@@ -122,11 +132,16 @@ unsigned long WriteDelay = 0;
 #define EXT_MAX_NUMBER_OF_HELIX_MESSAGES 128
 #define MIDI_HLX_MESSAGES 5 // number of messages per patch that are stored
 
-#define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 50048 // Patterns are stored from 50048 - 51199 (32 patterns of 36 bytes = 1152 bytes)
+#define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 50048 // Patterns are stored from address 50048 - 51199 (32 patterns of 36 bytes = 1152 bytes)
 #define EXT_MAX_NUMBER_OF_SEQ_PATTERNS 32
+
+#define EXT_EEP_USER_DEVICE_SETTINGS_ADDRESS 51200 // User device data is stored from address 51200 - 52479 (10 user devices of 128 bytes each)
+#define EXT_EEP_USER_DATA_ADDRESS 52480            // User data items are stored from address 52480 - 64000 (720 items of 16 bytes)
+#define EXT_MAX_NUMBER_OF_USER_DATA_ITEMS 720
 
 #else // IS_VCTOUCH
 // ****** Dual 24LC512 memory structure for VC-touch - double memory chip ***********
+#define NUMBER_OF_MEMORY_PAGES 1000
 
 // Commands are stored from address 32 - 39807 (32 bytes store 3 commands - 3729 commands of 10 bytes + 2486 unused bytes)
 #define EXT_EEP_CMD_BASE_ADDRESS 32
@@ -146,6 +161,10 @@ unsigned long WriteDelay = 0;
 
 #define EXT_EEP_SEQ_PATTERNS_BASE_ADDRESS 100096 // Patterns are stored from 100096 - 102399 (64 patterns of 36 bytes = 2304 bytes)
 #define EXT_MAX_NUMBER_OF_SEQ_PATTERNS 64
+
+#define EXT_EEP_USER_DEVICE_SETTINGS_ADDRESS 102400 // User device data is stored from address 102400 - 103679 (10 user devices of 128 bytes each)
+#define EXT_EEP_USER_DATA_ADDRESS 103680            // User data items are stored from address 103680 - 128000 (1520 items of 16 bytes)
+#define EXT_MAX_NUMBER_OF_USER_DATA_ITEMS 1520
 
 #endif
 
@@ -191,6 +210,15 @@ void setup_eeprom()
 #endif
 #endif
 
+#ifdef LOW_LEVEL_INITIALIZE_MEMORY
+  EEPROM_low_level_initialize();
+  EEP_low_level_initialize();
+  LCD_show_popup_label("Done...", MESSAGE_TIMER_LENGTH);
+  while (true);
+
+#endif
+
+  if (read_ext_EEPROM(EXP_EEP_USER_DEVICE_DATA_ADDR) != CURRENT_EXP_EEPROM_USER_DEVICE_DATA_VERSION) EEP_initialize_user_device_data(); // Must be done before checking EEP_check_internal_eeprom_data()
   if (EEPROM.read(EEPROM_VERSION_ADDR) != CURRENT_EEPROM_VERSION) EEP_initialize_internal_eeprom_data();
   else EEP_check_internal_eeprom_data(false);
   if (read_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION) EEP_initialize_command_data();
@@ -198,6 +226,8 @@ void setup_eeprom()
   if (read_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR) != CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION) EEP_initialize_Helix_data();
   if (read_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR) != CURRENT_EXT_EEPROM_MG300_DATA_VERSION) EEP_initialize_MG300_data();
   if (read_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR) != CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION) EEP_initialize_seq_patterns_data();
+
+  DEBUGMAIN("EEPROM initialization done");
 
   // Read data from EEPROM memory
   EEP_read_eeprom_common_data();
@@ -207,6 +237,18 @@ void setup_eeprom()
 
   EEPROM_create_command_indexes();
   EEPROM_create_patch_data_index();
+  EEPROM_create_user_data_index();
+
+  SCO_select_setlist(EEPROM.read(EEPROM_CURRENT_SETLIST_ADDR));
+  if (Current_mode == SONG_MODE) {
+    Current_song = 255;
+    SCO_select_song(EEPROM.read(EEPROM_CURRENT_SONG_ADDR));
+    Current_part = 255;
+    SCO_select_part(EEPROM.read(EEPROM_CURRENT_PART_ADDR));
+    SCO_set_song_setlist_item(Current_song);
+  }
+
+  DEBUGMAIN("EEPROM started");
 }
 
 void EEPROM_init_settings_from_menu() {
@@ -234,6 +276,9 @@ void EEPROM_update() {
   EEPROM.write(EEPROM_CURRENT_PAGE_ADDR, Current_page);
   EEPROM.write(EEPROM_CURRENT_DEVICE_ADDR, Current_device);
   EEPROM.write(EEPROM_CURRENT_MODE_ADDR, Current_mode);
+  EEPROM.write(EEPROM_CURRENT_SONG_ADDR, Current_song);
+  EEPROM.write(EEPROM_CURRENT_PART_ADDR, Current_part);
+  EEPROM.write(EEPROM_CURRENT_SETLIST_ADDR, Current_setlist);
 }
 
 // ********************************* Section 2: Internal EEPROM functions ********************************************
@@ -264,7 +309,7 @@ void EEP_read_eeprom_common_data() {
     Device[d]->patch_number = (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) << 8) + EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB);
     Device[d]->prev_patch_number = Device[d]->patch_number;
     Device[d]->update_bank_number(Device[d]->patch_number);
-    Device[d]->current_setlist = EEPROM.read(address + EEPROM_DEVICE_SETLIST);
+    Device[d]->current_device_setlist = EEPROM.read(address + EEPROM_DEVICE_SETLIST);
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
       Device[d]->set_setting(var, EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var));
     }
@@ -288,7 +333,7 @@ void EEP_write_eeprom_common_data() {
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
     EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, (Device[d]->patch_number >> 8));
     EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, (Device[d]->patch_number & 0xFF));
-    EEPROM_write(address + EEPROM_DEVICE_SETLIST, Device[d]->current_setlist);
+    EEPROM_write(address + EEPROM_DEVICE_SETLIST, Device[d]->current_device_setlist);
     //EEPROM_write(address + EEPROM_DEVICE_BANK_NUMBER, Device[d]->bank_number);
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) {
       EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
@@ -299,13 +344,25 @@ void EEP_write_eeprom_common_data() {
 void EEP_initialize_internal_eeprom_data() {
   // Initialize settings for VController and devices from Teensy EEPROM and write default configuration to external EEPROM
   LED_show_initializing_data();
+  DEBUGMAIN("Init settings...");
   LCD_show_popup_label("Init settings...", MESSAGE_TIMER_LENGTH);
   EEPROM_write(EEPROM_VERSION_ADDR, CURRENT_EEPROM_VERSION); // Save the current eeprom version
   EEPROM_write(EEPROM_CURRENT_PAGE_ADDR, DEFAULT_PAGE);
   EEPROM_write(EEPROM_CURRENT_DEVICE_ADDR, 0); // Select first device
   EEPROM_write(EEPROM_CURRENT_MODE_ADDR, DEFAULT_MODE);
+  EEPROM_write(EEPROM_CURRENT_SONG_ADDR, 0);
+  EEPROM_write(EEPROM_CURRENT_PART_ADDR, 0);
+  EEPROM_write(EEPROM_CURRENT_SETLIST_ADDR, 0);
 
   EEP_check_internal_eeprom_data(true);
+}
+
+void EEPROM_low_level_initialize() {
+  LCD_show_popup_label("LL Init INT MEM", MESSAGE_TIMER_LENGTH);
+  for (uint16_t i = 0; i < EEPROM_TOTAL_SIZE; i++) {
+    EEPROM_write(i, 0xFF);
+    LCD_show_bar(0, map(i, 0, EEPROM_TOTAL_SIZE, 0, 127), 0);
+  }
 }
 
 void EEP_check_internal_eeprom_data(bool initialize) {
@@ -329,6 +386,8 @@ void EEP_check_internal_eeprom_data(bool initialize) {
   }
 
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
+    DEBUGMSG("Checking device " + String(d));
+    DEBUGMSG(Device[d]->device_name);
     uint16_t address = EEPROM_DEVICES_BASE_ADDRESS + (EEPROM_DEVICE_DATA_SIZE * d);
     if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_PATCH_MSB) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_PATCH_MSB, 0);
     if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_PATCH_LSB) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_PATCH_LSB, 0);
@@ -336,7 +395,7 @@ void EEP_check_internal_eeprom_data(bool initialize) {
     Device[d]->init(); // So default values will be restored
     for (uint8_t var = 0; var < NUMBER_OF_DEVICE_SETTINGS; var++) { // Just write the settings from EEPROM
       if ((initialize) || (EEPROM.read(address + EEPROM_DEVICE_SETTINGS + var) == 0xFF)) EEPROM_write(address + EEPROM_DEVICE_SETTINGS + var, Device[d]->get_setting(var));
-      //DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
+      DEBUGMSG("Initialized address " + String(address + var + 1) + " to value " + String(Device[d]->get_setting(var)));
       if (initialize) LCD_show_bar(0, map(d + no_of_midi_switches, 0, no_of_midi_switches + NUMBER_OF_DEVICES, 0, 127), 0);
     }
   }
@@ -369,7 +428,7 @@ uint8_t EEPROM_read_brightness() {
 // Two commands of 10 bytes are stored on every page.
 // An index is created to quickly access the correct commands from EEPROM
 // There are also commands fixed in the ROM of the TEENSY
-// To access these commands, the index is larger (CMD_IS_FIXED = 0x8000)
+// To access these commands, the index is larger (INTERNAL_CMD = 0x8000)
 
 // Low level read/write of the 24LC512
 
@@ -390,6 +449,16 @@ byte read_ext_EEPROM(uint32_t eeaddress )
   EEP_read_ext_data(eeaddress, &rdata, 1);
 
   return rdata;
+}
+
+void EEP_low_level_initialize() {
+  LCD_show_popup_label("LL Init EXT MEM", MESSAGE_TIMER_LENGTH);
+  uint8_t empty_page[128] = { 255 };
+  for (uint16_t i = 0; i < NUMBER_OF_MEMORY_PAGES; i++) {
+    EEP_write_ext_data(i * 128, empty_page, 128);
+    LCD_show_bar(0, map(i, 0, NUMBER_OF_MEMORY_PAGES, 0, 127), 0);
+
+  }
 }
 
 void write_cmd_EEPROM(uint16_t memloc, const Cmd_struct* cmd ) // Write a command (11 bytes) to 24LC512 chip
@@ -458,6 +527,7 @@ void copy_cmd(const Cmd_struct* source, Cmd_struct* dest) {
 void EEP_initialize_command_data() {
   write_ext_EEPROM(EXT_EEP_COMMAND_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_COMMAND_DATA_VERSION); // Save the current eeprom version
   LED_show_initializing_data();
+  DEBUGMAIN("Init cmds");
   LCD_show_popup_label("Init cmds...", MESSAGE_TIMER_LENGTH);
 
   // Write commands to external EEPROM
@@ -816,6 +886,7 @@ void EEP_initialize_patch_data() {
 
   uint8_t empty_buffer[VC_PATCH_SIZE];
   memset(empty_buffer, 0, VC_PATCH_SIZE);
+  DEBUGMAIN("Init patches");
   LCD_show_popup_label("Init patches...", MESSAGE_TIMER_LENGTH);
 
   for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_PATCH_PRESETS; i++) {
@@ -1062,6 +1133,7 @@ void EEPROM_load_HELIX_message(uint8_t number) { // Read HLX_messages[5][3] arra
 
 void EEP_initialize_Helix_data() {
   LED_show_initializing_data();
+  DEBUGMAIN("Init HLX data");
   LCD_show_popup_label("Init HLX data...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_HELIX_FORWARD_MESSAGING_ADDR, CURRENT_EXP_EEPROM_HELIX_FORWARD_MESSAGING_VERSION); // Save the current eeprom version
   EEPROM_clear_HLX_message_array();
@@ -1139,6 +1211,7 @@ void EEPROM_exchange_MG300_patches(uint8_t patch1, uint8_t patch2) {
 
 void EEP_initialize_MG300_data() {
   LED_show_initializing_data();
+  DEBUGMAIN("Init MG300 data");
   LCD_show_popup_label("Init MG300 data", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXT_EEP_MG300_DATA_VERSION_ADDR, CURRENT_EXT_EEPROM_MG300_DATA_VERSION); // Save the current eeprom version
   EEPROM_clear_MG300_message_array();
@@ -1154,7 +1227,7 @@ void EEPROM_clear_MG300_message_array() {
 
 // ********************************* Section 9: Sequencer patterns storage ********************************************
 
-void EEPROM_store_seq_pattern(uint8_t number, uint8_t * data) { // Store MG300 effect types array to location number.
+void EEPROM_store_seq_pattern(uint8_t number, uint8_t *data) {
   if (number >= EXT_MAX_NUMBER_OF_SEQ_PATTERNS) return; // Exit if number is too large
   //const uint8_t* msg_ptr = (uint8_t*)EEPROM_seq_pattern;
 
@@ -1188,6 +1261,7 @@ bool EEPROM_load_seq_pattern(uint8_t number, uint8_t *data) {
 
 void EEP_initialize_seq_patterns_data() {
   LED_show_initializing_data();
+  DEBUGMAIN("Init seq data");
   LCD_show_popup_label("Init seq data...", MESSAGE_TIMER_LENGTH);
   write_ext_EEPROM(EXP_EEP_SEQ_PATTERNS_ADDR, CURRENT_EXP_EEPROM_SEQ_PATTERNS_VERSION); // Save the current eeprom version
   EEPROM_initialize_seq_patterns_message_array();
@@ -1257,7 +1331,179 @@ inline void EEP_write_ext_data(uint32_t address, const uint8_t *data, uint16_t d
 #endif
 }
 
-// ********************************* Section 10: memory test ********************************************
+// ********************************* Section 10: User device data storage ********************************************
+
+DMAMEM uint8_t USER_data_type_index[EXT_MAX_NUMBER_OF_USER_DATA_ITEMS];
+DMAMEM uint16_t USER_data_patch_number_index[EXT_MAX_NUMBER_OF_USER_DATA_ITEMS];
+uint16_t USER_data_last_item = 0;
+#define DATA_INDEX_NOT_FOUND 65535
+
+void EEPROM_store_user_device_data(uint8_t USER_dev, User_device_struct * data) {
+  if (USER_dev >= NUMBER_OF_USER_DEVICES) return; // Exit if device number is too large
+
+  uint32_t eeaddress = EXT_EEP_USER_DEVICE_SETTINGS_ADDRESS + (USER_dev * 128);
+  EEP_write_ext_data(eeaddress, (uint8_t*)data, USER_DATA_SIZE);
+
+  DEBUGMSG("EEPROM: Wrote " + String(USER_DATA_SIZE) + " bytes of data for user device " + String(USER_dev + 1) + " with index " + String(eeaddress));
+}
+
+bool EEPROM_load_user_device_data(uint8_t USER_dev, User_device_struct *data) {
+  if (USER_dev >= NUMBER_OF_USER_DEVICES) return false; // Exit if device number is too large
+
+  uint32_t eeaddress = EXT_EEP_USER_DEVICE_SETTINGS_ADDRESS + (USER_dev * 128);
+  EEP_read_ext_data(eeaddress, (uint8_t*)data, USER_DATA_SIZE);
+
+  DEBUGMSG("EEPROM: Read data for user device " + String(USER_dev + 1) + " with index " + String(eeaddress));
+  return true;
+}
+
+void EEP_initialize_user_device_data() {
+  User_device_struct EEPROM_default_user_device_data = {
+    "USER DEVICE X   ",  // char full_name[17];
+    "USERX ",            // char short_name[7];
+    0, 0,                // uint8_t patch_min_msb and lsb;
+    0, 99,               // uint8_t patch_max_msb and lsb;
+    "001   ",            // char patch_format[7];
+    "999   ",            // char patch_mask[7];
+    {0, 0, 0, 0},        // device_detection[4]
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // uint8_t parameter_CC[25];
+    {127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127, 7, 127, 127, 127, 127, 127, 127, 127, 127, 127, 127},// uint8_t parameter_value_max[25];
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // uint8_t parameter_value_min[13];
+    { USER_TOGGLE, USER_TOGGLE, USER_TOGGLE, USER_TOGGLE, USER_TOGGLE, USER_TOGGLE, USER_TOGGLE, USER_TOGGLE,
+      USER_RANGE, USER_RANGE, USER_TOGGLE, USER_ONE_SHOT, USER_ONE_SHOT
+    }, // uint8_t parameter_type[13];
+    0,                   // uint8_t looper_length;
+    1,                   //pc_type
+  };
+
+  LED_show_initializing_data();
+  DEBUGMAIN("Init USER data..");
+  LCD_show_popup_label("Init USER data..", MESSAGE_TIMER_LENGTH);
+  write_ext_EEPROM(EXP_EEP_USER_DEVICE_DATA_ADDR, CURRENT_EXP_EEPROM_USER_DEVICE_DATA_VERSION); // Save the current eeprom version
+  for (uint8_t i = 0; i < NUMBER_OF_USER_DEVICES; i++) {
+    char number_char = '1' + i;
+    if (i == 9) number_char = '0';
+    EEPROM_default_user_device_data.full_name[12] = number_char; // Replace X in full name.
+    EEPROM_default_user_device_data.short_name[4] = number_char; // Replace X in short name.
+    EEPROM_store_user_device_data(i, &EEPROM_default_user_device_data);
+    LCD_show_bar(0, map(i, 0, NUMBER_OF_USER_DEVICES + EXT_MAX_NUMBER_OF_USER_DATA_ITEMS, 0, 127), 0);
+  }
+
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_USER_DATA_ITEMS; i++) {
+    EEPROM_initialize_user_data_item(i);
+    LCD_show_bar(0, map(i + NUMBER_OF_USER_DEVICES, 0, NUMBER_OF_USER_DEVICES + EXT_MAX_NUMBER_OF_USER_DATA_ITEMS, 0, 127), 0);
+  }
+  USER_data_last_item = 0;
+  reinitialize_user_devices_from_memory();
+}
+
+void EEPROM_initialize_user_data_item(uint16_t index) {
+  User_device_name_struct default_data = {0, 0, 0, 0, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+  EEPROM_store_user_data_item(index, &default_data);
+}
+
+void EEPROM_store_user_data_item(uint16_t loc, User_device_name_struct * data) {
+  if (loc >= EXT_MAX_NUMBER_OF_USER_DATA_ITEMS) return; // Exit if device number is too large
+
+  uint32_t eeaddress = EXT_EEP_USER_DATA_ADDRESS + (loc * 16);
+  EEP_write_ext_data(eeaddress, (uint8_t*)data, 16);
+
+}
+
+bool EEPROM_read_user_data_item(uint16_t loc, User_device_name_struct *data) {
+  if (loc >= EXT_MAX_NUMBER_OF_USER_DATA_ITEMS) return false; // Exit if device number is too large
+
+  uint32_t eeaddress = EXT_EEP_USER_DATA_ADDRESS + (loc * 16);
+  EEP_read_ext_data(eeaddress, (uint8_t*)data, 16);
+
+  return true;
+}
+
+void EEPROM_create_user_data_index() {
+  USER_data_last_item = 0;
+  User_device_name_struct read_data;
+  for (uint16_t i = 0; i < EXT_MAX_NUMBER_OF_USER_DATA_ITEMS; i++) {
+    uint32_t eeaddress = EXT_EEP_USER_DATA_ADDRESS + (i * 16);
+    EEP_read_ext_data(eeaddress, (uint8_t*)&read_data, 4);
+    USER_data_type_index[i] = read_data.type_and_dev;
+    USER_data_patch_number_index[i] = (read_data.patch_msb << 8) + read_data.patch_lsb;
+    if (read_data.type_and_dev != 0) {
+      USER_data_last_item = i;
+      //Serial.println("!!! Found item at " + String(i) + " type:" + String(read_data.type_and_dev >> 3) + " gendev:" + String(read_data.type_and_dev & 7) + " patch:" + String(read_data.patch_number));
+    }
+  }
+  DEBUGMAIN("Created index for user device data containing " + String(USER_data_last_item) + " items");
+}
+
+bool EEPROM_read_user_item_name(uint8_t type, uint8_t USER_dev, uint16_t patch_no, String &name) {
+  name = "";
+  uint8_t typedev = (type << 4) + (USER_dev & 0x0F);
+  //Serial.println("!!! Requesting typedev " + String(typedev) + " and patch_no " + String(patch_no));
+  uint16_t index = EEPROM_find_user_data_index(typedev, patch_no);
+  if (index != DATA_INDEX_NOT_FOUND) {
+    User_device_name_struct item;
+    EEPROM_read_user_data_item(index, &item);
+    for (uint8_t c = 0; c < 12; c++) name += (char) item.name[c];
+    for (uint8_t c = 12; c < 16; c++) name += ' '; // Clean up
+    //Serial.println("!!! Read user name " + name + " from location " + String(index) + " type:" + String(type) + " gendev:" + String(USER_dev) + " patch:" + String(patch_no));
+    return true;
+  }
+  else {
+    //Serial.println("!!! No user name " + name + " from location " + String(index) + " type:" + String(type) + " gendev:" + String(USER_dev) + " patch:" + String(patch_no));
+    return false;
+  }
+}
+
+void EEPROM_store_user_item_name(uint8_t type, uint8_t USER_dev, uint16_t patch_no, uint8_t value, String name) {
+  uint8_t typedev = (type << 4) + (USER_dev & 0x0F);
+  uint16_t index = EEPROM_find_user_data_index(typedev, patch_no);
+  if (index == DATA_INDEX_NOT_FOUND) index = EEPROM_find_new_user_data_index();
+  uint8_t len = name.length();
+  if (len > 12) len = 12;
+
+  User_device_name_struct new_item;
+  new_item.type_and_dev = typedev;
+  new_item.patch_msb = patch_no >> 8;
+  new_item.patch_lsb = patch_no & 0xFF;
+  new_item.value = value;
+  for (uint8_t c = 0; c < len; c++) new_item.name[c] = (uint8_t) name[c];
+  for (uint8_t c = len; c < 12; c++) new_item.name[c] = ' ';
+  EEPROM_store_user_data_item(index, &new_item);
+  USER_data_type_index[index] = typedev;
+  USER_data_patch_number_index[index] = patch_no;
+  // Serial.println("!!! Wrote user name " + name + " to location " + String(index) + " type:" + String(type) + " gendev:" + String(USER_dev) + " patch:" + String(patch_no));
+}
+
+uint8_t EEPROM_read_user_par_state(uint8_t type, uint8_t USER_dev, uint16_t patch_no) {
+  uint8_t typedev = (type << 4) + (USER_dev & 0x0F);
+  uint16_t index = EEPROM_find_user_data_index(typedev, patch_no);
+  if (index != DATA_INDEX_NOT_FOUND) {
+    User_device_name_struct item;
+    EEPROM_read_user_data_item(index, &item);
+    return item.value;
+  }
+  else {
+    return 0;
+  }
+}
+
+uint16_t EEPROM_find_user_data_index(uint8_t typedev, uint16_t patch_number) {
+  for (uint16_t i = 0; i <= USER_data_last_item; i++) {
+    if ((USER_data_type_index[i] == typedev) && (USER_data_patch_number_index[i] == patch_number)) return i;
+  }
+  return DATA_INDEX_NOT_FOUND;
+}
+
+uint16_t EEPROM_find_new_user_data_index() {
+  for (uint16_t i = 0; i <= USER_data_last_item; i++) {
+    if (USER_data_type_index[i] == 0) return i;
+  }
+  USER_data_last_item++;
+  return USER_data_last_item;
+}
+
+
+// ********************************* Section 11: memory test ********************************************
 void EEPROM_memory_test() {
   // Test memory chip #1
   const uint32_t addr1 = 65535;

@@ -3,7 +3,7 @@
 #ifndef HARDWARE_H
 #define HARDWARE_H
 
-// This file contains all the hardware settings for the VController Production Model version 1.
+// This file contains all the hardware settings for the VController Production Model version 1 - modified for the Teensy 4.1
 // Make sure you include this file when updating to new firmware
 
 #define VC_NAME "V-Controller"
@@ -16,16 +16,16 @@
 //#define CONFIG_CUSTOM
 #define MENU_ON_INDIVIDUAL_DISPLAYS
 
-#define SKIP_GR55_PRESET_NAMES // Will not compile the hardcoded preset names for the preset patches - will save around 8k of space (3% on Teensy 3.2)
+//#define SKIP_GR55_PRESET_NAMES // Will not compile the hardcoded preset names for the preset patches - will save around 8k of space (3% on Teensy 3.2)
 
 
 // Allowable i2c rates:
 // I2C_RATE_100, I2C_RATE_200, I2C_RATE_300, I2C_RATE_400, I2C_RATE_600, I2C_RATE_800, I2C_RATE_1000, I2C_RATE_1200, 
 // I2C_RATE_1500, I2C_RATE_1800, I2C_RATE_2000, I2C_RATE_2400, I2C_RATE_2800, I2C_RATE_3000
 
-#define WIRE_SPEED I2C_RATE_1500 // Speed i2c port 1 (pin 17/18)
-#define WIRE1_SPEED I2C_RATE_800 // Speed i2c port 2 (pin 29/30)
-#define WireLQ Wire1 // Sets the i2c port for the main display to port 2 (Wire1)
+#define WIRE_SPEED 1000000
+#define WIRE2_SPEED 1000000
+#define WireLQ Wire2 // Sets the i2c port for the main display to port 3 (Wire2)
 
 // *** Pinout of the Teensy
 // If a pin is not connected in your hardware, just add a // before it.
@@ -57,7 +57,7 @@
 #define NUMBER_OF_CTL_JACKS 4 // Number of jacks on the VController for connecting an expression pedal or two switches 
 
 // Pin numbers in the Teensy (digital tip, digital ring, analog tip, analog ring, max_ring_for_exp_pedal) - make sure you write the analog pin numbers as A0 and not just 0
-#define JACK1_PINS 28, 14, A17, A0, 1000
+#define JACK1_PINS 26, 14, A12, A0, 1000
 #define JACK2_PINS 15, 16, A1, A2, 1000
 #define JACK3_PINS 20, 21, A6, A7, 1000
 #define JACK4_PINS 22, 23, A8, A9, 1000
@@ -137,12 +137,14 @@
 #define VCONTROLLER_MIDI_CHANNEL 16
 
 #define NUMBER_OF_MIDI_PORTS 4
-// Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
-//#define MIDI3_BAUD_RATE 115200
-//#define MIDI3_BAUD_RATE 38400
+#define MIDI1_SERIAL_PORT Serial1
+#define MIDI2_SERIAL_PORT Serial7
+#define MIDI3_SERIAL_PORT Serial2
 #define MIDI3_ENABLED
-//#define RECEIVE_SERIAL_BUFFER_SIZE 32 // Stabilize serial MIDI communication with buffers
-
+//#define MIDI4_SERIAL_PORT Serial4
+//#define MIDI4_ENABLED
+//#define MIDI5_SERIAL_PORT Serial5
+//#define MIDI5_ENABLED
 
 // Names and numbers of ports
 #define PORT1_NAME "USB MIDI"

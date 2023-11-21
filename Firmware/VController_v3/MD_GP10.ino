@@ -152,7 +152,7 @@ FLASHMEM void MD_GP10_class::check_SYSEX_in(const unsigned char* sxdata, short u
       current_patch_name += "    ";
       update_main_lcd = true;
       if (popup_patch_name) {
-        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
         popup_patch_name = false;
       }
     }
@@ -301,7 +301,7 @@ FLASHMEM void MD_GP10_class::request_current_patch_name() {
 }
 
 FLASHMEM void MD_GP10_class::number_format(uint16_t number, String &Output) {
-  Output += 'P' + String((number + 1) / 10) + String((number + 1) % 10);
+  build_patch_number(number, Output, "P01", "P99");
 }
 
 FLASHMEM void MD_GP10_class::direct_select_format(uint16_t number, String &Output) {
@@ -414,17 +414,17 @@ const PROGMEM GP10_parameter_struct GP10_parameters[] = {
   {0xFFF, 0x20005028,   2, "Bend SW", 131, FX_AMP_TYPE},
   {0xFFF, 0x2000500E,   9, "Amp SP TP", 134, FX_AMP_TYPE},
   {0xFFF, 0x20020803, 101, "Foot Vol", SHOW_NUMBER, FX_AMP_TYPE}, // 34
-  {0xFFF, 0x20021800,  18, "CTL1", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021802,  18, "CTL2", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021804,  17, "CTL3", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021806,  17, "CTL4", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021808,  17, "GK S1", 67, FX_DEFAULT_TYPE},
-  {0xFFF, 0x2002180A,  17, "GK S2", 67, FX_DEFAULT_TYPE}, // 40
-  {0xFFF, 0x2002180C,  15, "EXP SW", 85, FX_DEFAULT_TYPE}, // 41
-  {0xFFF, 0x2002180E,  15, "EXP", 100, FX_DEFAULT_TYPE}, // 42
-  {0xFFF, 0x2002180F,  15, "EXP ON", 100, FX_DEFAULT_TYPE}, // 43
-  {0xFFF, 0x20021810,  15, "EXP2", 100, FX_DEFAULT_TYPE},
-  {0xFFF, 0x20021811,  15, "GK VOL", 100, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021800,  18, "CTL1 ASGN", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021802,  18, "CTL2 ASGN", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021804,  17, "CTL3 ASGN", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021806,  17, "CTL4 ASGN", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021808,  17, "GK S1 ASGN", 67, FX_DEFAULT_TYPE},
+  {0xFFF, 0x2002180A,  17, "GK S2 ASGN", 67, FX_DEFAULT_TYPE}, // 40
+  {0xFFF, 0x2002180C,  15, "EXP SW ASN", 85, FX_DEFAULT_TYPE}, // 41
+  {0xFFF, 0x2002180E,  15, "EXP ASGN", 100, FX_DEFAULT_TYPE}, // 42
+  {0xFFF, 0x2002180F,  15, "EXP ON ASN", 100, FX_DEFAULT_TYPE}, // 43
+  {0xFFF, 0x20021810,  15, "EXP2 ASGN", 100, FX_DEFAULT_TYPE},
+  {0xFFF, 0x20021811,  15, "GK VOL ASN", 100, FX_DEFAULT_TYPE},
   {0xFFF, 0x10001000,   2, "Gtr2MIDI", 0, FX_DEFAULT_TYPE},  // 46. Can not be controlled from assignment, but can be from GP10_PARAMETER!!!
 };
 
@@ -555,7 +555,7 @@ FLASHMEM void MD_GP10_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16
       else msg += ':';
     }
     msg += SP[Sw].Label;
-    LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 
     //PAGE_load_current(false); // To update the other parameter states, we re-load the current page
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY;
@@ -721,7 +721,7 @@ FLASHMEM void MD_GP10_class::assign_press(uint8_t Sw, uint8_t value) { // Switch
     else value = SP[Sw].Assign_min;
     check_update_label(Sw, value);
   }
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 
   if (SP[Sw].Assign_on) update_page = REFRESH_FX_ONLY; //PAGE_load_current(false); // To update the other switch states, we re-load the current page
 }
@@ -736,7 +736,7 @@ FLASHMEM void MD_GP10_class::assign_release(uint8_t Sw) { // Switch set to GP10_
     if (SP[Sw].Assign_on) {
       SP[Sw].State = 2; // Switch state off
       check_update_label(Sw, SP[Sw].Assign_min);
-      LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
     }
     else {
       SP[Sw].State = 0; // Assign off, so LED should be off as well
@@ -948,7 +948,7 @@ FLASHMEM void MD_GP10_class::toggle_expression_pedal(uint8_t sw) {
   }
   SP[sw].PP_number = GP10_EXP_SW;
   read_parameter(sw, exp_sw_type, 0); // Update label temporary to show switch state
-  LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
   update_exp_label(sw);
   update_page = REFRESH_FX_ONLY;
 }

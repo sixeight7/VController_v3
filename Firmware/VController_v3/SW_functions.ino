@@ -59,6 +59,7 @@ uint8_t current_cmd_switch_action = 0; // Placeholder for the switch action of t
 #define SWITCH_DUAL_HELD 9
 
 uint8_t arm_page_cmd_exec = 0; // Set to the number of the selected page to execute the commands for this page
+bool par_state_set = false;
 
 void setup_switch_control()
 {
@@ -143,7 +144,7 @@ void main_switch_control()  // Checks if a button has been pressed and check out
     if (current_cmd > 0) {
       DEBUGMAIN("** Trigger execution of default commands for page " + String(arm_page_cmd_exec));
     }
-    current_cmd_switch = 0;
+    current_cmd_switch = ON_PAGE_SELECT_SWITCH;
     current_cmdbuf_index = 0;
     arm_page_cmd_exec = 0;
   }
@@ -174,6 +175,8 @@ void SCO_execute_cmd(uint8_t sw, uint8_t action, uint8_t index) {
 
   uint8_t switch_type = cmd_buf[index].Switch & SWITCH_TYPE_MASK;
   //DEBUGMSG("Checking Cmd index: " +  String(index) + ", switch type: " + String(switch_type) + ", switch: " + String(sw) + ", action: " + String(action));
+
+  if (index == 0) par_state_set = false;
 
   switch (action) {
     case SWITCH_PRESSED:
@@ -331,6 +334,7 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) break;
         SCO_select_next_device();
+        Current_mode = DEVICE_MODE;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case GLOBAL_TUNER:
@@ -362,7 +366,7 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
           MIDI_update_PC_ledger(SP[Sw].PP_number, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2), true);
           msg = "PC ";
           LCD_add_3digit_number(SP[Sw].PP_number, msg);
-          LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
         }
         if (Data1 == BANKSELECT) {
           MIDI_send_PC(SP[Sw].PP_number, cmd->Value2, MIDI_set_port_number_from_menu(cmd->Value3));
@@ -534,7 +538,6 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
     }
   }
   else if (Dev < NUMBER_OF_DEVICES) { // Check for device specific parameters
-    bool updated = false;
     uint16_t pnumber = 0;
     switch (Type) {
       case PATCH:
@@ -591,14 +594,20 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
       case PARAMETER:
         if (SC_switch_triggered_by_PC()) break;
         //if (Data2 == UPDOWN) break; // updown parameters are executed in SCO_command_press()
-        if (first_cmd) updated = SCO_update_parameter_state(Sw, cmd->Value1, cmd->Value2, cmd->Value3); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
-        if (updated) Device[Dev]->parameter_press(Sw, cmd, Data1);
+        if (!par_state_set) {
+          par_state_set = true;
+          SCO_update_parameter_state(Sw, cmd->Value1, cmd->Value2, cmd->Value3); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        }
+        Device[Dev]->parameter_press(Sw, cmd, Data1);
         break;
       case PAR_BANK:
         if (SC_switch_triggered_by_PC()) break;
         //if (Data2 == UPDOWN) break; // updown parameters are executed in SCO_command_press()
-        if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
-        if (updated) Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
+        if (!par_state_set) {
+          par_state_set = true;
+          SCO_update_parameter_state(Sw, SP[Sw].Assign_min, SP[Sw].Assign_max, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        }
+        Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
         break;
       case PAR_BANK_CATEGORY:
         if (SC_switch_is_expr_pedal()) break;
@@ -626,11 +635,14 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
       case ASSIGN:
         if (SC_switch_triggered_by_PC()) break;
         if ((Data1 == SELECT) || (Data1 == BANKSELECT)) {
-          if (first_cmd) updated = SCO_update_parameter_state(Sw, 0, 1, 1);
-          if (updated) {
-            if (SC_switch_is_expr_pedal()) Device[Dev]->assign_press(Sw, Expr_ped_value);
-            else Device[Dev]->assign_press(Sw, 127);
+          if (!par_state_set) {
+            par_state_set = true;
+            SCO_update_parameter_state(Sw, 0, 1, 1);
           }
+
+          if (SC_switch_is_expr_pedal()) Device[Dev]->assign_press(Sw, Expr_ped_value);
+          else Device[Dev]->assign_press(Sw, 127);
+
         }
         if (Data1 == BANKUP) {
           if (SC_switch_is_expr_pedal()) break;
@@ -716,15 +728,12 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
       case SAVE_PATCH:
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) break;
-        if (Dev == KTN) {
-          My_KTN.save_patch();
-        }
-        if (Dev == SY1000) {
-          My_SY1000.save_scene();
-        }
-        if (Dev == GR55) {
-          My_GR55.save_scene();
-        }
+
+        if (Dev == KTN) My_KTN.save_patch();
+        if (Dev == SY1000) My_SY1000.save_scene();
+        if (Dev == GR55) My_GR55.save_scene();
+        if ((Dev >= USER1) && (Dev <= USER10)) USER_device[Dev - USER1]->edit();
+
         switch_controlled_by_master_exp_pedal = 0;
         break;
     }
@@ -761,10 +770,10 @@ void SCO_execute_command_release(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         MIDI_send_note_off(Data1, cmd->Data2, cmd->Value1, MIDI_set_port_number_from_menu(cmd->Value2));
         break;
       case MIDI_CC:
-        if (first_cmd) {
-          SCO_CC_release(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
-          update_page = RELOAD_PAGE;
-        }
+        //if (first_cmd) {
+        SCO_CC_release(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+        if (first_cmd) update_page = RELOAD_PAGE;
+        //}
         break;
     }
   }
@@ -850,11 +859,11 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
       case PATCH:
         if ((Data1 == PREV) || (Data1 == NEXT) || (Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
         /*if (Data1 == PREV) pnumber = Device[Dev]->calculate_prev_next_patch_number(-1);
-        else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_prev_next_patch_number(1);
-        else break;
-        Device[Dev]->patch_select_pressed(pnumber, Sw);
-        mute_all_but_me(Dev); // mute all the other devices
-        update_page = RELOAD_PAGE;*/
+          else if (Data1 == NEXT) pnumber = Device[Dev]->calculate_prev_next_patch_number(1);
+          else break;
+          Device[Dev]->patch_select_pressed(pnumber, Sw);
+          mute_all_but_me(Dev); // mute all the other devices
+          update_page = RELOAD_PAGE;*/
         break;
       case PARAMETER:
         if ((Data2 == STEP) || (Data2 == UPDOWN)) {
@@ -866,7 +875,7 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         break;
       case PAR_BANK:
         if ((SP[Sw].Latch == STEP) || (SP[Sw].Latch == UPDOWN)) {
-          if (first_cmd) SCO_update_held_parameter_state(Sw, 0, Device[Dev]->number_of_values(SP[Sw].PP_number) - 1, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
+          if (first_cmd) SCO_update_held_parameter_state(Sw, SP[Sw].Assign_min, SP[Sw].Assign_max, 1); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
           Device[Dev]->parameter_press(Sw, cmd, SP[Sw].PP_number);
           SC_skip_release_and_hold_until_next_press(SKIP_LONG_PRESS);
           if (SP[Sw].Latch == UPDOWN) updown_direction_can_change = false;
@@ -878,7 +887,7 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         break;
       case ASSIGN:
         if ((Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
-        
+
         break;
     }
   }
@@ -889,8 +898,8 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
         return;
       case PAGE:
       case MIDI_PC:
-         if ((Data1 == PREV) || (Data1 == NEXT) || (Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
-         break;
+        if ((Data1 == PREV) || (Data1 == NEXT) || (Data1 == BANKDOWN) || (Data1 == BANKUP)) execute_held = true;
+        break;
       case MIDI_CC:
         if (first_cmd) SCO_CC_held(Data1, Data2, cmd->Value1, cmd->Value2, cmd->Value3, MIDI_set_port_number_from_menu(cmd->Value4), Sw, first_cmd); // Passing min, max and step value for STEP, RANGE and UPDOWN style pedal
         SC_skip_release_and_hold_until_next_press(SKIP_LONG_PRESS);
@@ -1035,24 +1044,6 @@ bool SCO_update_parameter_state_encoder(uint8_t Sw, uint16_t _min, uint16_t _max
       if (_max >= 128) val = (SP[Sw].Target_byte1 * 128) + SP[Sw].Target_byte2;
       else val = SP[Sw].Target_byte1;
       val = update_encoder_value(Enc_value, val, _min, _max);
-      /*if (Enc_value > 0) {
-        for (uint8_t i = 0; i < abs(Enc_value); i++) {
-          if (val >= _max) {
-            if ((Enc_value > 1) || (_max < 4)) val = _max;
-            else val = _min;
-          }
-          else val += Step;
-        }
-        }
-        if (Enc_value < 0)
-        for (uint8_t i = 0; i < abs(Enc_value); i++) {
-          if (val <= _min) {
-            if ((Enc_value < -1) || (_max < 4)) val = _min;
-            else val = _max;
-          }
-          else val -= Step;
-        }*/
-
       if (_max > 128) {
         SP[Sw].Target_byte1 = val / 128;
         SP[Sw].Target_byte2 = val % 128;
@@ -1097,7 +1088,7 @@ void SCO_update_released_parameter_state(uint8_t Sw) {
   if (SP[Sw].Latch == MOMENTARY) SP[Sw].State = 2;
 }
 
-void SCO_update_held_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8_t Step) {
+void SCO_update_held_parameter_state(uint8_t Sw, uint16_t Min, uint16_t Max, uint8_t Step) {
   uint16_t val;
   uint16_t _max = SCO_find_max_value(Max);
   uint16_t _min = Min;
@@ -1136,6 +1127,9 @@ void SCO_update_held_parameter_state(uint8_t Sw, uint8_t Min, uint8_t Max, uint8
 uint16_t SCO_return_parameter_value(uint8_t Sw, Cmd_struct * cmd) {
   if ((SP[Sw].Latch == RANGE) || (SP[Sw].Latch == STEP) || (SP[Sw].Latch == UPDOWN)) {
     return SP[Sw].Target_byte1;
+  }
+  if ((SP[Sw].Latch == MOMENTARY) || (SP[Sw].Latch == ONE_SHOT)) {
+    return cmd->Value1;
   }
   // Latch is MOMENTARY or TOGGLE
   if (SP[Sw].Type == PARAMETER) { //Parameters are read directly from the switch config.
@@ -1185,7 +1179,7 @@ uint8_t SCO_find_parameter_state(uint8_t Sw, uint8_t value) {
 
 void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t value2, uint8_t channel, uint8_t port, uint8_t Sw, bool first_cmd) {
 
-  uint8_t val;
+  uint8_t val = 255;
   String msg;
 
   if (SC_switch_is_expr_pedal()) {
@@ -1206,7 +1200,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
       LCD_add_3digit_number(CC_number, msg);
       msg += ':';
       LCD_add_3digit_number(val, msg);
-      LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
     }
   }
   else {
@@ -1214,8 +1208,7 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
     switch (CC_toggle) {
       case CC_ONE_SHOT:
       case CC_MOMENTARY:
-        MIDI_send_CC(CC_number, value1, channel, port); // Controller, Value, Channel, Port
-        MIDI_update_CC_ledger(CC_number, value1, channel, port, true);
+        val = value1;
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case CC_TOGGLE:
@@ -1225,12 +1218,10 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
           if (SP[Sw].State >= 2) SP[Sw].State = 0;
         }
         if (SP[Sw].State == 0) {
-          MIDI_send_CC(CC_number, value1, channel, port); // Controller, Value, Channel, Port
-          MIDI_update_CC_ledger(CC_number, value1, channel, port, true);
+          val = value1;
         }
         else {
-          MIDI_send_CC(CC_number, value2, channel, port); // Controller, Value, Channel, Port
-          MIDI_update_CC_ledger(CC_number, value2, channel, port, true);
+          val = value2;
         }
         switch_controlled_by_master_exp_pedal = 0;
         break;
@@ -1240,14 +1231,16 @@ void SCO_CC_press(uint8_t CC_number, uint8_t CC_toggle, uint8_t value1, uint8_t 
         val += 1;
         if (val > value1) val = value2; // Go from max to min value.
         SP[Sw].Target_byte1 = val;
-        MIDI_send_CC(CC_number, val, channel, port); // Controller, Value, Channel, Port
-        MIDI_update_CC_ledger(CC_number, val, channel, port, true);
         switch_controlled_by_master_exp_pedal = Sw;
         break;
       case CC_UPDOWN:
         updown_direction_can_change = true;
         switch_controlled_by_master_exp_pedal = Sw;
         break;
+    }
+    if (val != 255) {
+      MIDI_send_CC(CC_number, val, channel, port); // Controller, Value, Channel, Port
+      MIDI_update_CC_ledger(CC_number, val, channel, port, true);
     }
   }
 }
@@ -1299,6 +1292,16 @@ void SCO_select_page(uint8_t new_page) {
     update_main_lcd = true;
     SC_skip_release_and_hold_until_next_press(SKIP_RELEASE | SKIP_HOLD); // So no release or hold commands will be triggered on the new page by the switch that is still pressed now
     if (Current_page != PAGE_MENU) LCD_show_page_name(); // Temporary show page name on main display
+
+#ifdef IS_VCMINI
+    // Show encoder/knob information
+    if ((Setting.Show_popup_messages == 0) && (Current_page == PAGE_SELECT)) {
+      LCD_show_popup_title(" MENU  | SETLST ", MESSAGE_TIMER_LENGTH);
+      LCD_show_popup_label("SONG |PAGE |DEV ", MESSAGE_TIMER_LENGTH);
+    }
+
+#endif
+
     DEBUGMAIN("*** SCO_select_page: " + String(new_page));
   }
 }
@@ -1394,13 +1397,11 @@ uint8_t SCO_get_number_of_next_device() {
 }
 
 void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page of the current device. These can be set in programmed on the unit. Defaults are in init() of the device class
-  uint8_t new_page;
   if (Dev < NUMBER_OF_DEVICES) {
     set_current_device(Dev);
 
     // Move to next device page
-    new_page = Device[Dev]->select_next_device_page();
-    //Device[Dev]->read_current_device_page();
+    uint8_t new_page = Device[Dev]->select_next_device_page();
 
     // Select this page
     SCO_trigger_default_page_cmds(new_page);
@@ -2089,6 +2090,10 @@ void SCO_get_setlist_short_item_name(uint16_t item, String &name) {
 }
 
 void SCO_select_setlist(uint8_t number) {
+  if ((number == Current_setlist) && (number != 0) && (Number_of_setlist_items > 0)) {
+    SCO_open_first_item_of_setlist();
+    return;
+  }
   Current_setlist = number;
   update_page = REFRESH_PAGE;
   String msg;
@@ -2166,10 +2171,38 @@ void SCO_enter_setlist_menu() {
 }
 
 void SCO_select_first_item_of_setlist() {
-  if (Current_setlist_target == SETLIST_TARGET_SONG) SCO_select_song(0);
-  //if (Current_setlist_target == SETLIST_TARGET_PAGE) SCO_select_song(0);
-  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < (NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE)))
+  if (Current_setlist_target == SETLIST_TARGET_SONG) {
+    SCO_select_song(0);
+  }
+  if (Current_setlist_target == SETLIST_TARGET_PAGE) {
+    // Nothing
+  }
+  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < (NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE))) {
     Device[Current_setlist_target - SETLIST_TARGET_FIRST_DEVICE]->patch_select_pressed(0, 0);
+  }
+}
+
+void SCO_open_first_item_of_setlist() {
+  if (Current_setlist_target == SETLIST_TARGET_SONG) {
+    Current_mode = SONG_MODE;
+    SCO_select_song(SCO_get_song_number(0));
+    SCO_trigger_default_page_cmds(PAGE_FOR_SONG_MODE);
+    SCO_select_page(PAGE_FOR_SONG_MODE);
+  }
+  if (Current_setlist_target == SETLIST_TARGET_PAGE) {
+    Current_mode = PAGE_MODE;
+    uint8_t pg = SCO_get_page_number(0);
+    SCO_trigger_default_page_cmds(pg);
+    SCO_select_page(pg);
+  }
+  if ((Current_setlist_target >= SETLIST_TARGET_FIRST_DEVICE) && (Current_setlist_target < (NUMBER_OF_DEVICES + SETLIST_TARGET_FIRST_DEVICE))) {
+    Current_mode = DEVICE_MODE;
+    uint8_t Dev = Current_setlist_target - SETLIST_TARGET_FIRST_DEVICE;
+    uint8_t pg = Device[Dev]->read_current_device_page();
+    Device[Dev]->patch_select_pressed(0, 0);
+    SCO_trigger_default_page_cmds(pg);
+    SCO_select_page(pg, Dev);
+  }
 }
 
 void SCO_load_setlist_buffer_with_empty_setlist() {
@@ -2360,7 +2393,7 @@ void SCO_rename_current_setlist() {
   Text_entry_length = 16;
   Main_menu_cursor = 1;
 
-  start_keyboard(SCO_rename_setlist_done);
+  start_keyboard(SCO_rename_setlist_done, false);
 }
 
 void SCO_rename_setlist_done() {
@@ -2444,6 +2477,19 @@ uint8_t SCO_get_song_number(uint8_t number) {
   else return number;
 }
 
+void SCO_set_song_setlist_item(uint8_t song_no) {
+  if (SCO_setlist_active(SETLIST_TARGET_SONG)) {
+    for (uint8_t si = 0; si < SCO_get_song_max(); si++) {
+      if (SCO_read_setlist_item(si) == song_no) {
+        Current_song_setlist_item = si;
+        return;
+      }
+    }
+    Current_song_setlist_item = 0;
+  }
+  else Current_song_setlist_item = song_no;
+}
+
 void SCO_get_song_default_name(uint8_t number, String &name) {
   name += "NEW SONG";
 }
@@ -2517,6 +2563,7 @@ void SCO_select_song(uint8_t number) {
   }
   update_page = REFRESH_PAGE;
   update_main_lcd = true;
+  EEPROM_update_when_quiet();
 }
 
 void SCO_song_up_down(signed int delta) {
@@ -2545,8 +2592,9 @@ void SCO_select_part(uint8_t number) {
   update_page = REFRESH_PAGE;
   String msg;
   SCO_get_part_name(Current_part, msg);
-  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(0)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
   device_in_bank_selection = 0;
+  EEPROM_update_when_quiet();
 }
 
 void SCO_part_up_down(signed int delta) {
@@ -2575,7 +2623,7 @@ void SCO_songpart_up_down(signed int delta) {
   }
   String msg;
   SCO_get_part_name(Current_part, msg);
-  LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(0)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
 }
 
 void SCO_rename_current_song() {
@@ -2583,9 +2631,9 @@ void SCO_rename_current_song() {
   Text_entry = "";
   SCO_get_song_name(Current_song, Text_entry);
   Text_entry_length = SONG_NAME_SIZE;
-  Main_menu_cursor = 1;
 
-  start_keyboard(SCO_rename_song_done);
+
+  start_keyboard(SCO_rename_song_done, false);
 }
 
 void SCO_rename_song_done() {
@@ -2599,9 +2647,9 @@ void SCO_rename_current_part() {
   Text_entry = "";
   SCO_get_part_name(Current_part, Text_entry);
   Text_entry_length = SONG_PART_NAME_SIZE;
-  Main_menu_cursor = 1;
 
-  start_keyboard(SCO_rename_part_done);
+
+  start_keyboard(SCO_rename_part_done, false);
 }
 
 void SCO_rename_part_done() {

@@ -43,7 +43,7 @@ class LiquidCrystal_PCF8745 : public LCD
     void write4bits ( uint8_t value, uint8_t mode ) ;
 
     uint8_t _Addr;           // I2C Address of the IO expander
-    bool   _initialised;     // Initialised PCF8745 chip
+    bool  _initialised;     // Initialised PCF8745 chip
     uint8_t _Number;
     uint8_t _En;             // LCD expander word for enable pin
     uint8_t _Rs;             // LCD expander word for Register Select pin

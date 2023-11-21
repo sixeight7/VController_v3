@@ -162,10 +162,13 @@
 
 // Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
 #define NUMBER_OF_MIDI_PORTS 7
-//#define MIDI3_BAUD_RATE 115200
-//#define MIDI3_BAUD_RATE 38400
+#define MIDI1_SERIAL_PORT Serial1
+#define MIDI2_SERIAL_PORT Serial2
+#define MIDI3_SERIAL_PORT Serial3
 #define MIDI3_ENABLED
+#define MIDI4_SERIAL_PORT Serial4
 #define MIDI4_ENABLED
+#define MIDI5_SERIAL_PORT Serial5
 #define MIDI5_ENABLED
 #define MIDI5_SPEED 500000
 #define MIDI5_HANDSHAKE_PORT 37

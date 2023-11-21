@@ -8,14 +8,14 @@
 // Table below has a copy in VC-edit/Headers/VController/globals.cpp
 
 struct Setting_struct { // All the global settings in one place.
-  bool    Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
-  bool    Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
-  bool    Physical_LEDs; // Does the VController have Physical LEDs
-  bool    Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
+  bool   Send_global_tempo_after_patch_change; // If true, the tempo of all patches will remain the same. Set it by using the tap tempo of the V-Controller
+  bool   Hide_tap_tempo_LED; // Switch flasing tap tempo LED on and off
+  bool   spare;
+  bool   Virtual_LEDs; // Do you want to switch on Virtual LEDs - state indicators on displays?
   uint8_t LED_brightness; // The neopixels are very bright. I find setting them to 10 is just fine for an indicator light.
   uint8_t Backlight_brightness; //In case of RGB displays, here the backlight brightness is set
   uint8_t Bpm; // The current tempo
-  bool    LED_FX_off_is_dimmed; // When an effect is off, the LED will be dimmed
+  bool   LED_FX_off_is_dimmed; // When an effect is off, the LED will be dimmed
   uint8_t LED_global_colour; // Colour of Global functions
   uint8_t LED_bpm_colour; // Colour of the tempo LED
   uint8_t FX_default_colour; // Default colour
@@ -53,12 +53,12 @@ struct Setting_struct { // All the global settings in one place.
   uint8_t MIDI_forward_filter[3]; // Filters for MIDI forwarding
   uint8_t BLE_mode; // Bluetooth mode
   uint8_t WIFI_mode; // WIFI mode
-  bool    RTP_enabled; // Status of AppleMIDI / RTPMIDI
-  bool    WIFI_server_enabled; // Enable the WIFI server for OTA updates
+  bool   RTP_enabled; // Status of AppleMIDI / RTPMIDI
+  bool   WIFI_server_enabled; // Enable the WIFI server for OTA updates
   uint8_t Follow_tempo_from_G2M; // Tempo is updated from playing speed using Guitar2midi
   uint8_t LED_bpm_follow_colour; // Colour of tap tempo LED when tempo following is on
   uint8_t MIDI_forward_bidirectional; // Forward midi in both directions
-  bool    Spare; // Spare
+  uint8_t Show_popup_messages; // Show popup messages
   uint8_t Main_display_top_line_mode;
   uint8_t Block_identity_messages; // To block sysex messages as it messes with certain devices
 };
@@ -76,7 +76,7 @@ struct Setting_struct { // All the global settings in one place.
 const Setting_struct Default_settings = {  // Default values for global settings
   true,  // Send_global_tempo_after_patch_change
   false, // Hide tap tempo LED
-  true,  // Physical_LEDs
+  true,  // spare
   false, // Virtual_LEDs
   10,    // LED_brightness
   254,   // Backlight_brightness
@@ -124,7 +124,7 @@ const Setting_struct Default_settings = {  // Default values for global settings
   0,     // Disable Follow_tempo_from_G2M
   1,     // Colour of tap tempo LED when tempo following is on: green
   0,     // Forward midi in both directions
-  false, // Spare
+  0,     // Show popup messages
   5,     // Main_display_top_line_mode
   0,     // Block_identity_messages
 };
@@ -204,6 +204,45 @@ const MIDI_switch_settings_struct MIDI_switch_default_settings[NUMBER_OF_DEFAULT
   { MIDI_SWITCH_OFF, 1, 1, 0 }, // switch 31
 };
 
+#define USER_NUMBER_OF_CC_PARAMETERS 25
+#define USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE 13
+struct User_device_struct {
+  char full_name[17];
+  char short_name[7];
+  uint8_t patch_min_msb;
+  uint8_t patch_min_lsb;
+  uint8_t patch_max_msb;
+  uint8_t patch_max_lsb;
+  char first_patch_format[7];
+  char last_patch_format[7];
+  uint8_t device_detect[4];
+  uint8_t parameter_CC[USER_NUMBER_OF_CC_PARAMETERS];
+  uint8_t parameter_value_max[USER_NUMBER_OF_CC_PARAMETERS];
+  uint8_t parameter_value_min[USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE];
+  uint8_t parameter_type[USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE];
+  uint8_t looper_length;
+  uint8_t pc_type;
+};
+
+struct User_device_name_struct {
+  uint8_t type_and_dev;
+  uint8_t patch_msb;
+  uint8_t patch_lsb;
+  uint8_t value; // Used for par_state or colour
+  uint8_t name[12];
+};
+
+#define USER_DEVICE_PATCH_NAME_TYPE 1
+#define USER_DEVICE_FX_NAME_TYPE 2
+#define USER_DEVICE_SCENE_NAME_TYPE 3
+
+#define PC_TYPE_PC_ONLY 0
+#define PC_TYPE_PC_AND_CC0 1
+#define PC_TYPE_PC_AND_CC32 2
+#define PC_TYPE_PC_AND_CC0_MOD100 3
+#define PC_TYPE_PC_AND_CC32_MOD100 4
+#define PC_TPE_CC60 5
+
 // Switch parameter memory
 struct SP_struct {
   uint8_t Device;       // The device the switch is assigned to
@@ -237,6 +276,7 @@ struct SP_struct {
   uint8_t Value4;
   uint8_t Value5;
   uint8_t Offline_value;
+  bool Has_custom_label;
 };
 
 // Reserve the memory for the switches on the page and the external switches and the default page switch

@@ -253,7 +253,7 @@ void MD_SY1000_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned
       }
       update_main_lcd = true;
       if (popup_patch_name) {
-        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
         popup_patch_name = false;
       }
       request_next_data_item();
@@ -1273,7 +1273,7 @@ FLASHMEM void MD_SY1000_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint
       else msg += ':';
     }
     msg += SP[Sw].Label;
-    LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 
     //PAGE_load_current(false); // To update the other parameter states, we re-load the current page
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY;
@@ -1609,7 +1609,7 @@ FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value)
           msg = "Scene " + String(new_scene) + ':';
           read_scene_name_from_buffer(new_scene);
           msg += scene_label_buffer;
-          LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
           break;
         case MODE_SCENE_TOP_ROW:
           if (current_snapscene == (sw - 3)) new_scene = sw + 1; // Select scene 5 - 8
@@ -1618,7 +1618,7 @@ FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value)
           msg = "Scene " + String(new_scene) + ':';
           read_scene_name_from_buffer(new_scene);
           msg += scene_label_buffer;
-          LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
           delay(40);
           set_editor_mode(false);
           break;
@@ -1629,7 +1629,7 @@ FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value)
           msg = "Scene " + String(new_scene) + ':';
           read_scene_name_from_buffer(new_scene);
           msg += scene_label_buffer;
-          LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
           delay(25);
           set_editor_mode(false);
           break;
@@ -1863,7 +1863,7 @@ FLASHMEM void MD_SY1000_class::assign_press(uint8_t Sw, uint8_t value) { // Swit
     if (SP[Sw].State == 1) value = SP[Sw].Assign_max;
     else value = SP[Sw].Assign_min;
     check_update_label(Sw, value);
-    LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   }
 
   if (SP[Sw].Assign_on) update_page = REFRESH_PAGE; // To update the other switch states, we re-load the current page
@@ -1897,7 +1897,7 @@ FLASHMEM void MD_SY1000_class::assign_release(uint8_t Sw) { // Switch set to SY1
         write_parameter_value(number, 0);
       }
       check_update_label(Sw, SP[Sw].Assign_min);
-      LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
     }
     else SP[Sw].State = 0; // Assign off, so LED should be off as well
 
@@ -2194,7 +2194,7 @@ FLASHMEM void MD_SY1000_class::toggle_scene_assign(uint8_t number) {
   String msg = "CC #" + String(cc);
   uint8_t asgn = check_for_scene_assign_source(cc);
   if (asgn > 0) msg += " (ASGN " + String(asgn) + ')';
-  LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(0)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 }
 
 FLASHMEM void MD_SY1000_class::set_scene_assign_states(uint8_t my_byte) {
@@ -2568,14 +2568,14 @@ FLASHMEM void MD_SY1000_class::set_snapscene(uint8_t sw, uint8_t number) {
   set_snapscene_number_and_LED(number);
   if ((loaded) && (sw > 0)) {
     read_scene_name_from_buffer(number);
-    String msg = "Scene " + String(number) + ':' + scene_label_buffer;
-    LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+    String msg = "[S" + String(number) + "] " + scene_label_buffer;
+    if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
   }
   MIDI_send_current_snapscene(my_device_number, current_snapscene);
   update_main_lcd = true;
 }
 
-FLASHMEM void MD_SY1000_class::show_snapscene(uint8_t  number) {
+FLASHMEM void MD_SY1000_class::show_snapscene(uint8_t number) {
   if ((number < 1) || (number > 8)) return;
   if (number == current_snapscene) return;
   set_snapscene_number_and_LED(number);

@@ -35,16 +35,17 @@ LiquidCrystal  Main_lcd(MAIN_DISPLAY_TEENSY_PINS);
 #endif
 
 #ifdef IS_VCTOUCH
-#ifdef USE_TFT_USER_FONT
-#include "fonts.h"
-#endif
-#include "pics.h"
 #include <ER-TFTM0784-1.h>
 ER_TFTM0784 tft = ER_TFTM0784(SPI_SPEED, SDI_PIN, SDO_PIN, SCLK_PIN, CS_PIN, RST_SER_PIN);
 #include <2828.h>
 SSD2828 Master_bridge = SSD2828(SDI_2828_PIN, SCLK_2828_PIN, CS_2828_PIN, RST_2828_PIN);
 
 Goodix touch = Goodix(INT_911_PIN, RST_911_PIN);
+
+#ifdef USE_TFT_USER_FONT
+#include "fonts.h"
+#endif
+#include "pics.h"
 
 #define layer1_start_addr 0
 #define layer2_start_addr 1024000   //400*1280*2 
@@ -253,6 +254,7 @@ String Display_number_string; // Placeholder for patchnumbers on display
 uint8_t my_looper_lcd = 0; // The LCD that will show the looper progress bar (0 is no display)
 bool backlight_on[NUMBER_OF_DISPLAYS] = {false}; // initialize all backlights off
 bool pong_active = false;
+uint8_t custom_label_switch_number = 0;
 
 byte arrow_up[8] = { // The character for the UP arrow
   0b00100,
@@ -487,7 +489,6 @@ void LCD_update_top_line() {
 
   if (Current_page == PAGE_MENU) { // Show menu content if active
     menu_set_main_title();
-
     return;
   }
 
@@ -685,7 +686,7 @@ void LCD_show_page_name() { // Will temporary show the name of the current page
   if ((Setting.Main_display_top_line_mode == MD_SHOW_PAGE_NAME) || (Setting.Main_display_bottom_line_mode == MD_SHOW_PAGE_NAME)) return; // Do not show when display already shows the page name.
   //LCD_update_main_display();
   EEPROM_read_title(Current_page, 0, Current_page_name); // Read page name from EEPROM
-  LCD_show_popup_label(Current_page_name, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(0)) LCD_show_popup_label(Current_page_name, ACTION_TIMER_LENGTH);
 }
 
 bool LCD_check_main_display_show_patchname() {
@@ -772,9 +773,18 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
     //String lbl;
     EEPROM_read_title(Current_page, sw, msg); // Override the label if a custom label exists
     LCD_set_SP_label(sw, msg); // So full label will popup on switch activation
+    SP[sw].Has_custom_label = true;
+    return;
+  }
+  else if ((EEPROM_count_cmds(Current_page, sw) == 0) && (Current_page < Number_of_pages) && (EEPROM_check4label(PAGE_DEFAULT, sw))) {
+    //String lbl;
+    EEPROM_read_title(PAGE_DEFAULT, sw, msg); // Override the label if a custom label exists
+    LCD_set_SP_label(sw, msg); // So full label will popup on switch activation
+    SP[sw].Has_custom_label = true;
     return;
   }
 
+  SP[sw].Has_custom_label = false;
   msg = "";
   uint8_t Dev = SP[sw].Device;
   if (Dev == CURRENT) Dev = Current_device;
@@ -862,6 +872,7 @@ void LCD_load_short_message(uint8_t sw, String & msg) {
         msg = SP[sw].Label;
         break;
       case SAVE_PATCH:
+        if ((Dev >= USER1) && (Dev <= USER10)) msg = "EDIT ";
         msg = "SAVE ";
         break;
       default:
@@ -999,11 +1010,28 @@ void LCD_set_length(String & msg, uint8_t length) {
   }
 }
 
+bool LCD_check_popup_allowed(uint8_t sw) {
+  custom_label_switch_number = 0;
+  if (Setting.Show_popup_messages == 0) return true;
+  if (Setting.Show_popup_messages == 1) {
+    if (sw == 0) return false;
+    if (SP[sw].Has_custom_label) custom_label_switch_number = sw;
+    return (SP[sw].Has_custom_label);
+  }
+  if (Setting.Show_popup_messages == 2) return false;
+  return false;
+}
+
 void LCD_show_popup_label(String message, uint16_t time)
 // Will display a status message on the main display
 {
   if (on_screen_keyboard_active) return;
   if (pong_active) return;
+  if (custom_label_switch_number > 0) {
+    if (EEPROM_check4label(Current_page, custom_label_switch_number)) EEPROM_read_title(Current_page, custom_label_switch_number, message);
+    else EEPROM_read_title(0, custom_label_switch_number, message);
+    custom_label_switch_number = 0;
+  }
   LCD_main_set_label(message);
   LCD_print_main_lcd_txt();
   if (SC_switch_is_expr_pedal()) messageTimer = millis() + LEDBAR_TIMER_LENGTH;
@@ -1203,8 +1231,16 @@ void LCD_update(uint8_t sw, bool do_show) {
     String msg;
     EEPROM_read_title(Current_page, sw, msg); // Override the label if a custom label exists
     LCD_set_SP_label(sw, msg);
+    SP[sw].Has_custom_label = true;
+  }
+  else if ((EEPROM_count_cmds(Current_page, sw) == 0) && (Current_page < Number_of_pages) && (EEPROM_check4label(PAGE_DEFAULT, sw))) {
+    String msg;
+    EEPROM_read_title(PAGE_DEFAULT, sw, msg); // Override the label if a custom label exists
+    LCD_set_SP_label(sw, msg); // So full label will popup on switch activation
+    SP[sw].Has_custom_label = true;
   }
 
+  SP[sw].Has_custom_label = false;
   uint8_t Dev = SP[sw].Device;
   if (Dev == CURRENT) Dev = Current_device;
 
@@ -1399,7 +1435,10 @@ void LCD_update(uint8_t sw, bool do_show) {
           LCD_add_snapshot_number(Dev, SP[sw].Value3, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
         }
         LCD_set_title(Display_number_string);
-        strcpy(lcd_label, SP[sw].Label);
+        Display_number_string = "";
+        Device[Dev]->get_snapscene_label(SP[sw].PP_number, Display_number_string);
+        LCD_set_label(Display_number_string);
+        //strcpy(lcd_label, SP[sw].Label);
         break;
       case LOOPER:
         LCD_set_looper_title();
@@ -1408,6 +1447,7 @@ void LCD_update(uint8_t sw, bool do_show) {
         break;
       case SAVE_PATCH:
         if ((Dev == SY1000) || (Dev == GR55)) LCD_add_title("<SCENE MENU>");
+        else if ((Dev >= USER1) && (Dev <= USER10)) LCD_add_title("<EDIT>");
         else LCD_add_title("<SAVE PATCH>");
         LCD_add_label(Device[Dev]->device_name);
         //LCD_print_lcd_txt(sw);
@@ -1742,17 +1782,17 @@ void LCD_parameter_label(uint8_t sw, uint8_t Dev, String & msg) { // Will print 
         if (step == 0) step = 1;
         msg = lbl_trimmed;
         msg += " (";
-        msg += String((SP[sw].Target_byte1 / step) + 1);
+        msg += String(((SP[sw].Target_byte1 - SP[sw].Assign_min) / step) + 1);
         msg += '/';
-        msg += String(((SP[sw].Assign_max - 1) / step) + 1);
+        msg += String(((SP[sw].Assign_max - SP[sw].Assign_min) / step) + 1);
         msg += ')';
         break;
       case RANGE:
         msg = lbl_trimmed;
         msg += " (";
-        msg += String(SP[sw].Target_byte1 + 1);
+        msg += String(SP[sw].Target_byte1 - SP[sw].Assign_min + 1);
         msg += '/';
-        msg += String(SP[sw].Assign_max);
+        msg += String(SP[sw].Assign_max - SP[sw].Assign_min);
         msg += ')';
         break;
       default:
@@ -1780,9 +1820,9 @@ void LCD_CC_title(uint8_t sw, String & msg) { // Will print the right parameter 
       msg += "CC #";
       LCD_add_3digit_number(SP[sw].PP_number, msg);
       msg += " (";
-      msg += String(SP[sw].Target_byte1);
+      msg += String(SP[sw].Target_byte1 - SP[sw].Assign_min);
       msg += '/';
-      msg += String(SP[sw].Assign_max);
+      msg += String(SP[sw].Assign_max - SP[sw].Assign_min);
       msg += ')';
       break;
     case CC_UPDOWN:
@@ -2187,6 +2227,12 @@ void LCD_number_to_note(uint8_t number, String & msg) {
   if (octave >= 2) msg += String(octave - 2);
 }
 
+void LCD_trim(String &str, uint8_t len) {
+  uint8_t last_char = 0;
+  for (uint8_t s = 0; s < len; s++) if ((str[s] > ' ') && (str[s] <= 'z')) last_char = s;
+  str.substring(0, last_char + 1);
+}
+
 // ********************************* Section 5: Virtual LED functions ********************************************
 
 // A virtual LED is user defined character 0 on the display. The virtual LED is changed by changing the user defined character.
@@ -2260,6 +2306,7 @@ void Set_virtual_LED_colour(uint8_t number, uint8_t colour) { // Called from LED
 
 void TFT_handleTouch(int8_t contacts, GTPoint *points) {
   DEBUGMSG("Touch contacts: " + String(contacts));
+  if (pong_active) return;
   if (contacts > 0) {
     if ((!touch_active) && (contacts == 1)) {
       touch_active = true;
@@ -2275,12 +2322,16 @@ void TFT_handleTouch(int8_t contacts, GTPoint *points) {
           if (Current_page != PAGE_MENU) SCO_select_page(PAGE_MENU);
           else menu_exit();
         }
+        if (TFT_check_device_pic_pressed(last_touch_x_pos, last_touch_y_pos)) {
+          if (Current_page != DEFAULT_PAGE) SCO_select_page(DEFAULT_PAGE);
+          else menu_exit();
+        }
       }
       else { // Pressing key on on-screen keyboard
         TFT_check_on_screen_key_press(points[0].x_lsb + (points[0].x_msb << 8), points[0].y_lsb + (points[0].y_msb << 8));
       }
     }
-    else { // Check for dragging
+    else { // Check for dragging/swiping
       //uint16_t new_x_pos = points[0].x_lsb + (points[0].x_msb << 8);
       uint16_t new_y_pos = points[0].y_lsb + (points[0].y_msb << 8);
       if (!touch_drag_active) { // Check if drag can be enabled
@@ -2602,6 +2653,16 @@ bool TFT_check_menu_pressed(uint16_t x_pos, uint16_t y_pos) {
   return false;
 }
 
+#define PIC_HEIGHT 100
+#define PIC_WIDTH 160
+#define PIC_X 50
+#define PIC_Y 110
+
+bool TFT_check_device_pic_pressed(uint16_t x_pos, uint16_t y_pos) {
+  if ((x_pos >= PIC_X) && (x_pos <= PIC_X + PIC_WIDTH) && (y_pos >= PIC_Y) && (y_pos <= PIC_Y + PIC_HEIGHT)) return true;
+  return false;
+}
+
 void TFT_show_bluetooth_state() {
   if (on_screen_keyboard_active) return;
   if (pong_active) return;
@@ -2880,7 +2941,7 @@ void TFT_print_text_entry() {
 }
 
 void TFT_check_on_screen_key_press(uint16_t x, uint16_t y) {
-  Serial.println("y:" + String(y) + ", x:" + String(x));
+  //Serial.println("y:" + String(y) + ", x:" + String(x));
   for (uint8_t k = 0; k < NUMBER_OF_KEYS; k++) {
     uint16_t x_pos = TFT_keyboard[k].x_pos * 10;
     uint16_t y_pos = TFT_keyboard[k].y_pos * 10;
@@ -2944,7 +3005,7 @@ void TFT_check_on_screen_key_press(uint16_t x, uint16_t y) {
   // Select cursor position in text entry line
   if ((y > 25) && (y < 90)) {
     int pos = ((x - 640) / 32) + (Text_entry_length / 2);
-    Serial.println("pos:" + String(pos));
+    //Serial.println("pos:" + String(pos));
     if ((pos > 0) && (pos < (Text_entry_length + 1))) {
       Main_menu_cursor = pos;
       TFT_print_text_entry();
@@ -2989,11 +3050,41 @@ void TFT_update_device_pic() {
   tft.Active_Window_XY(PIC_Y, PIC_X);
   tft.Active_Window_WH(PIC_HEIGHT, PIC_WIDTH);
   tft.Goto_Pixel_XY(PIC_Y, PIC_X);
-  if (device_for_pic < 255) tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, Device[Current_device]->device_pic);
+  if (device_for_pic < 255) {
+    if ((Current_device >= USER1) && (Current_device <= USER10)) {
+      uint16_t dev_colour = TFT_find_medium_colour(get_TFT_colour(Device[Current_device]->my_LED_colour), 0x8410);
+      uint16_t pic[PIC_HEIGHT * PIC_WIDTH];
+      TFT_recolour_picture(Device[Current_device]->device_pic, pic, PIC_HEIGHT * PIC_WIDTH, 0x8410, dev_colour);
+      tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, pic);
+    
+      String lbl = Device[Current_device]->device_name;
+      lbl.trim();
+      uint8_t x_offset = (6 - lbl.length()) * 8;
+      TFT_show_user_font(GroteskBold16x32, lbl, PIC_X + 30 + x_offset, PIC_Y + 33, 0xFFFF, dev_colour, false);
+    }
+    else {
+      tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, Device[Current_device]->device_pic);
+    
+    }
+  }
   else tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, img_VC_touch);
 
   tft.Active_Window_XY(0, 0);
   tft.Active_Window_WH(400, 1280);
+}
+
+void TFT_recolour_picture(const uint16_t *src, uint16_t *dest, uint16_t size, uint16_t source_colour, uint16_t dest_colour) {
+  for (uint16_t i = 0; i < size; i++) {
+    if (src[i] == source_colour) dest[i] = dest_colour;
+    else dest[i] = src[i];
+  }
+}
+
+uint16_t TFT_find_medium_colour(uint16_t colour1, uint16_t colour2) {
+  uint16_t medium_red = ((colour1 & 0x001F) + (colour2 & 0x01F)) / 2;
+  uint16_t medium_green = ((colour1 & (63 << 5)) + (colour2 & (63 << 5))) / 2;
+  uint16_t medium_blue = ((colour1 & (31 << 11)) + (colour2 & (31 << 11))) / 2;
+  return medium_red | medium_green | medium_blue;
 }
 
 #ifdef USE_TFT_USER_FONT
@@ -3299,7 +3390,7 @@ void TFT_pong_move_enemy_bat() {
 
     int pos;
     pos = ball_position_Y - PONG_FIELD_Y_TOP;
-    if (ball_direction_X > 0) { 
+    if (ball_direction_X > 0) {
       pos = abs(ball_position_Y + (enemy_position_X - ball_position_X) / ball_direction_X * (ball_direction_Y / 10.0));
       if (pos < (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP)) pos %= (PONG_FIELD_Y_BOTTOM - PONG_FIELD_Y_TOP);
       else {
@@ -3517,7 +3608,7 @@ void TFT_pong_show_hint(int value) {
   }
   else {
     uint8_t percentage = map(value, PONG_FIELD_Y_TOP, PONG_FIELD_Y_BOTTOM - PONG_BAT_HEIGHT, 99, 0);
-    //if (percentage < 100) 
+    //if (percentage < 100)
     hint = String(percentage / 10) + String(percentage % 10) + "%";
   }
   if (value == TFT_PONG_CLEAR_HINT) hint = "   ";

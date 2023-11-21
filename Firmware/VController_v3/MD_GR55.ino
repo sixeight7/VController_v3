@@ -191,7 +191,7 @@ FLASHMEM void MD_GR55_class::check_SYSEX_in(const unsigned char* sxdata, short u
       }
       update_main_lcd = true;
       if (popup_patch_name) {
-        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
         popup_patch_name = false;
       }
     }
@@ -457,45 +457,11 @@ FLASHMEM void MD_GR55_class::number_format(uint16_t number, String &Output) {
   // Uses patch_number as input and returns Current_patch_number_string as output in format "U01-1"
   // First character is L for Lead, R for Rhythm, O for Other or U for User
   // In guitar mode preset_banks is set to 40, in bass mode it is set to 12, because there a less preset banks in bass mode.
-
-  uint16_t patch_number_corrected = 0; // Need a corrected version of the patch number to deal with the funny numbering system of the GR-55
-  uint16_t bank_number_corrected = 0; //Also needed, because with higher banks, we start counting again
-
-  bank_number_corrected = (number / 3); // Calculate the bank number from the patch number
-
-  if (bank_number_corrected < 99) {
-    Output += 'U';
-    patch_number_corrected = number;  //In the User bank all is normal
-  }
-
-  else {
-    if (bank_number_corrected >= (99 + (2 * preset_banks))) {   // In the Other bank we have to adjust the bank and patch numbers so we start with O01-1
-      Output += "O";
-      patch_number_corrected = number - (GR55_NUMBER_OF_USER_PATCHES + (6 * preset_banks));
-      bank_number_corrected = bank_number_corrected - (99 + (2 * preset_banks));
-    }
-
-    else {
-      if (bank_number_corrected >= (99 + preset_banks)) {   // In the Rhythm bank we have to adjust the bank and patch numbers so we start with R01-1
-        Output += "R";
-        patch_number_corrected = number - (GR55_NUMBER_OF_USER_PATCHES + (3 * preset_banks));
-        bank_number_corrected = bank_number_corrected - (99 + preset_banks);
-      }
-
-      else    {// In the Lead bank we have to adjust the bank and patch numbers so we start with L01-1
-        Output += "L";
-        patch_number_corrected = number - GR55_NUMBER_OF_USER_PATCHES;
-        bank_number_corrected = bank_number_corrected - 99;
-      }
-    }
-  }
-
-  // Then add the bank number
-  uint8_t bank_no = (patch_number_corrected / 3) + 1;
-
-  Output += String(bank_no / 10) + String(bank_no % 10);
-  // Finally add the patch number
-  Output += "-" + String((patch_number_corrected % 3) + 1);
+  uint16_t delta = 3 * preset_banks;
+  if (number < GR55_NUMBER_OF_USER_PATCHES) build_patch_number(number, Output, "U01-1", "U99-3"); // User bank
+  else if (number < GR55_NUMBER_OF_USER_PATCHES + delta) build_patch_number(number - GR55_NUMBER_OF_USER_PATCHES, Output, "L01-1", "L99-3"); // Lead bank
+  else if (number < (GR55_NUMBER_OF_USER_PATCHES + (2 * delta))) build_patch_number(number - (GR55_NUMBER_OF_USER_PATCHES + delta), Output, "R01-1", "R99-3"); // Rhythm bank
+  else  build_patch_number(number - (GR55_NUMBER_OF_USER_PATCHES + (2 * delta)), Output, "O01-1", "O99-3"); // Other bank
 }
 
 FLASHMEM void MD_GR55_class::direct_select_format(uint16_t number, String &Output) {
@@ -682,14 +648,14 @@ const PROGMEM GR55_parameter_struct GR55_parameters[] = {
   {0, 0x214, 0x18000235,  13, "TUNING", 160, FX_PITCH_TYPE, false},
   {0, 0x216, 0x18000230, 201, "PATCH LVL", SHOW_DOUBLE_NUMBER, FX_FILTER_TYPE, false},
   {100, 0xFFF, 0x18000011,   2, "CTL", 94 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x18000012,  16, "CTL SW", 94, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x1800001F,  10, "EXP", 84, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x18000036,  10, "EXP ON", 84, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x18000012,  16, "CTL SW ASN", 94, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x1800001F,  10, "EXP ASGN", 84, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x18000036,  10, "EXP ON ASN", 84, FX_DEFAULT_TYPE, false},
   {101, 0xFFF, 0x1800004D,   2, "EXP SW", 111 | SUBLIST_FROM_BYTE2, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x1800004E,  14, "EXP SW", 111, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x1800005B,  10, "GK VOL", 84, FX_DEFAULT_TYPE, false},
-  {0, 0xFFF, 0x18000072,  14, "GK S1", 111, FX_DEFAULT_TYPE, false}, // 40
-  {0, 0xFFF, 0x1800007F,  14, "GK S2", 111, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x1800004E,  14, "EXP SW ASN", 111, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x1800005B,  10, "GK VOL ASN", 84, FX_DEFAULT_TYPE, false},
+  {0, 0xFFF, 0x18000072,  14, "GK S1 ASGN", 111, FX_DEFAULT_TYPE, false}, // 40
+  {0, 0xFFF, 0x1800007F,  14, "GK S2 ASGN", 111, FX_DEFAULT_TYPE, false},
   {0, 0xFFF, 0x02000007,   2, "GTR2MIDI", 0, FX_DEFAULT_TYPE, false},
   {0, 0xFFF, 0x02000008,   2, "G2M MODE", 77, FX_DEFAULT_TYPE, false},
   {0, 0xFFF, 0x02000009,   2, "G2M CHOM", 0, FX_DEFAULT_TYPE, false},
@@ -854,7 +820,7 @@ FLASHMEM void MD_GR55_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16
       msg += ':';
     }
     msg += SP[Sw].Label;
-    LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
   }
 }
@@ -1087,7 +1053,7 @@ FLASHMEM void MD_GR55_class::assign_press(uint8_t Sw, uint8_t value) { // Switch
       toggle_scene_assign(asgn - GR55_NUMBER_OF_CONTROL_PEDALS);
     }
     check_update_label(Sw, value);
-    LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   }
 
   if (SP[Sw].Assign_on) update_page = REFRESH_PAGE; // To update the other switch states, we re-load the current page
@@ -1362,7 +1328,7 @@ FLASHMEM void MD_GR55_class::toggle_scene_assign(uint8_t number) {
   String msg = "CC #" + String(cc);
   uint8_t asgn = check_for_scene_assign_source(cc);
   if (asgn > 0) msg += " (ASGN " + String(asgn) + ')';
-  LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(0)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 }
 
 FLASHMEM void MD_GR55_class::set_scene_assign_states(uint8_t my_byte) {
@@ -1510,7 +1476,7 @@ FLASHMEM void MD_GR55_class::toggle_expression_pedal(uint8_t sw) {
   write_sysex(0x1800004D, value);
   SP[sw].PP_number = GR55_EXP_SW;
   read_parameter(sw, exp_sw_type, 0); // Update label temporary to show switch state
-  LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(SP[sw].Label, ACTION_TIMER_LENGTH);
   update_exp_label(sw);
   update_page = REFRESH_FX_ONLY;
 }
@@ -1816,8 +1782,8 @@ FLASHMEM void MD_GR55_class::set_snapscene(uint8_t sw, uint8_t number) {
   current_snapscene = number;
   if ((loaded) && (sw > 0)) {
     read_scene_name_from_buffer(number);
-    String msg = "Scene " + String(number) + ':' + scene_label_buffer;
-    LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
+    String msg = "[S" + String(number) + "] " + scene_label_buffer;
+    if (LCD_check_popup_allowed(sw)) LCD_show_popup_label(msg, MESSAGE_TIMER_LENGTH);
   }
   MIDI_send_current_snapscene(my_device_number, current_snapscene);
   switch_scene_momentary_inst(false);
@@ -1829,11 +1795,11 @@ FLASHMEM void MD_GR55_class::set_snapscene(uint8_t sw, uint8_t number) {
   update_main_lcd = true;
 }
 
-FLASHMEM void MD_GR55_class::release_snapscene(uint8_t  sw, uint8_t  number) {
+FLASHMEM void MD_GR55_class::release_snapscene(uint8_t sw, uint8_t number) {
   switch_scene_momentary_inst(true);
 }
 
-FLASHMEM void MD_GR55_class::show_snapscene(uint8_t  number) {
+FLASHMEM void MD_GR55_class::show_snapscene(uint8_t number) {
   if ((number < 1) || (number > 8)) return;
   if (number == current_snapscene) return;
   current_snapscene = number;

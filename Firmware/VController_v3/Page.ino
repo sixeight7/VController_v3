@@ -266,6 +266,7 @@ void PAGE_load_switch(uint8_t sw) {
         if (val == NOT_FOUND) SP[sw].Target_byte1 = cmd.Value2; // Default value for STEP/UPDOWN - starts with minimum value
         else SP[sw].Target_byte1 = val;
         SP[sw].Assign_max = cmd.Value1;
+        SP[sw].Assign_min = cmd.Value2;
         SP[sw].Direction = UP;
         if (Data2 == CC_TOGGLE) SP[sw].State = 1;
         else SP[sw].State = 0;
@@ -398,7 +399,7 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             {
               uint16_t par_num = (Device[Dev]->parameter_bank_number * SP[Current_switch].Bank_size) + SP[Current_switch].Bank_position - 1;
               uint16_t par_id = Device[Dev]->get_parbank_parameter_id(par_num); // If the device supports parameter categories, this will point to the parameter within the selected category
-              //DEBUGMSG("****PARNUM: " + String(par_num) + ", PAR: " + String(par_id));
+
               if (par_num < Device[Dev]->number_of_parbank_parameters()) {
 
                 // Determine if the pedal type: TOGGLE, STEP or UPDOWN
@@ -406,11 +407,18 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
                 if (Device[Dev]->number_of_values(par_id) == 2) { // If a certain parameter has two values, it will be a toggle switch
                   SP[Current_switch].Latch = TOGGLE;
                 }
+                else if (Device[Dev]->number_of_values(par_id) == 1) { // If a certain parameter has one value, it will be a one shot switch
+                  SP[Current_switch].Latch = ONE_SHOT;
+                }
                 else {
                   if (Device[Dev]->number_of_values(par_id) > 50) SP[Current_switch].Latch = UPDOWN; // If a certain parameter has more than 50 parameters, it will be an updown switch
                   else SP[Current_switch].Latch = STEP; // Otherwise it will be a step switch
                   SP[Current_switch].Assign_min = 0;
-                  SP[Current_switch].Assign_max = Device[Dev]->number_of_values(par_id);
+                  SP[Current_switch].Assign_max = Device[Dev]->number_of_values(par_id) - 1;
+                }
+
+                if ((Dev >= USER1) && (Dev <= USER10))  {
+                  USER_device[Dev - USER1]->set_par_data(Current_switch, par_id);
                 }
 
                 // Request the parameter name from the Device
@@ -493,11 +501,11 @@ void PAGE_request_current_switch() { //Will request the data for the next switch
             else LCD_clear_SP_label(Current_switch);
             break;
           case SNAPSCENE:
-            if ((Device[Dev]->current_snapscene == SP[Current_switch].Value2) && (SP[Current_switch].Value3 > 0)) {
+            if ((Device[Dev]->current_snapscene == SP[Current_switch].Value2) && (SP[Current_switch].Value3 > 0) && (Device[Dev]->get_number_of_snapscenes() >= SP[Current_switch].Value3)) {
               SP[Current_switch].PP_number = SP[Current_switch].Value3;
               SP[Current_switch].State = SP[Current_switch].Value2;
             }
-            else if ((Device[Dev]->current_snapscene == SP[Current_switch].Value1) && (SP[Current_switch].Value2 > 0)) {
+            else if ((Device[Dev]->current_snapscene == SP[Current_switch].Value1) && (SP[Current_switch].Value2 > 0) &&  (Device[Dev]->get_number_of_snapscenes() >= SP[Current_switch].Value2)) {
               SP[Current_switch].PP_number = SP[Current_switch].Value2;
               SP[Current_switch].State = SP[Current_switch].Value1;
             }

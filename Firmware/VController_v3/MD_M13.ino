@@ -557,7 +557,7 @@ FLASHMEM void MD_M13_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_
   if (SP[Sw].Latch == RANGE) MIDI_send_CC(M13_parameters[number].CC, SP[Sw].Target_byte1, MIDI_channel, MIDI_out_port);
   else if (value == 1) MIDI_send_CC(M13_parameters[number].CC, 127, MIDI_channel, MIDI_out_port);
   else MIDI_send_CC(M13_parameters[number].CC, 0, MIDI_channel, MIDI_out_port);
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 
@@ -719,6 +719,7 @@ const PROGMEM M13_looper_cc_struct M13_looper_cc[] = { // Table with the cc mess
 
 const uint8_t M13_LOOPER_NUMBER_OF_CCS = sizeof(M13_looper_cc) / sizeof(M13_looper_cc[0]);
 
-FLASHMEM void MD_M13_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM bool MD_M13_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < M13_LOOPER_NUMBER_OF_CCS) MIDI_send_CC(M13_looper_cc[cmd].cc, M13_looper_cc[cmd].value, MIDI_channel, MIDI_out_port);
+  return true;
 }

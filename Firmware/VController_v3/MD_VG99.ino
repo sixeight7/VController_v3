@@ -169,7 +169,7 @@ FLASHMEM void MD_VG99_class::check_SYSEX_in(const unsigned char* sxdata, short u
       }
       update_main_lcd = true;
       if (popup_patch_name) {
-        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
         popup_patch_name = false;
       }
     }
@@ -942,7 +942,7 @@ FLASHMEM void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16
       lbl += ':';
     }
     lbl += SP[Sw].Label;
-    LCD_show_popup_label(lbl, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(lbl, ACTION_TIMER_LENGTH);
 
     if (SP[Sw].Latch != UPDOWN) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
   }
@@ -1207,7 +1207,7 @@ FLASHMEM void MD_VG99_class::assign_press(uint8_t Sw, uint8_t value) { // Switch
     else new_val = SP[Sw].Assign_min;
     check_update_label(Sw, new_val);
   }
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 
   if (SP[Sw].Assign_on) update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
@@ -1225,7 +1225,7 @@ FLASHMEM void MD_VG99_class::assign_release(uint8_t Sw) { // Switch set to VG99_
     if ((SP[Sw].Assign_on) && (SP[Sw].Trigger != 255)) {
       SP[Sw].State = 2; // Switch state off
       check_update_label(Sw, SP[Sw].Assign_min);
-      LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
     }
     else SP[Sw].State = 0; // Assign off, so LED should be off as well
 

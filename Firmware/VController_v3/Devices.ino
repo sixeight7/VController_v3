@@ -63,7 +63,7 @@
 
 #else
 #define DEFAULT_PAGE DEFAULT_VC_PAGE
-#define PAGE_CURRENT_PATCH_BANK PAGE_VC_CURRENT_PATCH_BANK 
+#define PAGE_CURRENT_PATCH_BANK PAGE_VC_CURRENT_PATCH_BANK
 #define PAGE_FOR_SONG_MODE PAGE_VC_SONG_MODE
 #define PAGE_FOR_PAGE_MODE PAGE_VC_PAGE_MODE
 #define PAGE_FOR_DEVICE_MODE PAGE_VC_DEVICE_MODE
@@ -93,6 +93,7 @@ uint8_t update_page = OFF;
 uint8_t Number_of_pages = 0; // Real value is read in EEPROM_create_command_indexes()
 uint8_t Current_page = PAGE_CURRENT_PATCH_BANK;
 uint8_t Current_page_setlist_item = 0;
+#define ON_PAGE_SELECT_SWITCH 0
 uint8_t page_bank_number = 0;
 uint8_t page_bank_select_number = 0;
 uint8_t page_last_selected = 1;
@@ -104,21 +105,21 @@ uint8_t Current_setlist = 0;
 #define MAX_NUMBER_OF_SETLISTS 99
 uint16_t Selected_setlist_item = 0;
 #define GLOBAL_TEMPO 39
+uint8_t Current_setlist_target = 0; // DMAMEM fixes weird error in the menu - looks like something is reading outside the edges.
 uint16_t Selected_setlist_tempo = GLOBAL_TEMPO;
 uint16_t Current_setlist_position = 0;
 uint16_t Number_of_setlist_items = 0;
 #define MAX_NUMBER_OF_SETLIST_ITEMS 50
-uint8_t Current_setlist_target = 0;
 #define MAX_NUMBER_OF_SETLIST_TARGETS NUMBER_OF_DEVICES + 2
 uint8_t setlist_bank_number, setlist_bank_select_number;
-uint8_t Current_setlist_buffer[VC_PATCH_SIZE];
+DMAMEM uint8_t Current_setlist_buffer[VC_PATCH_SIZE];
 uint8_t Current_song = 0;
 uint8_t Current_song_setlist_item = 0; // The item in the setlist
 #define MAX_NUMBER_OF_SONGS 99
 uint8_t Current_part = 0;
 #define NUMBER_OF_PARTS 8
 uint8_t song_bank_number, song_bank_select_number;
-uint8_t Current_song_buffer[VC_PATCH_SIZE];
+DMAMEM uint8_t Current_song_buffer[VC_PATCH_SIZE];
 #define NUMBER_OF_SONG_TARGETS 5
 uint16_t Current_song_item[NUMBER_OF_SONG_TARGETS] = { 0 };
 uint8_t Current_song_midi_port[NUMBER_OF_SONG_TARGETS] = { 0 };
@@ -136,11 +137,23 @@ uint8_t update_lcd = 0; // Set to the number of the LCD that needs updating
 #define ACTION_TIMER_LENGTH 600 // for messages that are shown on press of buttons
 #define LEDBAR_TIMER_LENGTH 500 // time that status messages are shown (in msec)
 
+uint8_t USER_selected_device = USER1;
+uint8_t USER_selected_parameter = 0;
+uint8_t selected_parameter_colour = 0;
+uint8_t USER_selected_scene_number = 1;
+DMAMEM User_device_struct USER_current_device_data;
+uint16_t USER_current_device_data_patch_min;
+uint16_t USER_current_device_data_patch_max;
+#define USER_DATA_SIZE sizeof(USER_current_device_data)
+
 String Text_entry; // The string we use for entering a text in the menu
 uint8_t Text_entry_length = 16;
 bool on_screen_keyboard_active = false;
 uint8_t open_specific_menu = 0;
 bool do_not_forward_after_Helix_PC_message = false;
+
+uint32_t last_looper_cmd_sent_timer = 0;
+#define LAST_LOOPER_CMD_SENT_TIME 300
 
 #define UP true
 #define DOWN false
@@ -170,7 +183,7 @@ MD_GP10_class My_GP10 = MD_GP10_class(GP10);
 MD_GR55_class My_GR55 = MD_GR55_class(GR55);
 MD_VG99_class My_VG99 = MD_VG99_class(VG99);
 MD_ZG3_class My_ZG3 = MD_ZG3_class(ZG3);
-MD_ZMS70_class My_ZMS70 = MD_ZMS70_class(ZMS70);
+MD_ZMS_class My_ZMS = MD_ZMS_class(ZMS);
 MD_M13_class My_M13 = MD_M13_class(M13);
 MD_HLX_class My_HLX = MD_HLX_class(HLX);
 MD_FAS_class My_AXEFX = MD_FAS_class(AXEFX);
@@ -180,9 +193,21 @@ MD_SVL_class My_SVL = MD_SVL_class(SVL);
 MD_SY1000_class My_SY1000 = MD_SY1000_class(SY1000);
 MD_GM2_class My_GM2 = MD_GM2_class(GM2);
 MD_MG300_class My_MG300 = MD_MG300_class(MG300);
+MD_USER_class My_USER1 = MD_USER_class(USER1);
+MD_USER_class My_USER2 = MD_USER_class(USER2);
+MD_USER_class My_USER3 = MD_USER_class(USER3);
+MD_USER_class My_USER4 = MD_USER_class(USER4);
+MD_USER_class My_USER5 = MD_USER_class(USER5);
+MD_USER_class My_USER6 = MD_USER_class(USER6);
+MD_USER_class My_USER7 = MD_USER_class(USER7);
+MD_USER_class My_USER8 = MD_USER_class(USER8);
+MD_USER_class My_USER9 = MD_USER_class(USER9);
+MD_USER_class My_USER10 = MD_USER_class(USER10);
 
 // Here we create an array for the devices, so we can access them by pointer reference
-MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS70, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2, &My_MG300};
+MD_base_class * Device[NUMBER_OF_DEVICES] = {&My_GP10, &My_GR55, &My_VG99, &My_ZG3, &My_ZMS, &My_M13, &My_HLX, &My_AXEFX, &My_KTN, &My_KPA, &My_SVL, &My_SY1000, &My_GM2, &My_MG300, &My_USER1, &My_USER2, &My_USER3, &My_USER4, &My_USER5, &My_USER6, &My_USER7, &My_USER8, &My_USER9, &My_USER10};
+MD_USER_class * USER_device[NUMBER_OF_USER_DEVICES] = {&My_USER1, &My_USER2, &My_USER3, &My_USER4, &My_USER5, &My_USER6, &My_USER7, &My_USER8, &My_USER9, &My_USER10};
+
 
 void setup_devices() { // Trigger the initialization of  the devices
   DEBUGMAIN("Initializing devices");
@@ -214,6 +239,26 @@ void set_current_device(uint8_t dev) {
   }
 }
 
+void reinitialize_user_devices_from_memory() {
+  for (uint8_t ud = 0; ud < NUMBER_OF_USER_DEVICES; ud++) {
+    USER_device[ud]->init_from_device_data();
+  }
+}
+
+/*uint8_t get_device_number(uint8_t programmed_device_number) {
+  if (programmed_device_number < NUMBER_OF_PROGRAMMED_DEVICES) return programmed_device_number;
+  if (programmed_device_number >= CURRENT) return programmed_device_number;
+  if ((programmed_device_number >= USER1) && (programmed_device_number < USER10)) return programmed_device_number - USER1 + NUMBER_OF_PROGRAMMED_DEVICES;
+  return 0;
+}
+
+uint8_t get_programmed_device_number(uint8_t device_number) {
+  if (evice_number < NUMBER_OF_PROGRAMMED_DEVICES) return device_number;
+  if (device_number >= CURRENT) return programmed_device_number;
+  if (device_number >= NUMBER_OF_PROGRAMMED_DEVICES)  return device_number - NUMBER_OF_PROGRAMMED_DEVICES + USER1;
+  return 0;
+}*/
+
 IntervalTimer Sequencer_timer;
 
 void device_sequencer_start() {
@@ -233,7 +278,7 @@ void device_sequencer_update(uint8_t steps, uint8_t divider) {
 void device_sequencer_timer_expired() {
   __disable_irq();
   My_HLX.update_sequencer = true;
-  __enable_irq(); 
+  __enable_irq();
 }
 
 // Random number generator

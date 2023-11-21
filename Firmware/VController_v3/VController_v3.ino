@@ -33,27 +33,27 @@
 // ********************************* Section 1: Hardware selection ********************************************
 
 // **** Choose the correct hardware below and update the Arduino compiler settings ****
-// Current version of Arduino: 1.8.9 and TeensyDuino: 1.46
+// Current version of TeensyDuino: 1.8.19
 
-// Hardware of VController production model
+// Hardware of VController production model modified for Teensy 4.1
 //#include "hardware.h"
-// Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII, disable debug!
-
-// Hardware of VC-mini rev. B (Teensy 3.6)
-#include "hardware_VCmini_b.h"
-// Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
+// Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
 // Hardware of VC-touch
 //#include "hardware_VCtouch.h"
 // Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
+// Hardware of VC-mini rev. B (Teensy 4.1)
+#include "hardware_VCmini_41.h"
+// Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
+
+// Hardware of VC-mini rev. B (Teensy 3.6)
+//#include "hardware_VCmini_b.h"
+// Arduino IDE settings: Board: Teensy 3.6, USB Type: MIDI, CPU speed: 180 MHz, Optimize: Fast(!), Programmer: AVRISP mkII
+
 // Hardware of VController V1 model of sixeight
 //#include "hardware1.h"
 // Arduino IDE settings: Board: Teensy 3.1/3.2, USB Type: MIDI, CPU speed: 96 MHz, Optimize: Smallest code with LTO, Programmer: AVRISP mkII
-
-// Hardware of VC-mini rev. B (Teensy 4.1)
-//#include "hardware_VCmini_41.h"
-// Arduino IDE settings: Board: Teensy 4.1, USB Type: MIDI, CPU speed: 600 MHz, Optimize: Faster, Programmer: -
 
 // Hardware of VController model of Willem Smith
 //#include "hardware_WS.h"
@@ -90,7 +90,7 @@
 #endif
 
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
-#define VCONTROLLER_FIRMWARE_VERSION_MINOR 11
+#define VCONTROLLER_FIRMWARE_VERSION_MINOR 12
 #define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
 
 #include "debug.h"
@@ -105,11 +105,16 @@ void setup() {
 #if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
   Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, WIRE_SPEED);
 #else
+  pinMode(18, INPUT_PULLUP);
+  pinMode(19, INPUT_PULLUP);
   Wire.setClock(WIRE_SPEED);
   Wire.begin();
 #endif
-#ifdef WIRE1_SPEED
-  Wire1.begin(I2C_MASTER, 0x00, I2C_PINS_29_30, I2C_PULLUP_INT, WIRE1_SPEED);
+#ifdef WIRE2_SPEED
+  pinMode(24, INPUT_PULLUP);
+  pinMode(25, INPUT_PULLUP);
+  Wire2.setClock(WIRE2_SPEED);
+  Wire2.begin();
 #endif
 
   setup_LCD_control();
@@ -159,7 +164,7 @@ void loop() {
   Software features:
   - Patch and parameter control for the following devices:
       Boss GP-10, Roland GR-55, Roland VG-99, Boss Katana
-      Zoom G3, Zoom MS70-cdr
+      Zoom G3, Zoom MS SERIES
       Line6 M13, Line6 Helix
       AxeFX II (other types implemented but not tested)
       Kemper Profiling Amp
@@ -229,7 +234,7 @@ void loop() {
   08-06-2017 Increased the speed of the i2c connections. Use 1500 kHz for MCP23017 and memory and 800 kHz for PCF8745 expander chips. The production model uses both i2c ports now.
   11-06-2017 First version of command edit implemented - still kind of buggy...
   24-06-2017 Added EEPROM checks for changed data before writing to preserve EEPROM life.
-  24-06-2017 Added new FX types for ZMS70-cdr version 2.0.0
+  24-06-2017 Added new FX types for ZMS-cdr version 2.0.0
   27-06-2017 Adding new commands in edit mode finished.
   29-06-2017 Adding new page in edit mode finished
   30-06-2017 Added virtual keyboard for changing page names and labels
@@ -243,7 +248,7 @@ void loop() {
   25-09-2017 v3.0.1 Fixed PAGE_UP and PAGE_DOWN not working properly
   04-10-2017 v3.0.2 Updown could not be selected when programming menus
   29-10-2017 New algorithm for bass mode
-  04-11-2017 ZMS70cdr bug not showing patch name fixed. VController now diplaying full version number on powerup. Main display top line behaviour updated.
+  04-11-2017 ZMScdr bug not showing patch name fixed. VController now diplaying full version number on powerup. Main display top line behaviour updated.
   05-11-2017 Connect of first new device automatically selects its device page. v3.0.2 published
   11-11-2017 v3.0.3 Support Line6 M13 Patch change. Reading the patch names works, but is too slow for practical use. Tap tempo and global tuner work as well
   13-11-2017 Added basic support for effects and looper control
@@ -270,7 +275,7 @@ void loop() {
   30-08-2018 Added Katana edit mode, added large part of the parameters, but all the MOD and FX parameters will be too much data. Allowed UPDOWN and RANGE to support large numbers for delay times.
   10-09-2018 Katana can now store 80 extra patches.
   14-09-2018 Made the code for the Katana patch storage more readable. Also the extra parameters of the SDE-3000 are stored on the Katana now.
-  15-09-2018 Alpha testing release 3.1. Fixed minor bugs, improved patch reading for G3/MS70-cdr, GR55 direct select improved, M13 properly switched between EXP1 and 2. Updated fixed configuration for GR55, Katana and direct select
+  15-09-2018 Alpha testing release 3.1. Fixed minor bugs, improved patch reading for G3/MS SERIES, GR55 direct select improved, M13 properly switched between EXP1 and 2. Updated fixed configuration for GR55, Katana and direct select
   22-09-2018 When switching between pages with different bank sizes, the bank with the current patch is now always shown.
   22-09-2018 Release of firmware 3.1
   27-09-2018 Started with KPA support
@@ -296,7 +301,7 @@ void loop() {
   05-10-2019 Memory versions of external memory are stored on the external EEPROM instead of internal. This is easier when swapping memory chips.
   30-10-2019 v.3.3.3 Solved an issue with changing devices from an external MIDI foot controller. Some MIDI messages were not received, because writing i2c is blocking midi data reception. Writing the current page and device is now delayed.
   02-11-2019 v.3.3.4 Added high string priority. Also added basic support for the Strymon Volante.
-  18-11-2019 v.3.3.5 Added custom effect types of the MS-50G and th MS-60B to the MS70-cdr. Thanks to Dr. Michael Cvachovec for supplying the custom firmware packages for this.
+  18-11-2019 v.3.3.5 Added custom effect types of the MS-50G and th MS-60B to the MS SERIES. Thanks to Dr. Michael Cvachovec for supplying the custom firmware packages for this.
   30-12-2019 Added Katana patch dump from and to editor
   03-12-2019 Added MIDI clock receive.
   27-12-2019 Added MIDI clock transmit. Also the tap tempo LED turns blue whenever it is synced through MIDI clock. The tap tempo LED is now updated from the MIDI clock timer.
@@ -325,7 +330,7 @@ void loop() {
   20-07-2020 v.3.5.0 release Added support for the SY1000 and the GMajor 2. Added hot pluggable expression pedals and CURNUM action.
   22-08-2020 Started support for the NUX MG300.
   23-08-2020 Updated the USBHost_t36 library to support longer sysex messages as that is the only way to communicate with the MG300
-  30-08-2020 MS70-cdr: toggling effect on the VController now selects that effect on the MS70-cdr.
+  30-08-2020 MS SERIES: toggling effect on the VController now selects that effect on the MS SERIES.
   30-08-2020 NUX MG300 effect control implemented
   02-11-2020 Start implementing Katana MK2
   03-11-2020 Fixed HI-LEVEL of EQ not working properly for Katana. It was swapped with Hi-CUT.
@@ -413,4 +418,15 @@ void loop() {
   13-03-2023 GR55: VController no longer has space for the stored patch names of the lead, rhythm and other bank. Currently at 98% of FLASH memory. These patches can be selected, but the names are blank.
   13-03-2023 VC-edit: fixed crash when opening parameter command for current device. Fixed some other minor bugs.
   18-03-2023 VC-edit: fixed bug where user commands would be loaded double right after changing VC device in preferences.
+  20-03-2023 Release of firmware 3.11.0
+  01-04-2023 Fixed bug where parameters that were not in the first slot were not executed.
+  27-04-2023 Added support for MS50G and MS60B (MS60B untested)
+  22-08-2023 Added support for user devices
+  25-10-2023 VController now runs on Teensy 4.1 - firmware for Teensy 3.2 no longer supported
+  26-10-2023 Labels are read from the default page, if there are no commands for the switch on the current page and there is a command on the default page.
+  26-10-2023 VC-touch: pressing the device picture will take you to the mode select page.
+  26-10-2023 You can set or hide non essential popup messages with a new setting.
+  26-10-2023 VC-edit: fixed a number of errors mcopying and deleting items from and to the On Page Select field. Also fixed crash for swapping patches.
+  06-11-2023 Setlist select - double pressing a setlist will select the first item of it.
+  20-11-2023 VC-touch: Updated ER_TFTM0784 library for support of changed hardware of the display
   */

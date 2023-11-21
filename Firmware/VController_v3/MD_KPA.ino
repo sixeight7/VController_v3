@@ -175,7 +175,7 @@ FLASHMEM void MD_KPA_class::check_SYSEX_in(const unsigned char* sxdata, short un
         }
         update_main_lcd = true;
         if (popup_patch_name) {
-          LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
           popup_patch_name = false;
         }
         if ((ready_to_read_rig_name) && (patch_number != last_checked_rig_number) && (sxdata[sxlength - 1] == 0xF7)) {
@@ -557,7 +557,7 @@ FLASHMEM void MD_KPA_class::check_write_performance_name(uint16_t number, String
     for (uint8_t i = 0; i < max_index; i++) {
       KPA_name_buffer[name_index++] = (uint8_t) pname[i];
     }
-    Serial.println("Wrote:" + pname + " with patch number " + String(number) + ", bufnumber " + String(buffer_number) + " and index " + String(name_index - max_index));
+    //Serial.println("Wrote:" + pname + " with patch number " + String(number) + ", bufnumber " + String(buffer_number) + " and index " + String(name_index - max_index));
     EEPROM_save_device_patch(my_device_number + 1, buffer_number, KPA_name_buffer, VC_PATCH_SIZE);
   }
 }
@@ -933,7 +933,7 @@ FLASHMEM void MD_KPA_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16
   else MIDI_send_CC(KPA_CC_types[number].CC, value, MIDI_channel, MIDI_out_port);
   set_FX_state(number, value);
   check_update_label(Sw, value);
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   if ((number == KPA_MODE) || (number == KPA_RIG_UP) || (number == KPA_RIG_DOWN)) {
     request_current_patch_name();
   }
@@ -1193,7 +1193,7 @@ FLASHMEM void MD_KPA_class::release_snapscene(uint8_t sw, uint8_t number) {
   }
 }
 
-FLASHMEM void MD_KPA_class::show_snapscene(uint8_t  number) {
+FLASHMEM void MD_KPA_class::show_snapscene(uint8_t number) {
   if ((number < 1) || (number > 10)) return;
   if (number == current_snapscene) return;
   current_snapscene = number;
@@ -1205,6 +1205,9 @@ FLASHMEM void MD_KPA_class::snapscene_number_format(String &Output) { // Add sna
   Output += String(current_snapscene);
 }
 
+FLASHMEM uint8_t MD_KPA_class::get_number_of_snapscenes() {
+  return 10;
+}
 
 
 FLASHMEM bool MD_KPA_class::looper_active() {
@@ -1231,7 +1234,7 @@ const PROGMEM uint8_t KPA_looper_cc2_val[] = { // Table with the cc messages
 
 const uint8_t KPA_LOOPER_NUMBER_OF_CCS = sizeof(KPA_looper_cc2_val);
 
-FLASHMEM void MD_KPA_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM bool MD_KPA_class::send_looper_cmd(uint8_t cmd) {
   if (cmd < KPA_LOOPER_NUMBER_OF_CCS) {
     if (KPA_looper_cc2_val[cmd] > 0) {
       MIDI_send_CC(99, 125, MIDI_channel, MIDI_out_port);
@@ -1242,6 +1245,7 @@ FLASHMEM void MD_KPA_class::send_looper_cmd(uint8_t cmd) {
       last_looper_cmd = cmd;
     }
   }
+  return true;
 }
 
 FLASHMEM void MD_KPA_class::looper_release() {

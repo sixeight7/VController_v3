@@ -159,7 +159,7 @@ void MD_base_class::connect(uint8_t device_id, uint8_t in_port, uint8_t out_port
   MIDI_port_manual = MIDI_port_number(in_port & 0xF0);
   do_after_connect();
   PAGE_check_first_connect(my_device_number); // Go to the device page of this device if it is the first device that connects
-  if (enabled == DEVICE_DETECT) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
+  if ((LCD_check_popup_allowed(0)) && (enabled == DEVICE_DETECT)) LCD_show_popup_label(String(device_name) + " connected ", MESSAGE_TIMER_LENGTH);
 }
 
 void MD_base_class::do_after_connect() {}
@@ -242,7 +242,7 @@ uint16_t MD_base_class::calculate_patch_number(uint8_t bank_position, uint8_t ba
   else new_patch = (bank_number * bank_size) + bank_position;
   if (new_patch == (get_patch_max() + 1)) new_patch = NEW_PATCH;
   if (new_patch > (get_patch_max() + 1)) new_patch = NO_RESULT;
-  return new_patch;
+  return new_patch + get_patch_min();
 }
 
 bool MD_base_class::patch_select_pressed(uint16_t new_patch, uint8_t sw) {
@@ -356,7 +356,91 @@ void MD_base_class::display_patch_number_string() {
 }
 
 void MD_base_class::number_format(uint16_t number, String &Output) {
-  Output += String((number + 1) / 10) + String((number + 1) % 10);
+  build_patch_number(number, Output, "01", "99");
+  //Output += String((number + 1) / 10) + String((number + 1) % 10);
+}
+
+FLASHMEM void MD_base_class::build_patch_number(uint16_t number, String &Output, String firstPatch, String lastPatch) {
+  firstPatch.trim();
+  lastPatch.trim();
+  uint8_t length = firstPatch.length();
+  if ((length == 0) || (length != lastPatch.length())) {
+    Output += firstPatch;
+    return;
+  }
+
+  String outputPatch = firstPatch;
+
+  int factor = 1;
+
+  int i = length - 1;
+  while (i >= 0) {
+    char firstPatchChar = firstPatch.charAt(i);
+    char lastPatchChar = lastPatch.charAt(i);
+
+    if ((firstPatchChar == 'U') && (lastPatchChar == 'P')) {
+      if (number == 1) outputPatch.setCharAt(i, 'P');
+      number /= 2;
+    }
+    else if ((firstPatchChar == 'P') && (lastPatchChar == 'U')) {
+      if (number == 1) outputPatch.setCharAt(i, 'U');
+      number /= 2;
+    }
+    else if (isAlpha(firstPatchChar) && isAlpha(lastPatchChar)) {
+      factor = lastPatchChar - firstPatchChar + 1;
+      if (factor < 1) {
+        Output += firstPatch;
+        return;
+      }
+      int currentDigit = number % factor;
+      outputPatch.setCharAt(i, firstPatchChar + currentDigit);
+      number /= factor;
+    }
+
+    if (isdigit(firstPatchChar) && isdigit(lastPatchChar)) {
+      // Find numeric sequences in both patch numbers.
+      String firstNumSeq = "";
+      String lastNumSeq = "";
+      while ((i >= 0) && isDigit(firstPatch.charAt(i)) && isDigit(lastPatch.charAt(i))) {
+        firstNumSeq = firstPatch.charAt(i) + firstNumSeq;
+        lastNumSeq = lastPatch.charAt(i) + lastNumSeq;
+        i--;
+      }
+      i++;
+
+      int firstNum = firstNumSeq.toInt();
+      int lastNum = lastNumSeq.toInt();
+      factor = lastNum - firstNum + 1;
+      if (factor < 1) {
+        Output += firstPatch;
+        return;
+      }
+
+      String currentNum = String((number % factor) + firstNum);
+      while (currentNum.length() < lastNumSeq.length()) {
+        currentNum = "0" + currentNum;
+      }
+
+      for (uint8_t j = 0; j < currentNum.length(); j++) {
+        outputPatch.setCharAt(i + j, currentNum.charAt(j));
+      }
+      number /= factor;
+    }
+
+    i--;
+  }
+
+
+  Output += outputPatch;
+
+}
+
+FLASHMEM uint8_t MD_base_class::convert_mask_number(char c) {
+  if (c == '0') return 10; // A '0' is 10
+  if (c == '#') return 10; // A '#' is also 10, but the number to the left, can be calculated with the same number as this one.
+  if ((c >= '1') && (c <= '9')) return (c - '0');
+  if ((c >= 'A') && (c <= 'Z')) return (c - 'A' + 10);
+  return 0;
 }
 
 // Setlists and songs
@@ -673,7 +757,7 @@ bool MD_base_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2,
   return true;
 }
 
-/*void MD_base_class::set_snapscene_name(uint8_t number, String &Output) {
+/*void MD_base_class::get_snapscene_label(uint8_t number, String &Output) {
   Output = "Not supported";
   }*/
 
@@ -689,6 +773,10 @@ void MD_base_class::snapscene_number_format(String &Output) {}
 
 bool MD_base_class::check_snapscene_active(uint8_t scene) {
   return false;
+}
+
+uint8_t MD_base_class::get_number_of_snapscenes() {
+  return 8;
 }
 
 // ********************************* Section 6: Looper control ********************************************
@@ -734,10 +822,10 @@ uint8_t MD_base_class::show_looper_LED(uint8_t sw) {
     case LOOPER_UNDO_REDO:
       if (SP[sw].Pressed) state = L_ON;
       break;
-    case LOOPER_HALF_SPEED:
+    case LOOPER_HALF_FULL_SPEED:
       if (looper_half_speed) state = L_ON;
       break;
-    case LOOPER_REVERSE:
+    case LOOPER_FORWARD_REVERSE:
       if (looper_reverse) state = L_ON;
       break;
     case LOOPER_PLAY_ONCE:
@@ -815,11 +903,11 @@ void MD_base_class::request_looper_label(uint8_t sw) {
       if (looper_undone) LCD_set_SP_label(sw, "REDO");
       else LCD_set_SP_label(sw, "UNDO");
       break;
-    case LOOPER_HALF_SPEED:
+    case LOOPER_HALF_FULL_SPEED:
       if (looper_half_speed) LCD_set_SP_label(sw, "HALF");
       else LCD_set_SP_label(sw, "FULL");
       break;
-    case LOOPER_REVERSE:
+    case LOOPER_FORWARD_REVERSE:
       if (looper_reverse) LCD_set_SP_label(sw, "REV");
       else LCD_set_SP_label(sw, "FWD");
       break;
@@ -847,7 +935,7 @@ void MD_base_class::request_looper_label(uint8_t sw) {
       break;
   }
 
-#else // Regular VController
+#else // Regular VController or VC-touch
 
   switch (SP[sw].PP_number) {
     case LOOPER_SHOW_HIDE:
@@ -856,13 +944,13 @@ void MD_base_class::request_looper_label(uint8_t sw) {
       break;
     case LOOPER_PLAY_STOP:
       if (current_looper_state == LOOPER_STATE_STOPPED) {
-        if (loop_recorded) LCD_set_SP_label(sw, " PLAY [STOP]");
+        if (loop_recorded) LCD_set_SP_label(sw, "[STOP] PLAY ");
         else LCD_set_SP_label(sw, "[STOP]");
       }
       if (current_looper_state == LOOPER_STATE_RECORD) LCD_set_SP_label(sw,  "PLAY");
       if (current_looper_state == LOOPER_STATE_OVERDUB) LCD_set_SP_label(sw, "STOP ");
-      if (current_looper_state == LOOPER_STATE_PLAY) LCD_set_SP_label(sw, "[PLAY] STOP");
-      if (current_looper_state == LOOPER_STATE_PLAY_ONCE) LCD_set_SP_label(sw, "[ONCE] STOP");
+      if (current_looper_state == LOOPER_STATE_PLAY) LCD_set_SP_label(sw, "STOP [PLAY]");
+      if (current_looper_state == LOOPER_STATE_PLAY_ONCE) LCD_set_SP_label(sw, "STOP [ONCE]");
 #ifndef IS_VCMINI
       my_looper_lcd = sw;
 #endif
@@ -870,20 +958,20 @@ void MD_base_class::request_looper_label(uint8_t sw) {
     case LOOPER_REC_OVERDUB:
       if (current_looper_state == LOOPER_STATE_STOPPED) LCD_set_SP_label(sw, "REC");
       if (current_looper_state == LOOPER_STATE_RECORD) LCD_set_SP_label(sw,  "[REC] OVERDUB");
-      if (current_looper_state == LOOPER_STATE_OVERDUB) LCD_set_SP_label(sw, "[OVERDUB] PLAY ");
+      if (current_looper_state == LOOPER_STATE_OVERDUB) LCD_set_SP_label(sw, " PLAY [OVERDUB]");
       if ((current_looper_state == LOOPER_STATE_PLAY) || (current_looper_state == LOOPER_STATE_PLAY_ONCE)) LCD_set_SP_label(sw, "OVERDUB");
       break;
     case LOOPER_UNDO_REDO:
       if (looper_undone) LCD_set_SP_label(sw, "REDO");
       else LCD_set_SP_label(sw, "UNDO");
       break;
-    case LOOPER_HALF_SPEED:
-      if (looper_half_speed) LCD_set_SP_label(sw, " FULL [HALF]");
-      else LCD_set_SP_label(sw, "[FULL] HALF ");
+    case LOOPER_HALF_FULL_SPEED:
+      if (looper_half_speed) LCD_set_SP_label(sw, "[HALF] FULL ");
+      else LCD_set_SP_label(sw, " HALF [FULL]");
       break;
-    case LOOPER_REVERSE:
-      if (looper_reverse) LCD_set_SP_label(sw, " FWD [REV]");
-      else LCD_set_SP_label(sw, "[FWD] REV ");
+    case LOOPER_FORWARD_REVERSE:
+      if (looper_reverse) LCD_set_SP_label(sw, "[REV] FWD ");
+      else LCD_set_SP_label(sw, " REV [FWD]");
       break;
     case LOOPER_PLAY_ONCE:
       LCD_set_SP_label(sw, "PLAY ONCE");
@@ -894,11 +982,11 @@ void MD_base_class::request_looper_label(uint8_t sw) {
       break;
     case LOOPER_REC_PLAY_OVERDUB:
       if (current_looper_state == LOOPER_STATE_ERASED) LCD_set_SP_label(sw, "REC");
-      if (current_looper_state == LOOPER_STATE_RECORD) LCD_set_SP_label(sw,  "[REC] PLAY");
-      if (current_looper_state == LOOPER_STATE_PLAY) LCD_set_SP_label(sw, "OVERDUB [PLAY]");
+      if (current_looper_state == LOOPER_STATE_RECORD) LCD_set_SP_label(sw,  " PLAY [REC]");
+      if (current_looper_state == LOOPER_STATE_PLAY) LCD_set_SP_label(sw, "[PLAY] OVERDUB");
       if (current_looper_state == LOOPER_STATE_STOPPED) LCD_set_SP_label(sw, "PLAY");
-      if (current_looper_state == LOOPER_STATE_PLAY_ONCE) LCD_set_SP_label(sw, "OVERDUB [ONCE]");
-      if (current_looper_state == LOOPER_STATE_OVERDUB) LCD_set_SP_label(sw, "[OVERDUB] PLAY ");
+      if (current_looper_state == LOOPER_STATE_PLAY_ONCE) LCD_set_SP_label(sw, "[ONCE] OVERDUB");
+      if (current_looper_state == LOOPER_STATE_OVERDUB) LCD_set_SP_label(sw, " PLAY [OVERDUB]");
 #ifndef IS_VCMINI
       my_looper_lcd = sw;
 #endif
@@ -917,6 +1005,14 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
   if ((!connected) || (!looper_active())) return; // exit if device is not connected or looper is not active
   uint32_t current_time = micros();
   uint32_t prev_end_time;
+  if (send_cmd) { // Helix sends looper cc commands back to the VController. These messages should be stopped, as they mess with the system.
+    last_looper_cmd_sent_timer = millis() + LAST_LOOPER_CMD_SENT_TIME;
+  }
+  else { // We come here by CC message back from Helix or other device
+    if (millis() < last_looper_cmd_sent_timer) return;
+    else update_page = REFRESH_PAGE;
+  }
+  bool cmd_sent = !send_cmd;
   switch (looper_cmd) {
     case LOOPER_SHOW_HIDE:
       looper_show ^= 1; // Toggle looper show.
@@ -924,21 +1020,23 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
       else send_looper_cmd(LOOPER_CMD_HIDE);
       break;
     case LOOPER_PLAY:
-      if (current_looper_state == LOOPER_STATE_PLAY) break; // Exit if already playing
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_PLAY);
-      if (current_looper_state == LOOPER_STATE_RECORD) { // Check if we just came from record...
-        current_loop_length = (current_time - looper_start_time); // Store the length of the loop
+      //if (current_looper_state == LOOPER_STATE_PLAY) break; // Exit if already playing
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PLAY);
+      if (cmd_sent) {
+        if (current_looper_state == LOOPER_STATE_RECORD) { // Check if we just came from record...
+          current_loop_length = (current_time - looper_start_time); // Store the length of the loop
+          looper_start_time = current_time;
+          looper_end_time = current_time + current_loop_length; // Start showing the looper bar
+        }
+        current_looper_state = LOOPER_STATE_PLAY;
         looper_start_time = current_time;
         looper_end_time = current_time + current_loop_length; // Start showing the looper bar
       }
-      current_looper_state = LOOPER_STATE_PLAY;
-      looper_start_time = current_time;
-      looper_end_time = current_time + current_loop_length; // Start showing the looper bar
       break;
     case LOOPER_STOP:
       current_looper_state = LOOPER_STATE_STOPPED;
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_STOP);
-      looper_end_time = 0; // Will stop the looper bar
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_STOP);
+      if (cmd_sent) looper_end_time = 0; // Will stop the looper bar
       break;
     case LOOPER_PLAY_STOP:
       if (!loop_recorded) break; // Quit if no loop has been recorded yet.
@@ -950,33 +1048,39 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
       }
       break;
     case LOOPER_REC:
-      if (current_looper_state == LOOPER_STATE_RECORD) break; // Exit if already recording
+      //if (current_looper_state == LOOPER_STATE_RECORD) break; // Exit if already recording
       current_looper_state = LOOPER_STATE_RECORD;
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_REC);
-      if (max_looper_length > 0) { // If looper length is set in the init() of the device, we can show the looper bar.
-        if (!looper_half_speed) current_loop_length = max_looper_length;
-        else current_loop_length = max_looper_length * 2;
-        looper_start_time = current_time;
-        looper_end_time = looper_start_time + current_loop_length; // Start showing the looper bar
+      looper_stop_pressed = 0;
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_REC);
+      if (cmd_sent) {
+        if (max_looper_length > 0) { // If looper length is set in the init() of the device, we can show the looper bar.
+          if (!looper_half_speed) current_loop_length = max_looper_length;
+          else current_loop_length = max_looper_length * 2;
+          looper_start_time = current_time;
+          looper_end_time = looper_start_time + current_loop_length; // Start showing the looper bar
+        }
+        loop_recorded = true;
+        looper_overdub_happened = false;
+        looper_undone = false;
       }
-      loop_recorded = true;
-      looper_overdub_happened = false;
-      looper_undone = false;
       break;
     case LOOPER_OVERDUB:
-      if (current_looper_state == LOOPER_STATE_OVERDUB) break; // Exit if already in overdub
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_OVERDUB);
-      if (current_looper_state == LOOPER_STATE_RECORD) {
-        current_loop_length = (current_time - looper_start_time); // Store the length of the loop
-        looper_start_time = current_time;
-        looper_end_time = current_time + current_loop_length; // Start showing the looper bar
-      }
-      if (current_looper_state == LOOPER_STATE_OVERDUB) { // Toggle between overdub and play state
-        current_looper_state = LOOPER_STATE_PLAY;
-      }
-      else {
-        current_looper_state = LOOPER_STATE_OVERDUB;
-        looper_overdub_happened = true;
+      //if (current_looper_state == LOOPER_STATE_OVERDUB) break; // Exit if already in overdub
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_OVERDUB);
+      if (cmd_sent) {
+        if (current_looper_state == LOOPER_STATE_RECORD) {
+          current_looper_state = LOOPER_STATE_OVERDUB;
+          current_loop_length = (current_time - looper_start_time); // Store the length of the loop
+          looper_start_time = current_time;
+          looper_end_time = current_time + current_loop_length; // Start showing the looper bar
+        }
+        else if (current_looper_state == LOOPER_STATE_OVERDUB) { // Toggle between overdub and play state
+          current_looper_state = LOOPER_STATE_PLAY;
+        }
+        else {
+          current_looper_state = LOOPER_STATE_OVERDUB;
+          looper_overdub_happened = true;
+        }
       }
       break;
     case LOOPER_REC_OVERDUB:
@@ -986,81 +1090,147 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
       }
       else if (current_looper_state == LOOPER_STATE_RECORD) {
         current_looper_state = LOOPER_STATE_OVERDUB;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_OVERDUB);
-        current_loop_length = (current_time - looper_start_time); // Store the length of the loop
-        looper_start_time = current_time;
-        looper_end_time = current_time + current_loop_length; // Start showing the looper bar
-        looper_overdub_happened = true;
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_OVERDUB);
+        if (cmd_sent) {
+          current_loop_length = (current_time - looper_start_time); // Store the length of the loop
+          looper_start_time = current_time;
+          looper_end_time = current_time + current_loop_length; // Start showing the looper bar
+          looper_overdub_happened = true;
+        }
       }
       else if (current_looper_state == LOOPER_STATE_OVERDUB) {
         current_looper_state = LOOPER_STATE_PLAY;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_PLAY);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PLAY);
       }
       else if (current_looper_state == LOOPER_STATE_PLAY) { // Else toggle between overdub and play
         current_looper_state = LOOPER_STATE_OVERDUB;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_OVERDUB);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_OVERDUB);
         looper_overdub_happened = true;
       }
       break;
     case LOOPER_UNDO_REDO:
       if (!looper_overdub_happened) break;
       looper_undone ^= 1; // Toggle looper_undone
-      if ((looper_undone) && (send_cmd)) send_looper_cmd(LOOPER_CMD_UNDO);
-      else if (send_cmd) send_looper_cmd(LOOPER_CMD_REDO);
+      if ((looper_undone) && (send_cmd)) cmd_sent = send_looper_cmd(LOOPER_CMD_UNDO);
+      else if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_REDO);
+      if (!cmd_sent) looper_undone ^= 1; // Undo
       break;
-    case LOOPER_HALF_SPEED:
+    case LOOPER_UNDO:
+      if (!looper_overdub_happened) break;
+      looper_undone = true;
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_UNDO);
+      break;
+    case LOOPER_REDO:
+      if (!looper_overdub_happened) break;
+      looper_undone = false; // Toggle looper_undone
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_UNDO);
+      break;
+    case LOOPER_HALF_FULL_SPEED:
       if (current_looper_state == LOOPER_STATE_RECORD) break; // Can't do this while recording.
       looper_half_speed ^= 1; // Toggle looper_half_speed
       if (looper_half_speed) {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_HALF_SPEED);
-        current_loop_length *= 2; // Double the current loop length
-        if (current_looper_state != LOOPER_STATE_STOPPED)  {
-          looper_end_time += (looper_end_time - current_time); // Add the remaining time to looper_end_time
-          looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on half speed
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_HALF_SPEED);
+        if (cmd_sent) {
+          current_loop_length *= 2; // Double the current loop length
+          if (current_looper_state != LOOPER_STATE_STOPPED)  {
+            looper_end_time += (looper_end_time - current_time); // Add the remaining time to looper_end_time
+            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on half speed
+          }
         }
       }
       else {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_FULL_SPEED);
-        current_loop_length /= 2; // Half the current loop time
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_FULL_SPEED);
+        if (cmd_sent) {
+          current_loop_length /= 2; // Half the current loop time
+          if (current_looper_state != LOOPER_STATE_STOPPED) {
+            looper_end_time -= (looper_end_time - current_time) / 2; // Substract half the remaining time to looper_end_time
+            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on double speed
+          }
+        }
+      }
+      break;
+    case LOOPER_HALF_SPEED:
+      if (!looper_half_speed) {
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_HALF_SPEED);
+        looper_half_speed = true;
+        current_loop_length *= 2;
+        if (current_looper_state != LOOPER_STATE_STOPPED)  {
+            looper_end_time += (looper_end_time - current_time); // Add the remaining time to looper_end_time
+            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on half speed
+          }
+      }
+      break;
+    case LOOPER_FULL_SPEED:
+      if (looper_half_speed) {
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_FULL_SPEED);
+        looper_half_speed = false;
+        current_loop_length /= 2;
         if (current_looper_state != LOOPER_STATE_STOPPED) {
-          looper_end_time -= (looper_end_time - current_time) / 2; // Substract half the remaining time to looper_end_time
-          looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on double speed
+            looper_end_time -= (looper_end_time - current_time) / 2; // Substract half the remaining time to looper_end_time
+            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on double speed
+          }
+      }
+      break;
+    case LOOPER_FORWARD_REVERSE:
+      if (current_looper_state == LOOPER_STATE_RECORD) break; // Can't do this while recording.
+      looper_reverse ^= 1; // Toggle looper_reverse
+      if (looper_reverse) {
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_REVERSE);
+      }
+      else {
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_FORWARD);
+      }
+      if (cmd_sent) {
+        if (current_looper_state != LOOPER_STATE_STOPPED) {
+          prev_end_time = looper_end_time;
+          looper_end_time = current_time + (current_time - looper_start_time); // Toggle remaining time with time already used
+          looper_start_time = current_time - (prev_end_time - current_time);
+        }
+      }
+      else looper_reverse ^= 1; // Undo
+      break;
+    case LOOPER_FORWARD:
+      looper_reverse = true;
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_FORWARD);
+      if (cmd_sent) {
+        if (current_looper_state != LOOPER_STATE_STOPPED) {
+          prev_end_time = looper_end_time;
+          looper_end_time = current_time + (current_time - looper_start_time); // Toggle remaining time with time already used
+          looper_start_time = current_time - (prev_end_time - current_time);
         }
       }
       break;
     case LOOPER_REVERSE:
-      if (current_looper_state == LOOPER_STATE_RECORD) break; // Can't do this while recording.
-      looper_reverse ^= 1; // Toggle looper_reverse
-      if (looper_reverse) {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_REVERSE);
-      }
-      else {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_FORWARD);
-      }
-      if (current_looper_state != LOOPER_STATE_STOPPED) {
-        prev_end_time = looper_end_time;
-        looper_end_time = current_time + (current_time - looper_start_time); // Toggle remaining time with time already used
-        looper_start_time = current_time - (prev_end_time - current_time);
+      looper_reverse = false;
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_REVERSE);
+      if (cmd_sent) {
+        if (current_looper_state != LOOPER_STATE_STOPPED) {
+          prev_end_time = looper_end_time;
+          looper_end_time = current_time + (current_time - looper_start_time); // Toggle remaining time with time already used
+          looper_start_time = current_time - (prev_end_time - current_time);
+        }
       }
       break;
     case LOOPER_PLAY_ONCE:
       if (!loop_recorded) break; // Quit if no loop has been recorded yet.
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_PLAY_ONCE);
-      if (current_looper_state == LOOPER_STATE_RECORD) current_loop_length = (current_time - looper_start_time); // Store the length of the loop
-      if ((current_looper_state == LOOPER_STATE_RECORD) || (current_looper_state == LOOPER_STATE_STOPPED) || (current_looper_state == LOOPER_STATE_PLAY_ONCE)) {
-        looper_start_time = current_time;
-        looper_end_time = current_time + current_loop_length; // Reset and show the looper bar
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PLAY_ONCE);
+      if (cmd_sent) {
+        if (current_looper_state == LOOPER_STATE_RECORD) current_loop_length = (current_time - looper_start_time); // Store the length of the loop
+        if ((current_looper_state == LOOPER_STATE_RECORD) || (current_looper_state == LOOPER_STATE_STOPPED) || (current_looper_state == LOOPER_STATE_PLAY_ONCE)) {
+          looper_start_time = current_time;
+          looper_end_time = current_time + current_loop_length; // Reset and show the looper bar
+        }
+        current_looper_state = LOOPER_STATE_PLAY_ONCE;
+        looper_stop_pressed = 0;
       }
-      current_looper_state = LOOPER_STATE_PLAY_ONCE;
-      looper_stop_pressed = 0;
       break;
     case LOOPER_PRE_POST:
       looper_pre ^= 1; // Toggle looper_pre
       if (looper_pre) {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_POST);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_POST);
       }
       else {
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_PRE);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PRE);
       }
       break;
     case LOOPER_REC_PLAY_OVERDUB:
@@ -1070,7 +1240,7 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
       }
       else if (current_looper_state == LOOPER_STATE_RECORD) {
         current_looper_state = LOOPER_STATE_PLAY;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_PLAY);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PLAY);
         current_loop_length = (current_time - looper_start_time); // Store the length of the loop
         looper_start_time = current_time;
         looper_end_time = looper_start_time + current_loop_length; // Reset and show the looper bar
@@ -1078,13 +1248,13 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
       }
       else if (current_looper_state == LOOPER_STATE_PLAY) { // Else toggle between  overdub and play
         current_looper_state = LOOPER_STATE_OVERDUB;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_OVERDUB);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_OVERDUB);
         looper_overdub_happened = true;
       }
       else {
         if (current_looper_state != LOOPER_STATE_OVERDUB) looper_end_time = current_time + current_loop_length; // Reset and show the looper bar
         current_looper_state = LOOPER_STATE_PLAY;
-        if (send_cmd) send_looper_cmd(LOOPER_CMD_PLAY);
+        if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_PLAY);
       }
       break;
     case LOOPER_STOP_ERASE:
@@ -1098,7 +1268,7 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
         current_looper_state = LOOPER_STATE_ERASED; // KPA does loop erase on third press of stop button
         loop_recorded = false;
       }
-      if (send_cmd) send_looper_cmd(LOOPER_CMD_STOP);
+      if (send_cmd) cmd_sent = send_looper_cmd(LOOPER_CMD_STOP);
       looper_end_time = 0; // Will stop the looper bar
       looper_stop_pressed++;
       break;
@@ -1155,4 +1325,6 @@ void MD_base_class::looper_timer_check() {
   }
 }
 
-void MD_base_class::send_looper_cmd(uint8_t cmd) {}
+bool MD_base_class::send_looper_cmd(uint8_t cmd) {
+  return false;
+}

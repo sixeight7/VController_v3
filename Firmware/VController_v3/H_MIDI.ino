@@ -57,12 +57,11 @@
 #define VC_REQUEST_ALL_SETTINGS 6
 #define VC_SET_GENERAL_SETTINGS 7
 #define VC_SET_DEVICE_SETTINGS 8
-#define VC_SET_MIDI_SWITCH_SETTINGS 13
-#define VC_SAVE_SETTINGS 16
 #define VC_REQUEST_COMMANDS_DUMP 9
 #define VC_START_COMMANDS_DUMP 10
 #define VC_SET_COMMAND 11
 #define VC_FINISH_COMMANDS_DUMP 12
+#define VC_SET_MIDI_SWITCH_SETTINGS 13
 #define VC_REQUEST_DEVICE_PATCHES 14
 #define VC_SET_DEVICE_PATCH 15
 #define VC_SAVE_SETTINGS 16
@@ -72,6 +71,11 @@
 #define VC_INITIALIZE_DEVICE_PATCH 20
 #define VC_REQUEST_HARDWARE_VERSION 21
 #define VC_START_UPDATE_MODE 22
+#define VC_SAVE_USER_DEVICE_SETTINGS 23
+#define VC_SAVE_USER_DEVICE_NAME_ITEM 24
+#define VC_REQUEST_ALL_USER_DEVICE_SETTINGS 25
+#define VC_INITIALIZE_USER_DEVICE_DATA 26
+#define VC_SELECT_PATCH_FROM_EDITOR 27
 
 // Communication between VC devices
 #define VC_SET_PATCH_NUMBER 101
@@ -126,7 +130,7 @@ struct FastSettings : public midi::DefaultSettings
 };
 #endif
 
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial1, MIDI1, MySettings); // Enables serial1 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI1_SERIAL_PORT, MIDI1, MySettings); // Enables serial1 port for MIDI communication with custom settings
 #ifdef RECEIVE_SERIAL_BUFFER_SIZE
 uint8_t MIDI1_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 #endif
@@ -134,7 +138,7 @@ uint8_t MIDI1_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 uint8_t MIDI1_tx_buffer[TRANSMIT_SERIAL_BUFFER_SIZE];
 #endif
 
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial2, MIDI2, MySettings); // Enables serial2 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI2_SERIAL_PORT, MIDI2, MySettings); // Enables serial2 port for MIDI communication with custom settings
 #ifdef RECEIVE_SERIAL_BUFFER_SIZE
 uint8_t MIDI2_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 #endif
@@ -143,7 +147,7 @@ uint8_t MIDI2_tx_buffer[TRANSMIT_SERIAL_BUFFER_SIZE];
 #endif
 
 #ifdef MIDI3_ENABLED
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial3, MIDI3, MySettings); // Enables serial3 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI3_SERIAL_PORT, MIDI3, MySettings); // Enables serial3 port for MIDI communication with custom settings
 #ifdef RECEIVE_SERIAL_BUFFER_SIZE
 uint8_t MIDI3_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 #endif
@@ -153,7 +157,7 @@ uint8_t MIDI3_tx_buffer[TRANSMIT_SERIAL_BUFFER_SIZE];
 #endif
 
 #ifdef MIDI4_ENABLED
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial4, MIDI4, MySettings); // Enables serial4 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI4_SERIAL_PORT, MIDI4, MySettings); // Enables serial4 port for MIDI communication with custom settings
 #ifdef RECEIVE_SERIAL_BUFFER_SIZE
 uint8_t MIDI4_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 #endif
@@ -162,7 +166,7 @@ uint8_t MIDI4_tx_buffer[TRANSMIT_SERIAL_BUFFER_SIZE];
 #endif
 #endif
 #ifdef MIDI5_ENABLED
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial5, MIDI5, FastSettings); // Enables serial4 port for MIDI communication with custom settings
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI5_SERIAL_PORT, MIDI5, FastSettings); // Enables serial4 port for MIDI communication with custom settings
 #ifdef RECEIVE_SERIAL_BUFFER_SIZE
 uint8_t MIDI5_rx_buffer[RECEIVE_SERIAL_BUFFER_SIZE];
 #endif
@@ -1085,12 +1089,14 @@ void MIDI_send_stop(uint8_t Port) {
 
 // Sysex for detecting MIDI devices
 #define Anybody_out_there {0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7}  // Ask all MIDI devices to respond with their Manufacturing ID, Device ID and version number
+bool new_device_detect_active = false;
 
 void MIDI_check_SYSEX_in_universal(const unsigned char* sxdata, short unsigned int sxlength, uint8_t port) // Check for universal SYSEX message - identity reply
 {
   // Check if it is an identity reply from a device
   // There is no check on the second byte (device ID), in case a device has a different device ID
   if ((sxdata[3] == 0x06) && (sxdata[4] == 0x02)) {
+    if (new_device_detect_active) MIDI_new_device_found(sxdata);
     for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
       Device[d]->identity_check(sxdata, sxlength, port, Current_MIDI_out_port);
     }
@@ -1102,7 +1108,7 @@ void MIDI_check_SYSEX_in_universal(const unsigned char* sxdata, short unsigned i
       if (model_number == 0x02) model_name = "VC-mini";
       if (model_number == 0x03) model_name = "VC-touch";
       DEBUGMAIN(model_name + "connected");
-      LCD_show_popup_label(model_name + " connctd", MESSAGE_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(0)) LCD_show_popup_label(model_name + " connctd", MESSAGE_TIMER_LENGTH);
       VC_device_connected = true;
       VC_device_port = port;
     }
@@ -1190,8 +1196,30 @@ void MIDI_check_for_devices()
     }
 
     check_device_no++;
-    if (check_device_no >= NUMBER_OF_MIDI_PORTS) check_device_no = 0;
+    if (check_device_no >= NUMBER_OF_MIDI_PORTS) {
+      check_device_no = 0;
+      if (new_device_detect_active) {
+        MIDI_no_device_found();
+      }
+    }
   }
+}
+
+void MIDI_detect_new_device() {
+  for (uint8_t i = 0; i < 4; i++) USER_current_device_data.device_detect[i] = 0;
+  check_device_no = 0;
+  new_device_detect_active = true;
+}
+
+void MIDI_new_device_found(const unsigned char* sxdata) {
+  for (uint8_t i = 0; i < 4; i++) USER_current_device_data.device_detect[i] = sxdata[i + 5];
+  LCD_show_popup_label("New device found", ACTION_TIMER_LENGTH);
+  new_device_detect_active = false;
+}
+
+void MIDI_no_device_found() {
+  LCD_show_popup_label("No device found", ACTION_TIMER_LENGTH);
+  new_device_detect_active = false;
 }
 
 bool MIDI_check_current_outport_not_blocked_for_identity_messages() {
@@ -1514,6 +1542,23 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
       case VC_START_UPDATE_MODE:
         reboot_program_mode();
         break;
+      case VC_SAVE_USER_DEVICE_SETTINGS:
+        MIDI_editor_receive_user_device_settings(sxdata, sxlength);
+        break;
+      case VC_SAVE_USER_DEVICE_NAME_ITEM:
+        MIDI_editor_receive_user_device_name_item(sxdata, sxlength);
+        break;
+      case VC_REQUEST_ALL_USER_DEVICE_SETTINGS:
+        for (uint8_t i = 0; i < NUMBER_OF_USER_DEVICES; i++) MIDI_editor_send_user_device_settings(i, VC_MODEL_NUMBER, VCedit_port);
+        MIDI_editor_send_initialize_user_device_data_request();
+        for (uint16_t i = 0; i <= USER_data_last_item; i++) MIDI_editor_send_user_device_name_item(i, VC_MODEL_NUMBER, VCedit_port);
+        break;
+      case VC_INITIALIZE_USER_DEVICE_DATA:
+        MIDI_editor_initialize_user_device_data((sxdata[6] << 7) + sxdata[7]);
+        break;
+      case VC_SELECT_PATCH_FROM_EDITOR:
+        if (sxdata[7] < NUMBER_OF_DEVICES) Device[sxdata[7]]->select_patch((sxdata[11] << 7) + sxdata[13]);
+        break;
     }
   }
 }
@@ -1822,17 +1867,21 @@ void MIDI_send_VC_message(uint8_t cmd, uint8_t data1, uint8_t data2, uint8_t dat
 void MIDI_editor_send_patch(uint16_t index, uint8_t model, uint8_t port) {
   uint8_t patch_buffer[VC_PATCH_SIZE];
   EEPROM_load_device_patch_by_index(index, patch_buffer, VC_PATCH_SIZE);
-  uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
-  uint16_t messagesize = VC_PATCH_SIZE + number_of_overflow_bytes + 9;
-  uint8_t sysexmessage[messagesize] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, model, VC_DEVICE_ID, VC_SET_DEVICE_PATCH, (uint8_t)(index >> 7), (uint8_t)(index & 0x7F) };
+  send_7_bit_overflow_data(patch_buffer, VC_PATCH_SIZE, VC_SET_DEVICE_PATCH, index, model, port);
+}
+
+void send_7_bit_overflow_data(uint8_t *data, uint16_t datalen, uint8_t command, uint16_t index, uint8_t model, uint8_t port) {
+  uint8_t number_of_overflow_bytes = (datalen + 6) / 7;
+  uint16_t messagesize = datalen + number_of_overflow_bytes + 9;
+  uint8_t sysexmessage[messagesize] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, model, VC_DEVICE_ID, command, (uint8_t)(index >> 7), (uint8_t)(index & 0x7F) };
   uint8_t buffer_index = 0;
   for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
     uint8_t overflow_byte = 0;
     uint8_t byte_index = 9 + (obi * 8);
     for (uint8_t i = 0; i < 7; i++) {
-      if (buffer_index < VC_PATCH_SIZE) {
-        overflow_byte |= (patch_buffer[buffer_index] >> 7) << i;
-        sysexmessage[byte_index++] = patch_buffer[buffer_index] & 0x7F;
+      if (buffer_index < datalen) {
+        overflow_byte |= (data[buffer_index] >> 7) << i;
+        sysexmessage[byte_index++] = data[buffer_index] & 0x7F;
       }
       buffer_index++;
     }
@@ -1854,33 +1903,39 @@ void MIDI_editor_receive_command(const unsigned char* sxdata, short unsigned int
   EEPROM_write_command_from_editor(&cmd);
 }
 
-// Device patch data is sent using the overflow byte system from Zoom
-// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
 void MIDI_editor_receive_device_patch(const unsigned char* sxdata, short unsigned int sxlength) {
-  uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
-  if (sxlength < VC_PATCH_SIZE + number_of_overflow_bytes + 9) return;
   uint16_t number = (sxdata[6] << 7) + sxdata[7];
   if (number >= EXT_MAX_NUMBER_OF_PATCH_PRESETS) return;
 
   uint8_t patch_buffer[VC_PATCH_SIZE];
-  uint8_t buffer_index = 0;
-  for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
-    uint8_t overflow_byte = sxdata[8 + (obi * 8)];
-    uint8_t byte_index = 9 + (obi * 8);
-    for (uint8_t i = 0; i < 7; i++) {
-      if (buffer_index < VC_PATCH_SIZE) {
-        uint8_t new_byte = sxdata[byte_index++];
-        if ((overflow_byte & (1 << i)) != 0) new_byte |= 0x80;
-        patch_buffer[buffer_index] = new_byte;
-      }
-      buffer_index++;
-    }
-  }
+  if (!receive_7_bit_overflow_data(patch_buffer, VC_PATCH_SIZE, sxdata, sxlength)) return;
 
   EEPROM_save_device_patch_by_index(number, patch_buffer, VC_PATCH_SIZE);
   patch_data_index[number].Type = patch_buffer[0];
   patch_data_index[number].Patch_number = (patch_buffer[1] << 8) + patch_buffer[2];
   MIDI_show_dump_progress(number, EXT_MAX_NUMBER_OF_PATCH_PRESETS);
+}
+
+// Some data is sent using the overflow byte system from Zoom
+// MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
+bool receive_7_bit_overflow_data(uint8_t *data, uint16_t datalen, const unsigned char* sxdata, short unsigned int sxlength) {
+  uint8_t number_of_overflow_bytes = (datalen + 6) / 7;
+  if (sxlength < datalen + number_of_overflow_bytes + 9) return false;
+
+  uint8_t buffer_index = 0;
+  for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
+    uint8_t overflow_byte = sxdata[8 + (obi * 8)];
+    uint8_t byte_index = 9 + (obi * 8);
+    for (uint8_t i = 0; i < 7; i++) {
+      if (buffer_index < datalen) {
+        uint8_t new_byte = sxdata[byte_index++];
+        if ((overflow_byte & (1 << i)) != 0) new_byte |= 0x80;
+        data[buffer_index] = new_byte;
+      }
+      buffer_index++;
+    }
+  }
+  return true;
 }
 
 void MIDI_editor_receive_initialize_device_patch(const unsigned char* sxdata, short unsigned int sxlength) {
@@ -1903,6 +1958,53 @@ void MIDI_editor_send_finish_device_patch_dump(uint8_t model, uint8_t port) {
 void MIDI_editor_send_hardware_version(uint8_t model, uint8_t port) {
   uint8_t sysexmessage[8] = { 0xF0, VC_MANUFACTURING_ID, VC_FAMILY_CODE, model, VC_DEVICE_ID, VC_REQUEST_HARDWARE_VERSION, HARDWARE_VERSION, 0xF7 };
   MIDI_editor_send_sysex(sysexmessage, 8, port);
+}
+
+void MIDI_editor_send_user_device_settings(uint8_t instance, uint8_t model, uint8_t port) {
+  User_device_struct data;
+  EEPROM_load_user_device_data(instance, &data);
+  send_7_bit_overflow_data((uint8_t*)&data, sizeof(data), VC_SAVE_USER_DEVICE_SETTINGS, instance, model, port);
+  MIDI_show_dump_progress(instance, NUMBER_OF_USER_DEVICES + USER_data_last_item);
+}
+
+void MIDI_editor_receive_user_device_settings(const unsigned char* sxdata, short unsigned int sxlength) {
+  uint8_t instance = (sxdata[6] << 7) + sxdata[7];
+  if (instance < NUMBER_OF_USER_DEVICES) {
+    User_device_struct data;
+    if (!receive_7_bit_overflow_data((uint8_t*)&data, sizeof(data), sxdata, sxlength)) return;
+    EEPROM_store_user_device_data(instance, &data);
+    USER_device[instance]->init_from_device_data();
+    update_page = RELOAD_PAGE;
+  }
+  MIDI_show_dump_progress(instance, NUMBER_OF_USER_DEVICES + USER_data_last_item);
+}
+
+void MIDI_editor_send_user_device_name_item(uint16_t index, uint8_t model, uint8_t port) {
+  User_device_name_struct data;
+  EEPROM_read_user_data_item(index, &data);
+  send_7_bit_overflow_data((uint8_t*)&data, sizeof(data), VC_SAVE_USER_DEVICE_NAME_ITEM, index, model, port);
+  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_last_item);
+}
+
+void MIDI_editor_send_initialize_user_device_data_request() {
+  MIDI_send_VC_message(VC_INITIALIZE_USER_DEVICE_DATA, 0, 0, 0);
+}
+
+void MIDI_editor_initialize_user_device_data(uint16_t size) {
+  // We only initialize the bytes that are extra - in case we have fewer bytes than what we started with.
+  for(uint16_t i = size; i <= USER_data_last_item; i++) EEPROM_initialize_user_data_item(i);
+}
+
+void MIDI_editor_receive_user_device_name_item(const unsigned char* sxdata, short unsigned int sxlength) {
+  uint16_t index = (sxdata[6] << 7) + sxdata[7];
+  User_device_name_struct data;
+  if (!receive_7_bit_overflow_data((uint8_t*)&data, sizeof(data), sxdata, sxlength)) return;
+  EEPROM_store_user_data_item(index, &data);
+  USER_data_type_index[index] = data.type_and_dev;
+  USER_data_patch_number_index[index] = (data.patch_msb << 8) + data.patch_lsb;
+  USER_data_last_item = index;
+  update_page = RELOAD_PAGE;
+  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_last_item);
 }
 
 // ********************************* Section 7: MIDI switch command reading ********************************************
@@ -2165,8 +2267,8 @@ void MIDI_check_SYSEX_in_ESP32(const unsigned char* sxdata, short unsigned int s
         break;
       case WL_BLE_STATUS:
         show_ble_state = sxdata[5];
-        if (show_ble_state == 1) LCD_show_popup_label("BLE online", MESSAGE_TIMER_LENGTH);
-        if (show_ble_state == 0) LCD_show_popup_label("BLE offline", MESSAGE_TIMER_LENGTH);
+        if ((LCD_check_popup_allowed(0)) && (show_ble_state == 1)) LCD_show_popup_label("BLE online", MESSAGE_TIMER_LENGTH);
+        if ((LCD_check_popup_allowed(0)) && (show_ble_state == 0)) LCD_show_popup_label("BLE offline", MESSAGE_TIMER_LENGTH);
         break;
       case WL_WIFI_STATUS:
         show_wifi_state = sxdata[5];
@@ -2176,8 +2278,8 @@ void MIDI_check_SYSEX_in_ESP32(const unsigned char* sxdata, short unsigned int s
       case WL_RTPMIDI_STATUS:
         show_rtpmidi_state = sxdata[5];
 
-        if (show_rtpmidi_state == 1) LCD_show_popup_label("RTPMIDI online", MESSAGE_TIMER_LENGTH);
-        if (show_rtpmidi_state == 0) LCD_show_popup_label("RTPMIDI offline", MESSAGE_TIMER_LENGTH);
+        if ((LCD_check_popup_allowed(0)) && (show_rtpmidi_state == 1)) LCD_show_popup_label("RTPMIDI online", MESSAGE_TIMER_LENGTH);
+        if ((LCD_check_popup_allowed(0)) && (show_rtpmidi_state == 0)) LCD_show_popup_label("RTPMIDI offline", MESSAGE_TIMER_LENGTH);
         break;
       case WL_SET_WIFI_SSID:
         break;
@@ -2309,9 +2411,9 @@ void MIDIWL_after_save_in_menu() {
 void MIDIWL_set_WIFI_ssid() {
   Text_entry = "SSID";
   Text_entry_length = 20;
-  Main_menu_cursor = 1;
 
-  start_keyboard(MIDIWL_write_WIFI_ssid);
+
+  start_keyboard(MIDIWL_write_WIFI_ssid, false);
 }
 
 void MIDIWL_write_WIFI_ssid() {

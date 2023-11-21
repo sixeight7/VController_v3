@@ -265,7 +265,7 @@ FLASHMEM void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short un
       }
       update_main_lcd = true;
       if (popup_patch_name) {
-        LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
         popup_patch_name = false;
       }
     }
@@ -284,12 +284,12 @@ FLASHMEM void MD_KTN_class::check_SYSEX_in(const unsigned char* sxdata, short un
       DEBUGMAIN("Katana version is FW" + String(version));
       if (version > 4) {
         is_mk2 = true;
-        LCD_show_popup_label("KTN MK2 connectd", MESSAGE_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label("KTN MK2 connectd", MESSAGE_TIMER_LENGTH);
         request_sysex(KTN_GLOBAL_EQ_TYPE_ADDRESS_MK2, 1);
       }
       else {
         is_mk2 = false;
-        LCD_show_popup_label("KTN V" + String(version) + " connected", MESSAGE_TIMER_LENGTH);
+        if (LCD_check_popup_allowed(0)) LCD_show_popup_label("KTN V" + String(version) + " connected", MESSAGE_TIMER_LENGTH);
         request_sysex(KTN_GLOBAL_EQ_TYPE_ADDRESS_MK1, 1);
       }
       delay(5);
@@ -1215,7 +1215,7 @@ const PROGMEM KTN_parameter_struct KTN_parameters[] = {
   {0xB004, 0xB004, 101, "PDL PAR 05", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0xB005, 0xB005, 101, "PDL PAR 06", SHOW_NUMBER, KTN_PEDAL_TYPE_COLOUR, KTN_CAT_PEDAL, 4 },
   {0x0030, 0x0010,   2, "BOOST", 302 | SUBLIST_FROM_BYTE2, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
-  {0x0031, 0x0011,  24, "BST TP", 302, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
+  {0x0031, 0x0011,  23, "BST TP", 302, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0032, 0x0012, 121, "BST DRIVE", SHOW_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },  //10
   {0x0033, 0x0013, 101, "BST BOTTOM", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
   {0x0034, 0x0014, 101, "BST TONE", SHOW_TONE_NUMBER, FX_DIST_TYPE, KTN_CAT_BOOST, 1 },
@@ -2183,7 +2183,7 @@ FLASHMEM void MD_KTN_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_
         if (value == 1) msg += "ON";
         else msg += "OFF";
       }
-      LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+      if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
 
       // Show category title
       if ((SP[Sw].Type == PAR_BANK) && (SP[Sw].Bank_size == 1)) {

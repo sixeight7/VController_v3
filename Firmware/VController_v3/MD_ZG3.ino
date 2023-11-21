@@ -148,7 +148,7 @@ void MD_ZG3_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
 
         update_main_lcd = true;
         if (popup_patch_name) {
-          LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+          if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
           popup_patch_name = false;
         }
         update_page = REFRESH_FX_ONLY; // Need to update everything, otherwise displays go blank on detection of the G3.
@@ -182,6 +182,7 @@ void MD_ZG3_class::do_after_connect() {
   write_sysex(ZG3_EDITOR_MODE_ON); // Put the Zoom G3 in EDITOR mode
   write_sysex(ZG3_REQUEST_CURRENT_PATCH_NUMBER);
   write_sysex(ZG3_REQUEST_CURRENT_PATCH); //This will update the FX buttons
+  update_page = REFRESH_PAGE;
 }
 
 // ********************************* Section 3: ZOOM G3 common MIDI out functions ********************************************
@@ -429,7 +430,7 @@ void MD_ZG3_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
   uint8_t value = SCO_return_parameter_value(Sw, cmd);
   set_FX_state(SP[Sw].PP_number, value & 0x01);
 
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 }
 
 void MD_ZG3_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {

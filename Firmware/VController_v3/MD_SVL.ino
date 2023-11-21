@@ -189,8 +189,7 @@ FLASHMEM void MD_SVL_class::do_after_patch_selection() {
 }
 
 FLASHMEM void MD_SVL_class::number_format(uint16_t number, String & Output) {
-  uint16_t number_plus_one = number + 1;
-  Output += String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
+  build_patch_number(number, Output, "001", "999");
 }
 
 FLASHMEM void MD_SVL_class::direct_select_format(uint16_t number, String & Output) {
@@ -266,7 +265,7 @@ FLASHMEM void MD_SVL_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16_
     msg += ':';
     msg += String(value);
   }
-  LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(msg, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 

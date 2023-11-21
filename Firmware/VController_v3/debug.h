@@ -9,6 +9,7 @@ void StartFreeTimer();
 //#define DEBUG_NORMAL
 
 // Enable debugging of main events (put // in front of the next line to disable it
+
 //#define DEBUG_MAIN
 
 // Midi debugging

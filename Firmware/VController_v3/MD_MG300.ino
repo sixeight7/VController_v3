@@ -183,7 +183,7 @@ FLASHMEM void MD_MG300_class::read_patch_name(const unsigned char* sxdata, short
   }
   update_main_lcd = true; // And show it on the main LCD
   if (popup_patch_name) {
-    LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+    if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
     popup_patch_name = false;
   }
 }
@@ -426,7 +426,7 @@ FLASHMEM void MD_MG300_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint1
   if (number == 0) MIDI_send_CC(0, fx_type[0], MIDI_channel, MIDI_out_port); // Reset expression pedal type to original value after switching wah
   if (number < 9) MIDI_send_CC(66, number, MIDI_channel, MIDI_out_port); // Select this effect in edit mode on the MG300
 
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
   update_page = REFRESH_FX_ONLY; // To update the other switch states, we re-load the current page
 }
 

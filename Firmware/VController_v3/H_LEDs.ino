@@ -134,7 +134,7 @@ colour Backlight_colours_Buydisplay[NUMBER_OF_COLOURS] = {
 
 uint16_t TFT_colours[NUMBER_OF_COLOURS] = {
   0x0000 ,   // Colour 0 is LED OFF
-  0x0627 ,  // Colour 1 is Green
+  0x454A ,  // Colour 1 is Green
   0xF000 ,  //  Colour 2 is Red
   0x001B ,  // Colour 3 is Blue
   0xFD00 ,  // Colour 4 is Orange
@@ -563,13 +563,10 @@ void LED_show_colour(uint8_t LED_number, uint8_t colour_number) { // Sets the sp
   if (colour >= NUMBER_OF_COLOURS) colour = 0;
   if ((colour_number & LED_FLASHING) && (!LED_flashing_state_on)) colour = 0;
 
-  if (Setting.Physical_LEDs) LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[colour].red, colours[colour].green, colours[colour].blue));
+  LEDs.setPixelColor(LED_order[LED_number], LEDs.Color(colours[colour].red, colours[colour].green, colours[colour].blue));
 #ifdef IS_VCTOUCH
-  if (Setting.Physical_LEDs) {
-    //uint16_t colour_565 = ((colours[colour].red & 0xF8) << 8) + ((colours[colour].green & 0xFC) << 3) + ((colours[colour].blue & 0xF8) >> 3);
-    uint16_t colour_565 = TFT_colours[colour];
-    TFT_update_LED(LED_number, colour_565);
-  }
+  uint16_t colour_565 = TFT_colours[colour];
+  TFT_update_LED(LED_number, colour_565);
 #endif
   if (Setting.Virtual_LEDs) Set_virtual_LED_colour(LED_number, colour); // Update the virtual LEDs on the LCD as well
   if (MIDI_LEDs[LED_number] != colour) {
@@ -674,4 +671,8 @@ void LED_show_are_you_sure() {
 
 void LED_start_remote_control() {
   MIDI_update_LEDs(MIDI_LEDs, NUMBER_OF_LEDS);
+}
+
+uint16_t get_TFT_colour(uint8_t colour) {
+  return TFT_colours[colour];
 }

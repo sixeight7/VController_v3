@@ -135,7 +135,7 @@ void MD_GM2_class::check_SYSEX_in(const unsigned char* sxdata, short unsigned in
           DEBUGMSG(current_patch_name);
           update_main_lcd = true;
           if (popup_patch_name) {
-            LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+            if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
             popup_patch_name = false;
           }
           break;
@@ -308,8 +308,7 @@ bool MD_GM2_class::request_patch_name(uint8_t sw, uint16_t number) {
 }
 
 void MD_GM2_class::number_format(uint16_t number, String &Output) {
-  uint16_t number_plus_one = number + 1;
-  Output += String(number_plus_one / 100) + String((number_plus_one / 10) % 10) + String(number_plus_one % 10);
+  build_patch_number(number, Output, "001", "999");
 }
 
 void MD_GM2_class::direct_select_format(uint16_t number, String &Output) {
@@ -376,7 +375,7 @@ void MD_GM2_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16_t number
   write_sysex(GM2_FX_types[number].Address, value ^ 1, 0);
   FX_state[number] = value ^ 1;
 
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 }
 
 void MD_GM2_class::parameter_release(uint8_t Sw, Cmd_struct * cmd, uint16_t number) {

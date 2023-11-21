@@ -128,9 +128,14 @@
 #define VCONTROLLER_MIDI_CHANNEL 16
 
 #define NUMBER_OF_MIDI_PORTS 3
-// Set baudrate for MIDI3 - can be changed to allow for high speed connection to raspberry pi
-//#define MIDI3_BAUD_RATE 31250
+#define MIDI1_SERIAL_PORT Serial1
+#define MIDI2_SERIAL_PORT Serial2
+//#define MIDI3_SERIAL_PORT Serial3
 //#define MIDI3_ENABLED
+//#define MIDI4_SERIAL_PORT Serial4
+//#define MIDI4_ENABLED
+//#define MIDI5_SERIAL_PORT Serial5
+//#define MIDI5_ENABLED
 
 // Names and numbers of ports
 #define PORT1_NAME "USB MIDI"

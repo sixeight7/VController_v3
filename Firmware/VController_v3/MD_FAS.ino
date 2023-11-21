@@ -185,7 +185,7 @@ FLASHMEM void MD_FAS_class::check_SYSEX_in(const unsigned char* sxdata, short un
           }
           update_main_lcd = true;
           if (popup_patch_name) {
-            LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
+            if (LCD_check_popup_allowed(0)) LCD_show_popup_label(current_patch_name, ACTION_TIMER_LENGTH);
             popup_patch_name = false;
           }
           break;
@@ -702,7 +702,7 @@ FLASHMEM void MD_FAS_class::parameter_press(uint8_t Sw, Cmd_struct * cmd, uint16
 
   // Show message
   check_update_label(Sw, value);
-  LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
+  if (LCD_check_popup_allowed(Sw)) LCD_show_popup_label(SP[Sw].Label, ACTION_TIMER_LENGTH);
 
   if ((SP[Sw].Latch != RANGE) && (SP[Sw].Latch != UPDOWN)) update_page = REFRESH_PAGE;
 }
@@ -842,7 +842,7 @@ FLASHMEM void MD_FAS_class::get_snapscene_title(uint8_t number, String & Output)
   }*/
 
 
-/*FLASHMEM void MD_FAS_class::set_snapscene_name(uint8_t number, String &Output) {
+/*FLASHMEM void MD_FAS_class::get_snapscene_label(uint8_t number, String &Output) {
   Output += "SCENE " + String(number);
   }*/
 
@@ -854,7 +854,7 @@ FLASHMEM void MD_FAS_class::set_snapscene(uint8_t sw, uint8_t number) {
   MIDI_send_current_snapscene(my_device_number, current_snapscene);
 }
 
-FLASHMEM void MD_FAS_class::show_snapscene(uint8_t  number) {
+FLASHMEM void MD_FAS_class::show_snapscene(uint8_t number) {
   if ((number < 1) || (number > 8)) return;
   if (number == current_snapscene) return;
   current_snapscene = number;
@@ -931,7 +931,7 @@ const uint8_t AXEFX2_LOOPER_NUMBER_OF_CCS = sizeof(AXEFX2_looper_cc) / sizeof(AX
 
 // The Axe-Fx III does not have pre-set MIDI CCs. These can be selected in the MIDI menu.
 
-FLASHMEM void MD_FAS_class::send_looper_cmd(uint8_t cmd) {
+FLASHMEM bool MD_FAS_class::send_looper_cmd(uint8_t cmd) {
   // Execute commands for looper of the AxeFX2 and up, FX8 and AX8
   if (model_number >= FAS_MODEL_AF2) {
     if (cmd < AXEFX2_LOOPER_NUMBER_OF_CCS) {
@@ -950,4 +950,5 @@ FLASHMEM void MD_FAS_class::send_looper_cmd(uint8_t cmd) {
       if (FAS_Ultra_looper2_cc[cmd].cc > 0) MIDI_send_CC(FAS_Ultra_looper2_cc[cmd].cc, FAS_Ultra_looper2_cc[cmd].value, MIDI_channel, MIDI_out_port);
     }
   }
+  return true;
 }
