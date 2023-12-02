@@ -24,6 +24,7 @@ class VCsettings : public QObject
 public:
     explicit VCsettings(QObject *parent = nullptr);
     void fillTreeWidget(QTreeWidget *my_tree);
+    void updateTreeWidget(QTreeWidget *my_tree);
     void showData();
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;

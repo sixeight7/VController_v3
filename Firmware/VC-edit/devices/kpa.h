@@ -28,6 +28,8 @@ public:
     virtual uint16_t number_of_parameters();
     virtual uint8_t max_value(uint16_t par_no);
     virtual QString get_patch_info(uint16_t number);
+    virtual uint8_t get_number_of_snapscenes();
+
 
     uint8_t model_number;
 };

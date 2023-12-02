@@ -71,8 +71,49 @@ void VCsettings::fillTreeWidget(QTreeWidget *my_tree)
           }
       }
   }
-
 }
+
+void VCsettings::updateTreeWidget(QTreeWidget *my_tree)
+{
+  QTreeWidgetItem* parent = NULL;
+
+  for (int i = 0; i < NUMBER_OF_SETTINGS_MENU_ITEMS; i++) {
+      if (VCsettingMenu[i].type == HEADER) {
+          parent = my_tree->topLevelItem(i);
+          /*if (parent) {
+            parent->setText(0, VCsettingMenu[i].name);
+          }*/
+      }
+      else {
+          if (parent) {
+            QTreeWidgetItem *child = parent->child(i - parent->indexOfChild(parent));
+
+            // Update CustomSlider value
+            CustomSlider *slider = dynamic_cast<CustomSlider*>(my_tree->itemWidget(child, 4));
+            if (slider) {
+                slider->setValue((int)(size_t)*VCsettingMenu[i].value);
+            }
+
+            // Update CustomComboBox current item (if applicable)
+            if (VCsettingMenu[i].type == OPTION) {
+                CustomComboBox *comboBox = dynamic_cast<CustomComboBox*>(my_tree->itemWidget(child, 2));
+                if (comboBox) {
+                    comboBox->setCurrentIndex(*VCsettingMenu[i].value);
+                }
+            }
+
+            // Update CustomSpinBox value (if applicable)
+            if (VCsettingMenu[i].type == VALUE) {
+                CustomSpinBox *spinBox = dynamic_cast<CustomSpinBox*>(my_tree->itemWidget(child, 2));
+                if (spinBox) {
+                    spinBox->setValue((int)(size_t)*VCsettingMenu[i].value);
+                }
+            }
+          }
+      }
+  }
+}
+
 
 void VCsettings::settingChanged(int, int index, int value) // Called when a comboBox or spinBox in tree is updated
 {

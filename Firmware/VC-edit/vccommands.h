@@ -224,7 +224,7 @@ private:
         { "VALUE", SUBLIST_PAR_VALUE, 0, 255 }, // TYPE_PAR_VALUE 19
         { "ASSIGN", SUBLIST_ASSIGN, 0, 255 }, // TYPE_ASSIGN 20
         { "TRIGGER", SUBLIST_TRIGGER, 1, 127 }, // TYPE_ASSIGN 21
-        { "TOGGLE TYPE", 50, 0, 6 }, // TYPE_TOGGLE 22
+        { "TOGGLE TYPE", 50, 0, 7 }, // TYPE_TOGGLE 22
         { "STEP", 0, 1, 127 }, // TYPE_STEP 24
         { "SWITCH TRIGGER", 111, 0, 5 }, // TYPE_SWITCH_TRIGGER 24
         { "SWITCH", SUBLIST_SWITCH, 0, SWITCH_MAX_NUMBER }, // TYPE_SWITCH 25
@@ -259,7 +259,7 @@ private:
         "OFF", MIDI_PORT_NAMES,
 
         // Sublist 50 - 59: Toggle types
-        "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "", "", "",
+        "MOMENTARY", "TOGGLE", "TRISTATE", "FOURSTATE", "STEP",  "RANGE",  "UPDOWN", "ONE SHOT", "", "",
 
         // Sublist 60 - 84: Switch types
         "On Page Select", "Switch 1", "Switch 2", "Switch 3", "Switch 4", "Switch 5", "Switch 6", "Switch 7", "Switch 8",

@@ -64,6 +64,54 @@ void VCseqPattern::fillTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn)
     }
 }
 
+
+void VCseqPattern::updateTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn)
+{
+    QTreeWidgetItem *parent = findTopLevelItemByName(my_tree, "Sequence Patterns");
+    if (parent) {
+        for (int p = 0; p < NUMBER_OF_SEQ_PATTERNS; p++) {
+            QTreeWidgetItem *deviceChild = parent->child(p);
+
+            for (int i = 0; i < NUMBER_OF_SEQ_PATTERN_MENU_ITEMS; i++) {
+                QTreeWidgetItem *child = deviceChild->child(i);
+
+                // Update CustomSlider value
+                CustomSlider *slider = dynamic_cast<CustomSlider*>(my_tree->itemWidget(child, 4));
+                if (slider) {
+                    slider->setValue(getSeqPatternSetting(p, VCseqPatternMenu[i].parameter));
+                }
+
+                // Update CustomComboBox current item (if applicable)
+                if (VCseqPatternMenu[i].type == OPTION) {
+                    CustomComboBox *comboBox = dynamic_cast<CustomComboBox*>(my_tree->itemWidget(child, 2));
+                    if (comboBox) {
+                        comboBox->setCurrentIndex(getSeqPatternSetting(p, VCseqPatternMenu[i].parameter));
+                    }
+                }
+
+                // Update CustomSpinBox value (if applicable)
+                if (VCseqPatternMenu[i].type == VALUE) {
+                    CustomSpinBox *spinBox = dynamic_cast<CustomSpinBox*>(my_tree->itemWidget(child, 2));
+                    if (spinBox) {
+                        spinBox->setValue(getSeqPatternSetting(p, VCseqPatternMenu[i].parameter));
+                    }
+                }
+            }
+        }
+    }
+}
+
+QTreeWidgetItem* VCseqPattern::findTopLevelItemByName(QTreeWidget* my_tree, const QString &name) {
+    int topLevelItemCount = my_tree->topLevelItemCount();
+    for (int i = 0; i < topLevelItemCount; i++) {
+        QTreeWidgetItem* item = my_tree->topLevelItem(i);
+        if (item && item->text(0) == name) {
+            return item;
+        }
+    }
+    return nullptr;  // Item not found
+}
+
 void VCseqPattern::read(const QJsonObject &json)
 {
     QJsonObject deviceHeader = json["Sequence Patterns"].toObject();

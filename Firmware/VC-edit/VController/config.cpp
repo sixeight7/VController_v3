@@ -1777,6 +1777,63 @@ const QVector<Cmd_struct> VCtouch_fixed_commands = {
       {PAGE_VCTOUCH_SETLIST_SELECT, 14, SETLIST, COMMON, SL_EDIT}, // ** Switch 14 **
       {PAGE_VCTOUCH_SETLIST_SELECT, 15, PAGE, COMMON, SELECT, 0}, // ** Switch 15 **
       {PAGE_VCTOUCH_SETLIST_SELECT, 15 | LABEL, 'E', 'X', 'I', 'T', ' ', ' ', ' ', ' ' },
+
+    // ******************************* PAGE 233: User_patch_bank (8 buttons per page) *************************************************
+    {PAGE_VCTOUCH_USER_PATCH_BANK, LABEL,  'U', 'S', 'E', 'R', ' ', 'P', 'A', 'T' },
+    {PAGE_VCTOUCH_USER_PATCH_BANK, LABEL, 'C', 'H', ' ', 'S', 'E', 'L', 'C', 'T' },
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 1, PATCH, CURRENT, BANKSELECT, 1, 8}, // ** Switch 01 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 2, PATCH, CURRENT, BANKSELECT, 2, 8}, // ** Switch 02 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 3, PATCH, CURRENT, BANKSELECT, 3, 8}, // ** Switch 03 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 4, PATCH, CURRENT, BANKSELECT, 4, 8}, // ** Switch 04 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 5, TOGGLE_EXP_PEDAL, CURRENT}, // ** Switch 05 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 6, PATCH, CURRENT, BANKSELECT, 5, 8}, // ** Switch 06 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 7, PATCH, CURRENT, BANKSELECT, 6, 8}, // ** Switch 07 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 8, PATCH, CURRENT, BANKSELECT, 7, 8}, // ** Switch 08 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 9, PATCH, CURRENT, BANKSELECT, 8, 8}, // ** Switch 09 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 10, SAVE_PATCH, CURRENT}, // ** Switch 10 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 11, PATCH, CURRENT, BANKDOWN, 8}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 11 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 12, PATCH, CURRENT, BANKUP, 8}, // ** Switch 12 **
+    {PAGE_VCTOUCH_USER_PATCH_BANK, 12 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 12 **
+    //{PAGE_VCTOUCH_USER_PATCH_BANK, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
+
+    // ******************************* PAGE 233: User_parameter_bank (8 buttons per page) *************************************************
+    {PAGE_VCTOUCH_USER_PAR_BANK, LABEL, 'U', 'S', 'E', 'R', ' ', 'F', 'X', ' ' },
+    {PAGE_VCTOUCH_USER_PAR_BANK, LABEL, 'S', 'E', 'L', 'E', 'C', 'T', ' ', ' ' },
+    {PAGE_VCTOUCH_USER_PAR_BANK, 1, PAR_BANK, CURRENT, 1, 8}, // ** Switch 01 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 2, PAR_BANK, CURRENT, 2, 8}, // ** Switch 02 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 3, PAR_BANK, CURRENT, 3, 8}, // ** Switch 03 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 4, PAR_BANK, CURRENT, 4, 8}, // ** Switch 04 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 5, TOGGLE_EXP_PEDAL, CURRENT}, // ** Switch 05 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 6, PAR_BANK, CURRENT, 5, 8}, // ** Switch 06 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 7, PAR_BANK, CURRENT, 6, 8}, // ** Switch 07 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 8, PAR_BANK, CURRENT, 7, 8}, // ** Switch 08 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 9, PAR_BANK, CURRENT, 8, 8}, // ** Switch 09 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 10, SAVE_PATCH, CURRENT}, // ** Switch 10 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 11, PATCH, CURRENT, PREV}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 11 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 12, PATCH, CURRENT, NEXT}, // ** Switch 12 **
+    {PAGE_VCTOUCH_USER_PAR_BANK, 12 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 12 **
+    //{PAGE_VCTOUCH_USER_PAR_BANK, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
+
+    // ******************************* PAGE 234: User_parameter_bank (8 buttons per page) *************************************************
+    {PAGE_VCTOUCH_USER_SCENES, LABEL, 'U', 'S', 'E', 'R', ' ', 'S', 'C', 'E' },
+    {PAGE_VCTOUCH_USER_SCENES, LABEL, 'N', 'E', ' ', 'S', 'E', 'L', 'C', 'T' },
+    {PAGE_VCTOUCH_USER_SCENES, 1, SNAPSCENE, CURRENT, 1, 0, 0}, // ** Switch 01 **
+    {PAGE_VCTOUCH_USER_SCENES, 2, SNAPSCENE, CURRENT, 2, 0, 0}, // ** Switch 02 **
+    {PAGE_VCTOUCH_USER_SCENES, 3, SNAPSCENE, CURRENT, 3, 0, 0}, // ** Switch 03 **
+    {PAGE_VCTOUCH_USER_SCENES, 4, SNAPSCENE, CURRENT, 4, 0, 0}, // ** Switch 04 **
+    {PAGE_VCTOUCH_USER_SCENES, 5, TOGGLE_EXP_PEDAL, CURRENT}, // ** Switch 05 **
+    {PAGE_VCTOUCH_USER_SCENES, 6, SNAPSCENE, CURRENT, 5, 0, 0}, // ** Switch 06 **
+    {PAGE_VCTOUCH_USER_SCENES, 7, SNAPSCENE, CURRENT, 6, 0, 0}, // ** Switch 07 **
+    {PAGE_VCTOUCH_USER_SCENES, 8, SNAPSCENE, CURRENT, 7, 0, 0}, // ** Switch 08 **
+    {PAGE_VCTOUCH_USER_SCENES, 9, SNAPSCENE, CURRENT, 8, 0, 0}, // ** Switch 09 **
+    {PAGE_VCTOUCH_USER_SCENES, 10, SAVE_PATCH, CURRENT}, // ** Switch 10 **
+    {PAGE_VCTOUCH_USER_SCENES, 11, PATCH, CURRENT, PREV}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_SCENES, 11 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 11 **
+    {PAGE_VCTOUCH_USER_SCENES, 12, PATCH, CURRENT, NEXT}, // ** Switch 12 **
+    {PAGE_VCTOUCH_USER_SCENES, 12 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 12 **
+    //{PAGE_VCTOUCH_USER_SCENES, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
   };
 
   const uint16_t NUMBER_OF_INTERNAL_COMMANDS = sizeof(Fixed_commands) / sizeof(Fixed_commands[0]);

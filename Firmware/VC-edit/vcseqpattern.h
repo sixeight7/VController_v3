@@ -22,6 +22,7 @@ class VCseqPattern : public QObject
 public:
     explicit VCseqPattern(QObject *parent = nullptr);
     void fillTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn);
+    void updateTreeWidget(QTreeWidget *my_tree, VCseqPattern *VCptrn);
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
     //void readMidi();
@@ -38,6 +39,7 @@ private slots:
     void midiSeqPatternChanged(int, int, int);
 
 private:
+    QTreeWidgetItem* findTopLevelItemByName(QTreeWidget* my_tree, const QString &name);
     QString getPatternNameForTree(int pattern) const;
     QString getPatternNameForJson(int pattern) const;
 

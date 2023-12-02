@@ -37,6 +37,8 @@ public:
     virtual QString setlist_song_full_item_format(uint16_t item);
     virtual QString setlist_song_short_item_format(uint16_t item);
     virtual int setlist_song_get_number_of_items();
+    virtual uint8_t get_number_of_snapscenes();
+
 };
 
 #endif // HELIX_H

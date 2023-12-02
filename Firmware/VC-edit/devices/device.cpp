@@ -107,7 +107,75 @@ bool Device_class::check_command_enabled(uint8_t cmd)
 
 QString Device_class::number_format(uint16_t patch_no)
 {
-  return QString::number(patch_no);;
+    return QString::number(patch_no);;
+}
+
+QString Device_class::build_patch_number(uint16_t number, QString firstPatch, QString lastPatch)
+{
+    int length = firstPatch.length();
+    if ((length == 0) || (length != lastPatch.length())) return firstPatch;
+
+    QString outputPatch = firstPatch;
+
+    int factor = 1;
+
+    int i = length - 1;
+    while (i >= 0) {
+        QChar firstPatchChar = firstPatch[i];
+        QChar lastPatchChar = lastPatch[i];
+
+        if ((firstPatchChar == 'U') && (lastPatchChar == 'P')) {
+            if (number == 1) outputPatch[i] = 'P';
+            number /= 2;
+        }
+        else if ((firstPatchChar == 'P') && (lastPatchChar == 'U')) {
+            if (number == 1) outputPatch[i] = 'U';
+            number /= 2;
+        }
+        else if (firstPatchChar.isLetter() && lastPatchChar.isLetter()) {
+            factor = lastPatchChar.toLatin1() - firstPatchChar.toLatin1() + 1;
+            if (factor < 1) return firstPatch;
+            int currentDigit = number % factor;
+            outputPatch[i] = (char)(firstPatchChar.toLatin1() + currentDigit);
+            number /= factor;
+        }
+
+        if (firstPatchChar.isDigit() && lastPatchChar.isDigit()) {
+            // Find numeric sequences in both patch numbers.
+            QString firstNumSeq, lastNumSeq;
+            while (i >= 0 && (firstPatch[i].isDigit()) && (lastPatch[i].isDigit())) {
+                firstNumSeq = firstPatch[i] + firstNumSeq;
+                lastNumSeq = lastPatch[i] + lastNumSeq;
+                i--;
+            }
+            i++;
+
+            int firstNum = firstNumSeq.toInt();
+            int lastNum = lastNumSeq.toInt();
+            factor = lastNum - firstNum + 1;
+            if (factor < 1) return firstPatch;
+
+            QString currentNum = QString::number((number % factor) + firstNum).rightJustified(lastNumSeq.length(), '0');
+            for(int j = 0; j < currentNum.length(); j++) {
+                outputPatch[i + j] = currentNum[j];
+            }
+            number /= factor;
+        }
+
+        i--;
+    }
+
+    return outputPatch;
+}
+
+uint8_t Device_class::convert_mask_number(QChar c)
+{
+    if (c == '0') return 10; // A '0' is 10
+    if (c == '#') return 10; // A '#' is also 10, but the number to the left, can be calculated with the same number as this one.
+    if ((c >= '1') && (c <= '9')) return c.toLatin1() - '0';
+    if ((c >= 'A') && (c <= 'Z')) return (c.toLatin1() - 'A' + 10);
+    //if ((c >= 'a') && (c <= 'j')) return 10;
+    return 0;
 }
 
 QString Device_class::read_parameter_name(uint16_t)
@@ -168,6 +236,11 @@ QString Device_class::read_scene_name_from_buffer(int, uint8_t) const
 void Device_class::store_scene_name_to_buffer(int, uint8_t, QString)
 {
 
+}
+
+uint8_t Device_class::get_number_of_snapscenes()
+{
+    return 0;
 }
 
 uint8_t Device_class::supportPatchSaving()

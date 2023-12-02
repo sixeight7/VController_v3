@@ -181,3 +181,8 @@ int HLX_class::setlist_song_get_number_of_items()
 {
     return (HLX_NUMBER_OF_SETLISTS * (patch_max + 1));
 }
+
+uint8_t HLX_class::get_number_of_snapscenes()
+{
+    return 8;
+}

@@ -81,6 +81,8 @@ struct MIDI_switch_settings_struct {
   uint8_t cc;
 };
 
+#define ON_PAGE_SELECT_SWITCH 0
+
 #define MIDI_SWITCH_OFF 0
 #define MIDI_SWITCH_CC_MOMENTARY 1 // CC controlled by momentary switch
 #define MIDI_SWITCH_CC_TOGGLE 2 // CC controlled by toggle switch
@@ -96,6 +98,39 @@ extern uint8_t NUMBER_OF_SEQ_PATTERNS;
 #define EEPROM_SEQ_PATTERN_SIZE 36
 extern uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS_VCTOUCH][EEPROM_SEQ_PATTERN_SIZE];
 
+#define USER_NUMBER_OF_CC_PARAMETERS 25
+#define USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE 13
+struct User_device_struct {
+  char full_name[17];
+  char short_name[7];
+  uint8_t patch_min_msb;
+  uint8_t patch_min_lsb;
+  uint8_t patch_max_msb;
+  uint8_t patch_max_lsb;
+  char first_patch_format[7];
+  char last_patch_format[7];
+  uint8_t device_detect[4];
+  uint8_t parameter_CC[USER_NUMBER_OF_CC_PARAMETERS];
+  uint8_t parameter_value_max[USER_NUMBER_OF_CC_PARAMETERS];
+  uint8_t parameter_value_min[USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE];
+  uint8_t parameter_type[USER_NUMBER_OF_CC_PARAMETERS_WITH_TYPE];
+  uint8_t looper_length;
+  uint8_t pc_type;
+};
+
+struct User_device_name_struct {
+  uint8_t type_and_dev;
+  uint8_t patch_msb;
+  uint8_t patch_lsb;
+  uint8_t value; // Used for par_state or colour
+  uint8_t name[12];
+};
+#define MAX_NUMBER_OF_USER_DATA_ITEMS_VCTOUCH 1520
+#define MAX_NUMBER_OF_USER_DATA_ITEMS_VC_AND_VCMINI 720
+#define USER_DEVICE_PATCH_NAME_TYPE 1
+#define USER_DEVICE_FX_NAME_TYPE 2
+#define USER_DEVICE_SCENE_NAME_TYPE 3
+
 #define VC_PATCH_SIZE 192
 #define MAX_NUMBER_OF_DEVICE_PRESETS_VC_AND_VCMINI 150
 #define MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH 300
@@ -103,6 +138,8 @@ extern uint16_t MAX_NUMBER_OF_DEVICE_PRESETS; // Copy of EXT_MAX_NUMBER_OF_PATCH
 #define BASS_MODE_NUMBER_OFFSET 0x1000
 
 extern uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH][VC_PATCH_SIZE]; // Storage for the actual patches
+extern QVector<User_device_name_struct> User_device_data_item;
+extern int MAX_NUMBER_OF_USER_DATA_ITEMS;
 
 extern uint8_t number_of_midi_ports;
 extern QStringList midi_port_names;
@@ -118,6 +155,7 @@ extern uint8_t VCmidi_model_number;
 #define MAX_NUMBER_OF_SETLIST_ITEMS 50
 
 #define PATCH_INDEX_NOT_FOUND 0xFFFF
+#define DATA_INDEX_NOT_FOUND 0xFFFF
 
 #define GLOBAL_TEMPO 39
 #define MIN_BPM 40

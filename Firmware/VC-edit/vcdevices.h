@@ -23,6 +23,7 @@ class VCdevices : public QObject
 public:
     explicit VCdevices(QObject *parent = nullptr);
     void fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd);
+    void updateTreeWidget(QTreeWidget *my_tree, VCcommands *VCd);
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
 
@@ -45,6 +46,7 @@ public:
     void copyPatch(int number, int type);
     void pastePatch(int number, int type);
     void clearCopyBuffer();
+    bool checkSelectedTypeMatchesCopyBufferType(uint8_t selected_type);
     void initializePatch(int number, int type);
 
 signals:
@@ -60,6 +62,7 @@ public:
     void setup_devices();
 
 private:
+    QTreeWidgetItem* findTopLevelItemByName(QTreeWidget* my_tree, const QString &name);
     QVector<uint8_t> Patch_copy_buffer;
     bool copyBufferFilled = false;
 

@@ -17,6 +17,7 @@
 #include "devices/sy1000.h"
 #include "devices/gmajor2.h"
 #include "devices/mg300.h"
+#include "devices/user.h"
 
 extern GP10_class My_GP10;
 extern GR55_class My_GR55;
@@ -28,8 +29,19 @@ extern HLX_class My_HLX;
 extern AXEFX_class My_AXEFX;
 extern KTN_class My_KTN;
 extern SVL_class My_SVL;
+extern USER_class My_USER1;
+extern USER_class My_USER2;
+extern USER_class My_USER3;
+extern USER_class My_USER4;
+extern USER_class My_USER5;
+extern USER_class My_USER6;
+extern USER_class My_USER7;
+extern USER_class My_USER8;
+extern USER_class My_USER9;
+extern USER_class My_USER10;
 
 extern Device_class * Device[NUMBER_OF_DEVICES];
+extern USER_class * USER_device[NUMBER_OF_USER_DEVICES];
 
 #define MAX_NUMBER_OF_SETLISTS 99
 #define MAX_NUMBER_OF_SONGS 99

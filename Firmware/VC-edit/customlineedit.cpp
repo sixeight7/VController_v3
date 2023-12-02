@@ -1,12 +1,15 @@
 #include "customlineedit.h"
+#include "QtWidgets/qapplication.h"
 #include <QTimer>
+#include <QKeyEvent>
 
 customLineEdit::customLineEdit(QWidget *parent, int myDeviceIdex, int myParameterIndex)
 :QLineEdit(parent)
 {
     m_device_index = myDeviceIdex;
     m_parameter_index = myParameterIndex;
-    connect(this, SIGNAL(activated(int)), this, SLOT(triggerVariantActivated(int)));
+    //connect(this, SIGNAL(activated(int)), this, SLOT(triggerVariantActivated(int)));
+    connect(this, &customLineEdit::textChanged, this, &customLineEdit::handleTextChanged);
 }
 
 uint8_t customLineEdit::getDeviceIndex()
@@ -26,7 +29,24 @@ void customLineEdit::focusInEvent(QFocusEvent *)
     });
 }
 
-void customLineEdit::triggerVariantActivated(int index)
+void customLineEdit::keyPressEvent(QKeyEvent *keyEvent)
 {
-    emit new_value(m_device_index, m_parameter_index, index );
+    if ((keyEvent->key() == Qt::Key_Up) || (keyEvent->key() == Qt::Key_Down)) {
+        keyEvent->ignore(); // So the parent will pick it up
+    }
+    else if ((keyEvent->key() == Qt::Key_Return) || (keyEvent->key() == Qt::Key_Enter)) {
+        QKeyEvent event(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+        QApplication::sendEvent(parent(), &event);
+    }
+    else QLineEdit::keyPressEvent(keyEvent);
+}
+
+/*void customLineEdit::triggerVariantActivated(int index)
+{
+
+}*/
+
+void customLineEdit::handleTextChanged(const QString &text)
+{
+  emit new_text(m_device_index, m_parameter_index, this->text() );
 }

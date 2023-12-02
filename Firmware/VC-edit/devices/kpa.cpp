@@ -151,3 +151,8 @@ QString KPA_class::get_patch_info(uint16_t number)
     //line.append(QString::number(patch_no));
     return line;
 }
+
+uint8_t KPA_class::get_number_of_snapscenes()
+{
+    return 10;
+}

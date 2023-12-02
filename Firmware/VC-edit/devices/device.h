@@ -23,6 +23,8 @@ public:
 
     virtual bool check_command_enabled(uint8_t cmd);
     virtual QString number_format(uint16_t patch_no);
+    QString build_patch_number(uint16_t number, QString firstPatch, QString lastPatch);
+    uint8_t convert_mask_number(QChar c);
     virtual QString read_parameter_name(uint16_t par_no);
     virtual QString read_parameter_state(uint16_t par_no, uint8_t value);
     virtual uint16_t number_of_parameters();
@@ -35,6 +37,7 @@ public:
     virtual uint8_t trigger_follow_assign(uint8_t assign_no);
     virtual QString read_scene_name_from_buffer(int number, uint8_t scene) const;
     virtual void store_scene_name_to_buffer(int number, uint8_t scene, QString name);
+    virtual uint8_t get_number_of_snapscenes();
 
     virtual uint8_t supportPatchSaving();
     virtual void readPatchData(int index, int patch_no, const QJsonObject &json);

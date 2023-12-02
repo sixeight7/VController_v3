@@ -14,6 +14,7 @@
 #include "songeditdialog.h"
 #include "setlisteditdialog.h"
 #include "scenedialog.h"
+#include "initializeuserdevicedatadialog.h"
 #include "mainwindow.h"
 
 #include <QSettings>
@@ -76,6 +77,7 @@ MainWindow::MainWindow(QWidget *parent) :
     MyVCmidiSwitches = new VCmidiSwitches();
     MyVCseqPatterns = new VCseqPattern();
     MyVCdevices = new VCdevices();
+    MyVCuserDevice = new VCuserdevices();
     MyVCcommands = new VCcommands();
     connect(MyVCcommands, SIGNAL(updateCommandScreens(bool)), this, SLOT(updateCommandScreens(bool)));
 
@@ -89,6 +91,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Fill objects on screen
     fillTreeWidget(ui->treeWidget);
+    updateUserDeviceTab();
+    connect(MyMidi, SIGNAL(updateUserDeviceTab()), this, SLOT(updateUserDeviceTab()));
+    connect(MyVCuserDevice, SIGNAL(updateUserDeviceNameWidget()), this, SLOT(updateUserDeviceNameWidget()));
+    connect(MyVCuserDevice, SIGNAL(updateFullName()), this, SLOT(updateUserDeviceFullName()));
+
     fillPatchListBox(ui->patchListWidget);
     fillPatchTypeComboBox(ui->patchTypeComboBox);
     ui->patchListWidget->setDefaultDropAction(Qt::MoveAction);
@@ -101,6 +108,10 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->currentPageComboBox2, SIGNAL(customContextMenuRequested(const QPoint)), this, SLOT(ShowPageContextMenu(QPoint)));
     ui->patchListWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->patchListWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(ShowPatchContextMenu(QPoint)));
+    ui->currentUserDeviceComboBox->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->currentUserDeviceComboBox, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(ShowUserDeviceContextMenu(QPoint)));
+    ui->patchNameTableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->patchNameTableWidget, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(ShowUserNameContextMenu(QPoint)));
     setupLcdDisplays();
     resetRemoteControlButtons();
     on_tabWidget_currentChanged(ui->tabWidget->currentIndex());
@@ -131,7 +142,7 @@ void MainWindow::runEverySecond()
 
 void MainWindow::updateSettings()
 {
-    fillTreeWidget(ui->treeWidget);
+    updateTreeWidget(ui->treeWidget);
     closeProgressBar("Settings read succesfully");
 }
 
@@ -152,6 +163,7 @@ void MainWindow::updateCommands(int check_number_of_cmds, int check_number_of_pa
 
 void MainWindow::loadAppSettings() {
     QSettings appSettings;
+    qDebug() << "Settimgs located at" << appSettings.fileName();
 
     appSettings.beginGroup("MainWindow");
     uint8_t newType = appSettings.value("VC_type").toUInt();
@@ -164,6 +176,8 @@ void MainWindow::loadAppSettings() {
     if (MySavePageFile == "") MySavePageFile = QDir::homePath();
     MySavePatchFile = appSettings.value("savePatchFile").toString();
     if (MySavePatchFile == "") MySavePatchFile = QDir::homePath();
+    MySaveUserDeviceFile = appSettings.value("savePatchFile").toString();
+    if (MySaveUserDeviceFile == "") MySaveUserDeviceFile = QDir::homePath();
     currentPage = appSettings.value("currentPage").toInt();
     previousPage = currentPage;
     previousSwitchPage = currentPage;
@@ -210,6 +224,7 @@ void MainWindow::saveAppSettings() {
     appSettings.setValue("fullBackupFile", MyFullBackupFile);
     appSettings.setValue("savePageFile", MySavePageFile);
     appSettings.setValue("savePatchFile", MySavePatchFile);
+    appSettings.setValue("saveUserDeviceFile", MySaveUserDeviceFile);
     appSettings.setValue("currentPage", currentPage);
     appSettings.setValue("currentPatchTypeComboBoxItem", ui->patchTypeComboBox->currentIndex());
     appSettings.endGroup();
@@ -289,6 +304,49 @@ void MainWindow::fillTreeWidget(QTreeWidget *my_tree)
     connect(my_tree, SIGNAL(activated(QModelIndex)), this, SLOT(treeWidgetActivated(QModelIndex)));
 }
 
+void MainWindow::updateTreeWidget(QTreeWidget *my_tree)
+{
+    MyVCsettings->updateTreeWidget(my_tree);
+    MyVCmidiSwitches->updateTreeWidget(my_tree, MyVCmidiSwitches);
+    MyVCseqPatterns->updateTreeWidget(my_tree, MyVCseqPatterns);
+    MyVCdevices->updateTreeWidget(my_tree, MyVCcommands);
+}
+
+
+void MainWindow::fillUserDeviceTreeWidget(QTreeWidget *my_tree)
+{
+    my_tree->clear();
+    my_tree->setColumnCount(5);
+    my_tree->setHeaderLabels(QStringList() << "Setting" << "" << "Value" << "" << "Slider");
+    my_tree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    my_tree->setColumnWidth(1, 4);
+    my_tree->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    my_tree->setColumnWidth(3, 4);
+    my_tree->header()->setSectionResizeMode(4, QHeaderView::Stretch);
+    my_tree->setStyleSheet("QTreeWidget::item { padding: 2 px; }");
+    MyVCuserDevice->fillTreeWidget(my_tree);
+    connect(my_tree, SIGNAL(activated(QModelIndex)), this, SLOT(treeWidgetActivated(QModelIndex)));
+    MyVCdevices->updateTreeWidget(my_tree, MyVCcommands); // To update USER device names in settings tree
+}
+
+void MainWindow::fillUserDevicePatchNameWidget(QTableWidget *patchNameWidget)
+{
+    int currentInstance = ui->currentUserDeviceComboBox->currentIndex();
+    MyVCuserDevice->fillPatchNameTableWidget(currentInstance, patchNameWidget);
+}
+
+void MainWindow::fillUserDeviceFxAndSceneNameWidget(QTableWidget *patchNameWidget)
+{
+    int currentInstance = ui->currentUserDeviceComboBox->currentIndex();
+    MyVCuserDevice->fillFxAndSceneNameTableWidget(currentInstance, patchNameWidget);
+}
+
+void MainWindow::updateUserDeviceFxAndSceneNameWidget(QTableWidget *patchNameWidget)
+{
+    int currentInstance = ui->currentUserDeviceComboBox->currentIndex();
+    MyVCuserDevice->updateFxAndSceneNameTableWidget(currentInstance, patchNameWidget);
+}
+
 void MainWindow::treeWidgetActivated(QModelIndex)
 {
     QApplication::processEvents();
@@ -318,7 +376,7 @@ void MainWindow::fillListBoxes(bool first_time)
     for(int w = 0; w < myListWidgets.count(); w++) {
       MyVCcommands->fillCommandsListWidget(this, myListWidgets[w], currentPage, w + 1, true, first_time);
     }
-    MyVCcommands->fillCommandsListWidget(this, ui->onPageSelect0ListWidget, currentPage, 0, true, first_time);
+    MyVCcommands->fillCommandsListWidget(this, ui->onPageSelect0ListWidget, currentPage, ON_PAGE_SELECT_SWITCH, true, first_time);
 
     // Create pacman shortcuts for first and last item
     if (first_time) {
@@ -448,16 +506,16 @@ void MainWindow::fillPatchTypeComboBox(QComboBox *my_combobox)
 void MainWindow::updateStatusLabel()
 {
     uint8_t cmd_percentage = Commands.size() * 100 / EXT_EEP_MAX_NUMBER_OF_COMMANDS;
-    //statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%");
-
     uint8_t patch_percentage = MyVCdevices->numberOfPatches() * 100 / MAX_NUMBER_OF_DEVICE_PRESETS;
-    statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%, Patch memory: " + QString::number(patch_percentage) + "%");
+    uint8_t user_device_data_percentage = MyVCuserDevice->getNumberOfUserItems() * 100 / MAX_NUMBER_OF_USER_DATA_ITEMS;
+    statusLabel->setText("Cmd memory: " + QString::number(cmd_percentage) + "%, Patch memory: " + QString::number(patch_percentage) + "%, USER data items: " + QString::number(user_device_data_percentage) + "%");
 
-    uint8_t max_percentage = cmd_percentage;
-    if (patch_percentage > cmd_percentage) max_percentage = patch_percentage;
-    if (max_percentage >= 95) statusLabel->setStyleSheet("background-color: orange");
+    uint8_t highest_percentage = cmd_percentage;
+    if (patch_percentage > highest_percentage) highest_percentage = patch_percentage;
+    if (user_device_data_percentage > highest_percentage) highest_percentage = user_device_data_percentage;
+    if (highest_percentage >= 95) statusLabel->setStyleSheet("background-color: orange");
     else statusLabel->setStyleSheet("background: transparent");
-    if (max_percentage >= 100) statusLabel->setStyleSheet("background-color: red");
+    if (highest_percentage >= 100) statusLabel->setStyleSheet("background-color: red");
 
     if (VControllerConnected) {
         editorStateLabel->setText("Online");
@@ -685,13 +743,15 @@ void MainWindow::on_actionOpen_triggered()
         MyVCmidiSwitches->read(loadDoc.object());
         MyVCseqPatterns->read(loadDoc.object());
         MyVCdevices->read(loadDoc.object());
+        MyVCuserDevice->readAll(loadDoc.object());
         MyVCcommands->readAll(loadDoc.object());
         //MyVCdevices->readAll(loadDoc.object());
         readAllPatchData(loadDoc.object());
         MyVCdevices->readAllLegacyKatana(loadDoc.object());
-        fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
+        updateTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
         updateCommandScreens(false);
         fillPatchListBox(ui->patchListWidget);
+        updateUserDeviceTab();
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
     }
 
@@ -711,7 +771,7 @@ void MainWindow::on_actionOpen_triggered()
             currentPage = MyVCcommands->addPage();
         }
         MyVCcommands->readPage(currentPage, loadDoc.object());
-        fillTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
+        updateTreeWidget(ui->treeWidget); // Will refresh the settings in the widget
         updateCommandScreens(false);
         ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
     }
@@ -735,6 +795,7 @@ void MainWindow::on_actionSave_triggered()
     MyVCseqPatterns->write(saveObject);
     MyVCdevices->write(saveObject);
     MyVCcommands->writeAll(saveObject);
+    MyVCuserDevice->writeAll(saveObject);
     writeAllPatchData(saveObject);
     //MyVCdevices->writeAll(saveObject);
     QJsonDocument saveDoc(saveObject);
@@ -983,7 +1044,14 @@ void MainWindow::on_tabWidget_currentChanged(int index)
     }
     else {
         ui->menuPatch->menuAction()->setVisible(false);
-    }    
+    }
+
+    if (ui->tabWidget->tabText(index) == "User devices") {
+        ui->menuUser_Device->menuAction()->setVisible(true);
+    }
+    else {
+        ui->menuUser_Device->menuAction()->setVisible(false);
+    }
 }
 
 void MainWindow::on_readSysexButton_clicked()
@@ -1149,12 +1217,38 @@ void MainWindow::ShowPatchContextMenu(const QPoint &pos)
     QPoint myPos = widget->mapToGlobal(pos);
 
     QMenu submenu;
+    submenu.addAction(ui->actionCut_patch);
     submenu.addAction(ui->actionCopyPatch);
     submenu.addAction(ui->actionPastePatch);
     submenu.addAction(ui->actionEditPatch);
     submenu.addAction(ui->actionImport);
     submenu.addAction(ui->actionExport);
     submenu.addAction((ui->actionInitialize_patch));
+    submenu.exec(myPos);
+}
+
+void MainWindow::ShowUserDeviceContextMenu(const QPoint &pos)
+{
+    customListWidget *widget = (customListWidget *)sender();
+    QPoint myPos = widget->mapToGlobal(pos);
+
+    QMenu submenu;
+    submenu.addAction(ui->actionInitialize_Device);
+    submenu.addAction(ui->actionImport_Device);
+    submenu.addAction(ui->actionExport_Device);
+    submenu.exec(myPos);
+}
+
+void MainWindow::ShowUserNameContextMenu(const QPoint &pos)
+{
+    customListWidget *widget = (customListWidget *)sender();
+    QPoint myPos = widget->mapToGlobal(pos);
+
+    QMenu submenu;
+    submenu.addAction(ui->actionCut_User_Device_Patch);
+    submenu.addAction(ui->actionCopy_User_Device_Patch);
+    submenu.addAction(ui->actionPaste_User_Device_Patch);
+    submenu.addAction(ui->actionClear_User_Device_Patch);
     submenu.exec(myPos);
 }
 
@@ -1273,7 +1367,8 @@ void MainWindow::VControllerDetected(int type, int versionMajor, int versionMino
     }
     else if ((!VControllerConnected) && (!dataEdited) && (!fileLoaded)) {
         MyMidi->MIDI_editor_request_all_commands();
-        MyMidi->MIDI_editor_request_all_KTN_patches();
+        MyMidi->MIDI_editor_request_all_patches();
+        MyMidi->MIDI_editor_request_all_user_device_settings();
         MyMidi->MIDI_editor_request_settings();
     }
     VControllerConnected = true;
@@ -1353,7 +1448,7 @@ void MainWindow::on_actionAbout_triggered()
 
 void MainWindow::on_actionWebsite_triggered()
 {
-    QDesktopServices::openUrl(QUrl("https://www.vguitarforums.com/smf/index.php?topic=15154.0"));
+    QDesktopServices::openUrl(QUrl("https://www.vguitarforums.com/smf/index.php?board=277.0"));
 }
 
 void MainWindow::on_actionDonate_triggered()
@@ -1379,13 +1474,13 @@ void MainWindow::on_actionPreviousPage_triggered()
 
 void MainWindow::on_refreshSettingsTreeButton_clicked()
 {
-    fillTreeWidget(ui->treeWidget);
+    updateTreeWidget(ui->treeWidget);
 }
 
 void MainWindow::on_readPatchButton_clicked()
 {
     try_reconnect_MIDI();
-    MyMidi->MIDI_editor_request_all_KTN_patches();
+    MyMidi->MIDI_editor_request_all_patches();
 }
 
 void MainWindow::on_writePatchButton_clicked()
@@ -1462,10 +1557,12 @@ void MainWindow::on_actionEditPatch_triggered()
         if (currentDevicePatchType == EXT_SETLIST_TYPE) {
             setlistEditDialog::createNewSetlist(item);
             on_actionEditPatch_triggered();
+            dataEdited = true;
         }
         if (currentDevicePatchType == EXT_SONG_TYPE) {
             songEditDialog::createNewSong(item);
             on_actionEditPatch_triggered();
+            dataEdited = true;
         }
     }
 }
@@ -1594,6 +1691,8 @@ void MainWindow::on_actionCopyPatch_triggered()
 
         MyVCdevices->copyPatch(patch, currentDevicePatchType);
     }
+
+    ui->actionPastePatch->setEnabled((ui->patchTypeComboBox->currentIndex() != 0) && (MyVCdevices->checkSelectedTypeMatchesCopyBufferType(currentDevicePatchType)));
 }
 
 void MainWindow::on_actionPastePatch_triggered()
@@ -1657,7 +1756,8 @@ void MainWindow::on_patchTypeComboBox_currentIndexChanged(int index)
     }
 
     ui->actionImport->setEnabled(index != 0); // Hide the Import Action when in memory mode
-    ui->actionPastePatch->setEnabled(index != 0);
+    ui->actionCut_patch->setEnabled(index != 0);
+    ui->actionPastePatch->setEnabled((index != 0) && (MyVCdevices->checkSelectedTypeMatchesCopyBufferType(currentDevicePatchType)));
 }
 
 
@@ -1700,8 +1800,10 @@ void MainWindow::buildMainWindow()
     ui->readSysexCmdButton2->setText("Read commands from " + VC_name);
     ui->writeSysexCmdButton->setText("Write commands to " + VC_name);
     ui->writeSysexCmdButton2->setText("Write commands to " + VC_name);
-    ui->readPatchButton->setText("Read patches from " + VC_name);
-    ui->writePatchButton->setText("Write patches to " + VC_name);
+    ui->readPatchButton->setText("Read songs/setlists/patches from " + VC_name);
+    ui->writePatchButton->setText("Write songs/setlists/patches to " + VC_name);
+    ui->readAllDeviceSettingsButton->setText("Read user device settings from " + VC_name);
+    ui->writeAllDeviceSettingsButton->setText("Write user device settings to " + VC_name);
     ui->readSysexButton->setText("Read settings from " + VC_name);
     ui->writeSysexButton->setText("Write settings to " + VC_name);
     ui->readPatternsButton->setText("Read patterns from " + VC_name);
@@ -1810,6 +1912,46 @@ void MainWindow::drawPageComboBoxes()
             newLineLayout->addLayout(newItemLayout);
         }
         layout2->insertLayout(row, newLineLayout);
+    }
+}
+
+void MainWindow::updateUserDeviceTab()
+{
+    if (!userDevicePageBuilt) fillUserDeviceComboBox();
+    fillUserDeviceTreeWidget(ui->userDeviceTreeWidget);
+    fillUserDevicePatchNameWidget(ui->patchNameTableWidget);
+    fillUserDeviceFxAndSceneNameWidget(ui->fxAndSceneTableWidget);
+    updateUserDeviceComboBoxItems();
+    userDevicePageBuilt = true;
+    updateStatusLabel();
+}
+
+void MainWindow::updateUserDeviceNameWidget()
+{
+    fillUserDevicePatchNameWidget(ui->patchNameTableWidget);
+}
+
+void MainWindow::updateUserDeviceFullName()
+{
+    updateUserDeviceComboBoxItems();
+    MyVCdevices->updateTreeWidget(ui->treeWidget, MyVCcommands);
+}
+
+void MainWindow::fillUserDeviceComboBox()
+{
+    ui->currentUserDeviceComboBox->clear();
+    for (uint8_t ud = 0; ud < NUMBER_OF_USER_DEVICES; ud++) {
+        ui->currentUserDeviceComboBox->addItem("USER DEVICE " + QString::number(ud + 1));
+    }
+}
+
+void MainWindow::updateUserDeviceComboBoxItems()
+{
+    for (int d = 0; d < NUMBER_OF_USER_DEVICES; d++) {
+        QString text = USER_device[d]->get_full_name();
+        QString default_text = "USER DEVICE " + QString::number(d + 1);
+        if (text.trimmed() == default_text) return;
+        ui->currentUserDeviceComboBox->setItemText(d, default_text + ":   " + text);
     }
 }
 
@@ -2056,4 +2198,177 @@ void MainWindow::drawRemoteSwitch(QHBoxLayout *layout, uint8_t switchNumber, int
     layout->addWidget(roundSwitch, Qt::AlignCenter);
     connect(roundSwitch, &customSwitch::pressed, this, &MainWindow::on_switch_pressed);
     connect(roundSwitch, &customSwitch::released, this, &MainWindow::on_switch_released);
+}
+
+void MainWindow::on_readAllDeviceSettingsButton_clicked()
+{
+    MyMidi->MIDI_editor_request_all_user_device_settings();
+    dataEdited = true;
+}
+
+
+void MainWindow::on_writeAllDeviceSettingsButton_clicked()
+{
+    if (User_device_data_item.size() > MAX_NUMBER_OF_USER_DATA_ITEMS) {
+        QMessageBox msg;
+        msg.critical(this, "Out of memory", "Too many USER device items in current configuration to fit the " + VC_name + ". Please delete some names, states and colours and try again.");
+        return;
+    }
+    MyVCuserDevice->cleanUpUserDeviceNameItems();
+    MyMidi->MIDI_editor_send_all_user_device_data();
+}
+
+
+void MainWindow::on_currentUserDeviceComboBox_currentIndexChanged(int index)
+{
+    if (index < NUMBER_OF_USER_DEVICES) {
+        MyVCuserDevice->setCurrentUserDevice(index);
+    }
+    if (userDevicePageBuilt) updateUserDeviceTab();
+}
+
+
+void MainWindow::on_radioButtonGlobal_toggled(bool checked)
+{
+    MyVCuserDevice->setGlobalChecked(checked);
+    fillUserDeviceFxAndSceneNameWidget(ui->fxAndSceneTableWidget);
+}
+
+
+void MainWindow::on_patchNameTableWidget_currentCellChanged(int currentRow, int, int, int)
+{
+    MyMidi->MIDI_select_patch_on_device(ui->currentUserDeviceComboBox->currentIndex() + USER1, currentRow);
+    MyVCuserDevice->setSelectedPatchNumber(currentRow);
+    fillUserDeviceFxAndSceneNameWidget(ui->fxAndSceneTableWidget);
+    updateStatusLabel();
+}
+
+
+void MainWindow::on_actionImport_Device_triggered()
+{
+    // Import user_device_data
+    int instance = ui->currentUserDeviceComboBox->currentIndex();
+    if (instance == -1) return; // Nothing selected
+
+    // File Open
+    QString MyFile = QFileDialog::getOpenFileName(this, "Open VC-edit patch file", QFileInfo(MySaveUserDeviceFile).filePath(), tr("VC-edit data (*.vud)"));
+    QFile loadFile(MyFile);
+
+    if (!loadFile.open(QIODevice::ReadOnly)) {
+        ui->statusbar->showMessage("Couldn't open selected file.", STATUS_BAR_MESSAGE_TIME);
+        return;
+    }
+
+    QByteArray saveData = loadFile.readAll();
+    QJsonDocument loadDoc(QJsonDocument::fromJson(saveData));
+    fileLoaded = true;
+    QString jsonType = readHeader(loadDoc.object());
+
+
+    if (jsonType == "User Device Data") {
+        MyVCuserDevice->read(loadDoc.object(), instance, true);
+        updateUserDeviceTab();
+        ui->statusbar->showMessage(MyFile + " opened", STATUS_BAR_MESSAGE_TIME);
+        dataEdited = true;
+    }
+
+    else {
+        ui->statusbar->showMessage("Couldn't read selected VC-edit User Device data file", STATUS_BAR_MESSAGE_TIME);
+        return;
+    }
+}
+
+
+void MainWindow::on_actionExport_Device_triggered()
+{
+    // File Save
+    QFileInfo fileInfo(MySaveUserDeviceFile);
+    qDebug() << MySaveUserDeviceFile << fileInfo.absoluteFilePath();
+    uint8_t current_instance = ui->currentUserDeviceComboBox->currentIndex();
+    MySaveUserDeviceFile = fileInfo.absoluteFilePath() + "/" + USER_device[current_instance]->get_full_name().trimmed() + ".vud";
+    MySaveUserDeviceFile = QFileDialog::getSaveFileName(this, "Save VC-edit user device file:", MySaveUserDeviceFile, tr("VC-edit user device data (*.vud)"));
+    QFile saveFile(MySaveUserDeviceFile);
+
+    if (!saveFile.open(QIODevice::WriteOnly)) {
+        qWarning("Couldn't open json settings file.");
+        return;
+    }
+    
+    MyVCuserDevice->cleanUpUserDeviceNameItems();
+
+    QJsonObject saveObject;
+    writeHeader(saveObject, "User Device Data");
+    //MyVCcommands->writePage(currentPage, saveObject);
+    MyVCuserDevice->write(saveObject, current_instance, true);
+    QJsonDocument saveDoc(saveObject);
+    saveFile.write(saveDoc.toJson());
+    ui->statusbar->showMessage(MySaveUserDeviceFile + " opened", STATUS_BAR_MESSAGE_TIME);
+}
+
+
+
+void MainWindow::on_actionInitialize_Device_triggered()
+{
+    uint8_t current_instance = ui->currentUserDeviceComboBox->currentIndex();
+    initializeUserDeviceDataDialog id(this, current_instance);
+    id.exec();
+    id.close();
+    updateUserDeviceTab();
+    dataEdited = true;
+}
+
+
+void MainWindow::on_actionCopy_User_Device_Patch_triggered()
+{
+    qDebug() << "Copying items";
+    QModelIndexList indexList = ui->patchNameTableWidget->selectionModel()->selectedIndexes();
+    bool cleared = false;
+    foreach (QModelIndex index, indexList) {
+        if (index.column() == 1) {
+            if (!cleared) {
+                MyVCuserDevice->clearCopyBuffer(index.row());
+                cleared = true;
+            }
+            MyVCuserDevice->copyPatchItems(ui->currentUserDeviceComboBox->currentIndex(), index.row());
+        }
+    }
+}
+
+
+void MainWindow::on_actionPaste_User_Device_Patch_triggered()
+{
+    qDebug() << "Pasting items";
+    MyVCuserDevice->pastePatchItems(ui->currentUserDeviceComboBox->currentIndex(), ui->patchNameTableWidget->currentRow());
+    updateUserDeviceTab();
+    dataEdited = true;
+}
+
+
+void MainWindow::on_actionClear_User_Device_Patch_triggered()
+{
+    qDebug() << "Clearing items";
+    QModelIndexList indexList = ui->patchNameTableWidget->selectionModel()->selectedIndexes();
+    foreach (QModelIndex index, indexList) {
+        if (index.column() == 1) {
+            qDebug() << "Clearing item" << index.row();
+            MyVCuserDevice->clearPatchItems(ui->currentUserDeviceComboBox->currentIndex(), index.row());
+        }
+    }
+    updateUserDeviceTab();
+    dataEdited = true;
+}
+
+
+
+void MainWindow::on_actionCut_User_Device_Patch_triggered()
+{
+    on_actionCopy_User_Device_Patch_triggered();
+    on_actionClear_User_Device_Patch_triggered();
+}
+
+
+void MainWindow::on_actionCut_patch_triggered()
+{
+    on_actionCopyPatch_triggered();
+    on_actionInitialize_patch_triggered();
 }

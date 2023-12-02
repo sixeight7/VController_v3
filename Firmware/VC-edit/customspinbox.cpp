@@ -10,8 +10,7 @@ CustomSpinBox::CustomSpinBox(QWidget *parent, int myDeviceIndex, int myParameter
 {
     m_device_index = myDeviceIndex;
     m_parameter_index = myParameterIndex;
-    connect(this, SIGNAL(editingFinished()), this, SLOT(triggerVariantActivated()));
-
+    connect(this, SIGNAL(textChanged(QString)), this, SLOT(triggerVariantActivated()));
     setAlignment(Qt::AlignHCenter);
     setStyleSheet("padding-left: 3px; padding-right: 5px; padding-top: 0px; padding-bottom: 3px;");
 }

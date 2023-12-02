@@ -38,6 +38,12 @@
 #define VC_SET_SEQ_PATTERN 19
 #define VC_INITIALIZE_DEVICE_PATCH 20
 #define VC_REQUEST_HARDWARE_VERSION 21
+#define VC_START_UPDATE_MODE 22
+#define VC_SAVE_USER_DEVICE_SETTINGS 23
+#define VC_SAVE_USER_DEVICE_NAME_ITEM 24
+#define VC_REQUEST_ALL_USER_DEVICE_SETTINGS 25
+#define VC_INITIALIZE_USER_DEVICE_DATA 26
+#define VC_SELECT_PATCH_FROM_EDITOR 27
 
 class Midi : public QObject
 {
@@ -57,7 +63,7 @@ public:
     void checkMidiIn(std::vector<unsigned char> *message);
     void MIDI_editor_request_settings();
     void MIDI_editor_request_all_commands();
-    void MIDI_editor_request_all_KTN_patches();
+    void MIDI_editor_request_all_patches();
     void MIDI_editor_request_sequence_patterns();
     void MIDI_send_data(uint8_t cmd, uint8_t *my_data, uint16_t my_len);
     void MIDI_editor_send_settings();
@@ -72,7 +78,10 @@ public:
     void MIDI_send_initialize_device_patch(uint16_t patch_no);
     void MIDI_editor_finish_device_patch_dump();
     void MIDI_editor_request_hardware_version();
+    void MIDI_editor_request_all_user_device_settings();
+    void MIDI_editor_send_all_user_device_data();
     void send_universal_identity_request();
+    void MIDI_select_patch_on_device(uint8_t dev, uint16_t patch);
 
 signals:
     void updateSettings();
@@ -84,6 +93,7 @@ signals:
     void closeProgressBar(QString);
     void VControllerDetected(int type, int versionMajor, int versionMinor, int versionBuild);
     void updatePatchListBox();
+    void updateUserDeviceTab();
 
 private:
     static void staticMidiCallback(double, std::vector< unsigned char > *message, void *userData);
@@ -104,9 +114,13 @@ private:
     void MIDI_editor_receive_device_patch(std::vector< unsigned char > *message);
     void MIDI_editor_receive_initialize_device_patch(std::vector< unsigned char > *message);
     void MIDI_editor_receive_finish_device_patch_dump(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_user_device_settings(std::vector< unsigned char > *message);
+    void MIDI_editor_receive_user_name_item(std::vector< unsigned char > *message);
+    bool receive_7_bit_overflow_data(QByteArray *data, uint16_t datalen, std::vector<unsigned char> *message);
     QByteArray ReadPatch(int number);
     void WritePatch(int number, QByteArray patch);
     void InitializePatch(int number);
+    void send_7_bit_overflow_data(QByteArray data, uint16_t datalen, uint8_t command, uint16_t index);
 };
 
 #endif // MIDI_H

@@ -102,6 +102,9 @@ uint8_t MIDI_seq_pattern[NUMBER_OF_SEQ_PATTERNS_VCTOUCH][EEPROM_SEQ_PATTERN_SIZE
 
 uint8_t Device_patches[MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH][VC_PATCH_SIZE]; // Storage for the actual patches
 
+QVector<User_device_name_struct> User_device_data_item = {};
+int MAX_NUMBER_OF_USER_DATA_ITEMS = MAX_NUMBER_OF_USER_DATA_ITEMS_VC_AND_VCMINI;
+
 uint8_t number_of_midi_ports = 0;
 QStringList midi_port_names = {};
 uint8_t VCmidi_model_number;

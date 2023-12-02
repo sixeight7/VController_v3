@@ -280,6 +280,17 @@ void Midi::checkMidiIn(std::vector<unsigned char> *message)
             VC_hardware_version = message->at(6);
             qDebug() << "Hardware version:" << VC_hardware_version;
             break;
+        case VC_SAVE_USER_DEVICE_SETTINGS:
+            MIDI_editor_receive_user_device_settings(message);
+            break;
+        case VC_SAVE_USER_DEVICE_NAME_ITEM:
+            MIDI_editor_receive_user_name_item(message);
+            break;
+        case VC_INITIALIZE_USER_DEVICE_DATA:
+            User_device_data_item.clear();
+            emit startProgressBar(NUMBER_OF_USER_DEVICES, "Receiving USER device data");
+            emit updateProgressBar(0);
+            break;
         }
     }
 
@@ -296,7 +307,7 @@ void Midi::MIDI_editor_request_all_commands()
     sendSysexCommand(1, VC_REQUEST_COMMANDS_DUMP);
 }
 
-void Midi::MIDI_editor_request_all_KTN_patches()
+void Midi::MIDI_editor_request_all_patches()
 {
     sendSysexCommand(1, VC_REQUEST_KATANA_PATCHES);
 }
@@ -394,6 +405,11 @@ void Midi::MIDI_editor_send_command(uint16_t cmd_no)
 // MIDI sysex data can not use the 8th bit of a data byte. So we use the overflow byte to store the 8th bits of the next 7 bytes.
 void Midi::MIDI_send_device_patch(uint16_t patch_no)
 {
+    QByteArray patch_buffer = ReadPatch(patch_no);
+    send_7_bit_overflow_data(patch_buffer, VC_PATCH_SIZE, VC_SET_DEVICE_PATCH, patch_no);
+}
+
+void Midi::send_7_bit_overflow_data(QByteArray data, uint16_t datalen, uint8_t command, uint16_t index) {
     if (_midiOut && !_midiOut->isPortOpen()) return; // Exit if port is not open.
 
     std::vector<unsigned char> message;
@@ -403,33 +419,29 @@ void Midi::MIDI_send_device_patch(uint16_t patch_no)
     message.push_back( VC_FAMILY_CODE );
     message.push_back( VCmidi_model_number );
     message.push_back( VC_DEVICE_ID );
-    message.push_back( VC_SET_DEVICE_PATCH);
-    message.push_back( patch_no >> 7 );
-    message.push_back( patch_no & 0x7F );
+    message.push_back( command);
+    message.push_back( (uint8_t)(index >> 7) );
+    message.push_back( (uint8_t)(index & 0x7F) );
 
-    QByteArray patch_buffer = ReadPatch(patch_no);
-    uint8_t number_of_overflow_bytes = (VC_PATCH_SIZE + 6) / 7;
-    //uint16_t messagesize = VC_PATCH_SIZE + number_of_overflow_bytes + 9;
-
-    int buffer_index = 0;
-    for (int obi = 0; obi < number_of_overflow_bytes; obi++) {
+    uint8_t number_of_overflow_bytes = (datalen + 6) / 7;
+    uint8_t buffer_index = 0;
+    for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
       uint8_t overflow_byte = 0;
       for (uint8_t i = 0; i < 7; i++) {
-        if (buffer_index < VC_PATCH_SIZE) {
-          if (patch_buffer[buffer_index] & 0x80) overflow_byte |= (1 << i);
+        if (buffer_index < datalen) {
+                if (data[buffer_index] & 0x80) overflow_byte |= (1 << i);
         }
         buffer_index++;
       }
       message.push_back(overflow_byte);
       buffer_index -= 7;
       for (uint8_t i = 0; i < 7; i++) {
-        if (buffer_index < VC_PATCH_SIZE) {
-          message.push_back(patch_buffer[buffer_index] & 0x7F);
+        if (buffer_index < datalen) {
+          message.push_back(data[buffer_index] & 0x7F);
         }
         buffer_index++;
       }
     }
-
     message.push_back( 0xF7 );
     _midiOut->sendMessage(&message);
     MIDI_debug_data(&message, false);
@@ -468,6 +480,39 @@ void Midi::MIDI_editor_request_hardware_version()
     MIDI_send_data(VC_REQUEST_HARDWARE_VERSION, dummy, 1);
 }
 
+void Midi::MIDI_editor_request_all_user_device_settings()
+{
+    uint8_t dummy[1] = {0};
+    MIDI_send_data(VC_REQUEST_ALL_USER_DEVICE_SETTINGS, dummy, 1);
+}
+
+void Midi::MIDI_editor_send_all_user_device_data()
+{
+    emit startProgressBar(NUMBER_OF_USER_DEVICES + User_device_data_item.size(), "Uploading User Device data...");
+
+    for (uint8_t i = 0; i < NUMBER_OF_USER_DEVICES; i++) {
+      User_device_struct userdata = USER_device[i]->get_device_data();
+      QByteArray data;
+      uint8_t* userdatabytes = (uint8_t*)&userdata;
+      for (uint8_t i = 0; i < sizeof(userdata); i++) data.append(userdatabytes[i]);
+      send_7_bit_overflow_data(data, sizeof(userdata), VC_SAVE_USER_DEVICE_SETTINGS, i);
+      emit updateProgressBar(i);
+    }
+
+    int no_of_items = User_device_data_item.size();
+    uint8_t data_size[2] = { (uint8_t) ((no_of_items >> 7) & 0x7F), (uint8_t)(no_of_items & 0x7F)};
+    MIDI_send_data(VC_INITIALIZE_USER_DEVICE_DATA, data_size, 2);
+
+    for (int i = 0; i < no_of_items; i++) {
+      QByteArray data;
+       uint8_t* userdatabytes = (uint8_t*)&User_device_data_item[i];
+      for (uint8_t j = 0; j < sizeof(User_device_data_item[0]); j++) data.append(userdatabytes[j]);
+      send_7_bit_overflow_data(data, sizeof(User_device_data_item[0]), VC_SAVE_USER_DEVICE_NAME_ITEM, i);
+      emit updateProgressBar(NUMBER_OF_USER_DEVICES + i);
+    }
+    emit closeProgressBar("Done uploading");
+}
+
 void Midi::send_universal_identity_request()
 {
     // Format: 0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7
@@ -483,6 +528,13 @@ void Midi::send_universal_identity_request()
     _midiOut->sendMessage(&message);
 
     qDebug() << "Sent Universal Identity Request";
+}
+
+void Midi::MIDI_select_patch_on_device(uint8_t dev, uint16_t patch)
+{
+    if (dev >= NUMBER_OF_DEVICES) return;
+    uint8_t data[4] = {dev, 0, (uint8_t)(patch >> 7), (uint8_t)(patch & 0x7F)};
+    MIDI_send_data(VC_SELECT_PATCH_FROM_EDITOR, data, 4);
 }
 
 QString Midi::addChar(unsigned char c) {
@@ -545,6 +597,7 @@ void Midi::MIDI_debug_data(std::vector<unsigned char> *message, bool isMidiIn)
 void Midi::MIDI_show_error()
 {
     qDebug() << "MIDI read error!";
+    qWarning("MIDI read error! Please read data again.");
 }
 
 // Device patch data is sent using the overflow byte system from Zoom
@@ -589,6 +642,10 @@ void Midi::MIDI_editor_receive_finish_commands_dump(std::vector<unsigned char> *
 
 void Midi::MIDI_editor_receive_command(std::vector<unsigned char> *message)
 {
+  if (message->size() != 27) {
+      MIDI_show_error();
+      return;
+  }
   Cmd_struct cmd;
   uint8_t* cmdbytes = (uint8_t*)&cmd;
   MIDI_read_data(message, cmdbytes, sizeof(cmd));
@@ -645,23 +702,10 @@ void Midi::MIDI_editor_receive_device_patch(std::vector<unsigned char> *message)
         MIDI_show_error();
         return;
     }
-    QByteArray patch;
     int patch_index = (message->at(6) << 7) + message->at(7);
-      uint8_t buffer_index = 0;
-      for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
-        uint8_t overflow_byte = message->at(8 + (obi * 8));
-        uint8_t byte_index = 9 + (obi * 8);
-        for (uint8_t i = 0; i < 7; i++) {
-          if (buffer_index < VC_PATCH_SIZE) {
-            uint8_t new_byte = message->at(byte_index++);
-            if ((overflow_byte & (1 << i)) != 0) new_byte |= 0x80;
-            patch.append(new_byte);
-          }
-          buffer_index++;
-        }
-      }
-    WritePatch(patch_index, patch);
-    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving device patches");
+    QByteArray patch;
+    if (receive_7_bit_overflow_data(&patch, VC_PATCH_SIZE, message)) WritePatch(patch_index, patch);
+    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving songs, setlists and patches");
     emit updateProgressBar(patch_index);
     emit updatePatchListBox();
 }
@@ -670,7 +714,7 @@ void Midi::MIDI_editor_receive_initialize_device_patch(std::vector<unsigned char
 {
     int patch_index = (message->at(6) << 7) + message->at(7);
     InitializePatch(patch_index);
-    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving device patches");
+    if (patch_index == 0) emit startProgressBar(MAX_NUMBER_OF_DEVICE_PRESETS, "Receiving songs, setlists and patches");
     emit updateProgressBar(patch_index);
 }
 
@@ -692,6 +736,74 @@ void Midi::MIDI_editor_receive_settings(std::vector<unsigned char> *message)
     emit startProgressBar(NUMBER_OF_DEVICES + NUMBER_OF_MIDI_SWITCHES + NUMBER_OF_SEQ_PATTERNS, "Receiving settings");
     emit updateProgressBar(0);
 }
+
+void Midi::MIDI_editor_receive_user_device_settings(std::vector< unsigned char > *message)
+{
+    uint8_t instance = (message->at(6) << 7) + message->at(7);
+    if (instance >= NUMBER_OF_USER_DEVICES) return;
+    QByteArray data;
+    User_device_struct userdata;
+    if (receive_7_bit_overflow_data(&data, sizeof(userdata), message)) {
+      uint8_t* userdatabytes = (uint8_t*)&userdata;
+      for (uint8_t i = 0; i < sizeof(userdata); i++) userdatabytes[i] = data[i];
+      USER_device[instance]->set_device_data(&userdata);
+    }
+    if (instance == (NUMBER_OF_USER_DEVICES - 1)) emit updateUserDeviceTab();
+    emit updateProgressBar(instance);
+}
+
+void Midi::MIDI_editor_receive_user_name_item(std::vector<unsigned char> *message)
+{
+    QByteArray data;
+    User_device_name_struct new_item;
+    receive_7_bit_overflow_data(&data, sizeof(new_item), message);
+
+    uint8_t* new_item_bytes = (uint8_t*)&new_item;
+    for (uint8_t i = 0; i < sizeof(new_item); i++) new_item_bytes[i] = data[i];
+
+    User_device_data_item.append(new_item);
+    emit updateProgressBar(NUMBER_OF_USER_DEVICES + User_device_data_item.size());
+}
+
+bool Midi::receive_7_bit_overflow_data(QByteArray *data, uint16_t datalen, std::vector<unsigned char> *message)
+{
+    if (!data || !message || message->size() < 9) {
+        // Check for null pointers and minimum size of the message vector
+        return false;
+    }
+
+    uint8_t number_of_overflow_bytes = (datalen + 6) / 7;
+    uint8_t buffer_index = 0;
+
+    for (uint8_t obi = 0; obi < number_of_overflow_bytes; obi++) {
+        if (8 + (obi * 8) >= message->size()) {
+            // Check if accessing beyond the bounds of the message vector
+            return false;
+        }
+
+        uint8_t overflow_byte = message->at(8 + (obi * 8));
+        uint8_t byte_index = 9 + (obi * 8);
+
+        for (uint8_t i = 0; i < 7; i++) {
+            if (buffer_index < datalen) {
+                if (byte_index >= message->size()) {
+                    // Check if accessing beyond the bounds of the message vector
+                    return false;
+                }
+
+                uint8_t new_byte = message->at(byte_index++);
+                if ((overflow_byte & (1 << i)) != 0) {
+                    new_byte |= 0x80;
+                }
+                data->append(new_byte);
+            }
+            buffer_index++;
+        }
+    }
+
+    return true;
+}
+
 
 QByteArray Midi::ReadPatch(int number)
 {

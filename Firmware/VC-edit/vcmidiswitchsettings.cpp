@@ -19,8 +19,6 @@ void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
     for (int s = 1; s < NUMBER_OF_MIDI_SWITCHES; s++) {
         QTreeWidgetItem *deviceChild = new QTreeWidgetItem(parent);
         deviceChild->setText(0, getSwitchNameForTree(s));
-        //my_tree->addTopLevelItem(deviceChild);
-        //parent->addChild(deviceChild);
 
         for (int i = 0; i < NUMBER_OF_MIDI_SWITCH_MENU_ITEMS; i++) {
             QTreeWidgetItem *child = new QTreeWidgetItem(deviceChild);
@@ -69,6 +67,70 @@ void VCmidiSwitches::fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
         }
     }
 }
+
+void VCmidiSwitches::updateTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm)
+{
+    QTreeWidgetItem *parent = findTopLevelItemByName(my_tree, "MIDI Switch Settings");
+    if (parent) {
+        for (int s = 1; s < NUMBER_OF_MIDI_SWITCHES; s++) {
+            QTreeWidgetItem *deviceChild = parent->child(s - 1);
+            deviceChild->setText(0, getSwitchNameForTree(s));
+
+            for (int i = 0; i < NUMBER_OF_MIDI_SWITCH_MENU_ITEMS; i++) {
+                QTreeWidgetItem *child = deviceChild->child(i);
+                child->setText(0, VCmidiSwitchMenu[i].name);
+
+                // Update CustomSlider value
+                CustomSlider *slider = dynamic_cast<CustomSlider*>(my_tree->itemWidget(child, 4));
+                if (slider) {
+                    slider->setRange(VCmidiSwitchMenu[i].min, VCmidiSwitchMenu[i].max);
+                    slider->setValue(getMidiSwitchSetting(s, VCmidiSwitchMenu[i].parameter));
+                }
+
+                // Update CustomComboBox current item (if applicable)
+                if (VCmidiSwitchMenu[i].type == OPTION) {
+                    CustomComboBox *comboBox = dynamic_cast<CustomComboBox*>(my_tree->itemWidget(child, 2));
+                    if (comboBox) {
+                        comboBox->clear(); // Clear existing items
+                        if (VCmidiSwitchMenu[i].sublist > 0) {
+                            if (VCmidiSwitchMenu[i].sublist == MIDI_PORT_SUBLIST) {
+                                //comboBox->addItem("OFF");
+                                for (int p = 0; p < number_of_midi_ports; p++)
+                                    comboBox->addItem(midi_port_names[p]);
+                            } else {
+                                int number_of_items = VCmidiSwitchMenu[i].max - VCmidiSwitchMenu[i].min + 1;
+                                for (int j = 0; j < number_of_items; j++)
+                                    comboBox->addItem(menu_sublist.at(j + VCmidiSwitchMenu[i].sublist - 1));
+                            }
+                            comboBox->setCurrentIndex(getMidiSwitchSetting(s, VCmidiSwitchMenu[i].parameter));
+                        }
+                    }
+                }
+
+                // Update CustomSpinBox value (if applicable)
+                if (VCmidiSwitchMenu[i].type == VALUE) {
+                    CustomSpinBox *spinBox = dynamic_cast<CustomSpinBox*>(my_tree->itemWidget(child, 2));
+                    if (spinBox) {
+                        spinBox->setRange(VCmidiSwitchMenu[i].min, VCmidiSwitchMenu[i].max);
+                        spinBox->setValue(getMidiSwitchSetting(s, VCmidiSwitchMenu[i].parameter));
+                    }
+                }
+            }
+        }
+    }
+}
+
+QTreeWidgetItem* VCmidiSwitches::findTopLevelItemByName(QTreeWidget* my_tree, const QString &name) {
+    int topLevelItemCount = my_tree->topLevelItemCount();
+    for (int i = 0; i < topLevelItemCount; i++) {
+        QTreeWidgetItem* item = my_tree->topLevelItem(i);
+        if (item && item->text(0) == name) {
+            return item;
+        }
+    }
+    return nullptr;  // Item not found
+}
+
 
 void VCmidiSwitches::read(const QJsonObject &json)
 {

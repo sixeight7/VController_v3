@@ -1,12 +1,15 @@
 #include "customcheckbox.h"
 
-CustomCheckBox::CustomCheckBox(QWidget *parent, uint8_t number)
+CustomCheckBox::CustomCheckBox(QWidget *parent, int deviceIndex, int parameterIndex)
     : QCheckBox{parent}
 {
-    my_number = number;
+    m_device_index = deviceIndex;
+    m_parameter_index = parameterIndex;
+    connect(this, SIGNAL(clicked(bool)), this, SLOT(my_custom_clicked(bool)));
 }
 
-uint8_t CustomCheckBox::getMyNumber() const
+void CustomCheckBox::my_custom_clicked(bool state)
 {
-    return my_number;
+    emit custom_clicked(m_device_index, m_parameter_index, state);
 }
+

@@ -28,7 +28,7 @@ struct Cmd_struct
 
 // ********************************* Section 1: VController commands ********************************************
 
-#define NUMBER_OF_DEVICES 14
+// Here we define the supported devices
 #define GP10 0
 #define GR55 1
 #define VG99 2
@@ -43,6 +43,22 @@ struct Cmd_struct
 #define SY1000 11
 #define GM2 12
 #define MG300 13
+#define NUMBER_OF_PROGRAMMED_DEVICES 14
+
+// User devices have higher numbers, so they can always be at the end of the device list
+#define USER1 14
+#define USER2 15
+#define USER3 16
+#define USER4 17
+#define USER5 18
+#define USER6 19
+#define USER7 20
+#define USER8 21
+#define USER9 22
+#define USER10 23
+#define NUMBER_OF_USER_DEVICES 10
+
+#define NUMBER_OF_DEVICES (NUMBER_OF_PROGRAMMED_DEVICES + NUMBER_OF_USER_DEVICES)
 
 #define CURRENT 254 // To select the current device
 #define COMMON 255 // Not really a device, but used for common procedures, that are not device specific or for all devices.
@@ -334,6 +350,11 @@ struct Cmd_struct
 #define MG300_DEFAULT_VC_PAGE3 0
 #define MG300_DEFAULT_VC_PAGE4 0
 
+#define USER_DEFAULT_VC_PAGE1 PAGE_VC_CURRENT_PATCH_BANK
+#define USER_DEFAULT_VC_PAGE2 PAGE_VC_CURRENT_PARAMETER
+#define USER_DEFAULT_VC_PAGE3 0
+#define USER_DEFAULT_VC_PAGE4 0
+
 // ********************************* Section 3: VController default configuration for programmable pages ********************************************
 
 #define PAGE_VC_DEFAULT 0
@@ -445,6 +466,11 @@ struct Cmd_struct
 #define MG300_DEFAULT_VCMINI_PAGE3 0
 #define MG300_DEFAULT_VCMINI_PAGE4 0
 
+#define USER_DEFAULT_VCMINI_PAGE1 PAGE_VCMINI_CURRENT_PATCH_BANK
+#define USER_DEFAULT_VCMINI_PAGE2 PAGE_VCMINI_CURRENT_PARAMETER
+#define USER_DEFAULT_VCMINI_PAGE3 0
+#define USER_DEFAULT_VCMINI_PAGE4 0
+
 // ********************************* Section 5: VController default configuration for programmable pages ********************************************
 #define PAGE_VCMINI_DEFAULT 0
 #define PAGE_VCMINI_GM_TEST 1
@@ -487,7 +513,10 @@ struct Cmd_struct
 #define PAGE_VCTOUCH_SONG_MODE 230
 #define PAGE_VCTOUCH_SONG_SELECT 231
 #define PAGE_VCTOUCH_SETLIST_SELECT 232
-#define LAST_FIXED_CMD_PAGE_VCTOUCH 232
+#define PAGE_VCTOUCH_USER_PATCH_BANK 233
+#define PAGE_VCTOUCH_USER_PAR_BANK 234
+#define PAGE_VCTOUCH_USER_SCENES 235
+#define LAST_FIXED_CMD_PAGE_VCTOUCH 235
 
 #define DEFAULT_VCTOUCH_PAGE PAGE_VCTOUCH_SELECT // The page that gets selected when a valid page number is unknown
 
@@ -561,6 +590,11 @@ struct Cmd_struct
 #define MG300_DEFAULT_VCTOUCH_PAGE2 PAGE_VCTOUCH_CURRENT_PARAMETER
 #define MG300_DEFAULT_VCTOUCH_PAGE3 0
 #define MG300_DEFAULT_VCTOUCH_PAGE4 0
+
+#define USER_DEFAULT_VCTOUCH_PAGE1 PAGE_VCTOUCH_USER_PATCH_BANK
+#define USER_DEFAULT_VCTOUCH_PAGE2 PAGE_VCTOUCH_USER_PAR_BANK
+#define USER_DEFAULT_VCTOUCH_PAGE3 PAGE_VCTOUCH_USER_SCENES
+#define USER_DEFAULT_VCTOUCH_PAGE4 0
 
 // ********************************* Section 7: VC-touch default configuration for programmable pages ********************************************
 #define PAGE_VCTOUCH_DEFAULT 0

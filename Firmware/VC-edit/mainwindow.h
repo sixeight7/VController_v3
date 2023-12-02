@@ -1,4 +1,4 @@
-#ifndef MAINWINDOW_H
+ #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 // The main window of VC-edit.
@@ -15,6 +15,7 @@
 #include "vcseqpattern.h"
 #include "vcdevices.h"
 #include "vccommands.h"
+#include "vcuserdevices.h"
 #include "customlistwidget.h"
 #include "customswitch.h"
 #include "customled.h"
@@ -23,7 +24,7 @@
 // This version number is shown in the about dialog and also appears in all files created by VC-edit.
 // Version should be the same as the version shown on the VController of VC-mini
 #define VCMINI_FIRMWARE_VERSION_MAJOR 3
-#define VCMINI_FIRMWARE_VERSION_MINOR 11
+#define VCMINI_FIRMWARE_VERSION_MINOR 12
 #define VCMINI_FIRMWARE_VERSION_BUILD 0
 
 #define STATUS_BAR_MESSAGE_TIME 2000
@@ -53,12 +54,17 @@ public slots:
     void listWidgetClicked();
     void selectWidget(customListWidget *widget);
     void updatePatchListBox();
+    void updateUserDeviceTab();
+    void updateUserDeviceNameWidget();
+    void updateUserDeviceFullName();
 
-    // Menu actions - also appear in submenus
+    // Menu actions - also appear in submenus (right click)
     void checkMenuItems();
     void ShowPageContextMenu(const QPoint &pos); // For right-click on page comboBox
     void ShowListWidgetContextMenu(const QPoint &pos); // For right click on the listWidgets
     void ShowPatchContextMenu(const QPoint &pos);
+    void ShowUserDeviceContextMenu(const QPoint &pos);
+    void ShowUserNameContextMenu(const QPoint &pos);
 
     // Menu File
     void on_actionOpen_triggered();
@@ -81,12 +87,22 @@ public slots:
     void on_actionPasteCommand_triggered();
     void on_actionDeleteCommand_triggered();
 
-    // Menu Patch
+    // Menu Song/Setlist/Patch
     void on_actionCopyPatch_triggered();
     void on_actionPastePatch_triggered();
     void on_actionEditPatch_triggered();
     void on_actionExport_triggered();
     void on_actionImport_triggered();
+    void on_actionInitialize_patch_triggered();
+
+    // Menu User Device
+    void on_actionImport_Device_triggered();
+    void on_actionExport_Device_triggered();
+    void on_actionInitialize_Device_triggered();
+    void on_actionCut_User_Device_Patch_triggered();
+    void on_actionCopy_User_Device_Patch_triggered();
+    void on_actionPaste_User_Device_Patch_triggered();
+    void on_actionClear_User_Device_Patch_triggered();
 
     // Menu Help
     void on_actionAbout_triggered();
@@ -113,6 +129,9 @@ private slots:
     void treeWidgetActivated(QModelIndex);
     void movePatch(customListWidget *widget, int sourceRow, int destRow);
     void on_patchTypeComboBox_currentIndexChanged(int index);
+    void on_refreshSettingsTreeButton_clicked();
+    void on_currentUserDeviceComboBox_currentIndexChanged(int index);
+    void on_patchNameTableWidget_currentCellChanged(int currentRow, int currentColumn, int previousRow, int previousColumn);
 
     // Pressing buttons
     void on_readSysexButton_clicked();
@@ -128,6 +147,16 @@ private slots:
     void on_toolButtonPageDown2_clicked();
     void on_toolButtonPageUp2_clicked();
 
+    void on_readPatchButton_clicked();
+    void on_writePatchButton_clicked();
+
+    void on_readPatternsButton_clicked();
+    void on_writePatternsButton_clicked();
+
+    void on_readAllDeviceSettingsButton_clicked();
+    void on_writeAllDeviceSettingsButton_clicked();
+    void on_radioButtonGlobal_toggled(bool checked);
+
     // Remote control switches
     void on_switch_pressed();
     void on_switch_released();
@@ -142,20 +171,13 @@ private slots:
     void on_switch_16_pressed();
     void on_switch_16_released();
 
-    void on_refreshSettingsTreeButton_clicked();
-
-    void on_readPatchButton_clicked();
-    void on_writePatchButton_clicked();
-
-    void on_actionInitialize_patch_triggered();
-
-    void on_readPatternsButton_clicked();
-
-    void on_writePatternsButton_clicked();
+    void on_actionCut_patch_triggered();
 
 private:
     void buildMainWindow();
     void drawPageComboBoxes();
+    void fillUserDeviceComboBox();
+    void updateUserDeviceComboBoxItems();
     void drawRemoteControlArea();
     void drawRemoteControlAreaVController();
     void drawRemoteControlAreaVCmini();
@@ -167,6 +189,11 @@ private:
     void resetRemoteControlButtons();
     void setupEditTab();
     void fillTreeWidget(QTreeWidget *my_tree);
+    void updateTreeWidget(QTreeWidget *my_tree);
+    void fillUserDeviceTreeWidget(QTreeWidget *my_tree);
+    void fillUserDevicePatchNameWidget(QTableWidget *patchNameWidget);
+    void fillUserDeviceFxAndSceneNameWidget(QTableWidget *patchNameWidget);
+    void updateUserDeviceFxAndSceneNameWidget(QTableWidget *patchNameWidget);
     void fillPageComboBox(QComboBox *my_combobox);
     void fillListBoxes(bool first_time);
     void fillPatchListBox(QListWidget *my_patchList);
@@ -195,9 +222,11 @@ private:
 
     Ui::MainWindow *ui;
     bool booted = false;
+    bool userDevicePageBuilt = false;
     QString MyFullBackupFile;
     QString MySavePageFile;
     QString MySavePatchFile;
+    QString MySaveUserDeviceFile;
     QString MyMidiInPort, MyMidiOutPort;
     bool MyMidiSlowMode;
     Midi *MyMidi;
@@ -206,6 +235,7 @@ private:
     VCmidiSwitches *MyVCmidiSwitches;
     VCseqPattern *MyVCseqPatterns;
     VCdevices *MyVCdevices;
+    VCuserdevices * MyVCuserDevice;
     VCcommands *MyVCcommands;
     int currentPage = 0;
     int previousPage = 0;

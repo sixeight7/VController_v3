@@ -2,6 +2,7 @@
 #define CUSTOMLINEEDIT_H
 
 #include <QLineEdit>
+#include <QtGui>
 
 class customLineEdit : public QLineEdit
 {
@@ -14,14 +15,16 @@ public:
 
 protected:
     void focusInEvent(QFocusEvent *);
+    void keyPressEvent(QKeyEvent*);
 
 signals:
 
-    void new_value(int, int, int);
+    void new_text(int, int, const QString &);
 
 private slots:
 
-    void triggerVariantActivated(int index);
+    //void triggerVariantActivated(int index);
+    void handleTextChanged(const QString &text);
 
 private:
     int m_device_index;

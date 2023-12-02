@@ -176,12 +176,12 @@ void songEditDialog::fillTable()
     // Fill part names
     for (uint8_t part = 0; part < NUMBER_OF_PARTS; part++) {
         // Set enabled
-        CustomCheckBox *checkBox = new CustomCheckBox(ui->tableWidget, part);
+        CustomCheckBox *checkBox = new CustomCheckBox(ui->tableWidget, 0, part);
         checkBox->setChecked(check_part_active(part));
-        //checkBox->setStyleSheet( "text-align: center; margin-left:50%; margin-right:50%;" );
+        checkBox->setStyleSheet("margin-left:17%; margin-right:83%;");
         ui->tableWidget->setCellWidget(part + 3, 0, checkBox);
         myCheckBoxes[part] = checkBox;
-        connect(checkBox, SIGNAL(clicked(bool)), this, SLOT(partEnabledStateChanged(bool)));
+        connect(checkBox, SIGNAL(custom_clicked(int, int, bool)), this, SLOT(partEnabledStateChanged(int, int, bool)));
 
         // Set name
         customLineEdit *lineEdit = new customLineEdit(ui->tableWidget, part + 3, 1);
@@ -277,10 +277,8 @@ void songEditDialog::tableDataChanged(int row, int col, int data)
     }
 }
 
-void songEditDialog::partEnabledStateChanged(bool state)
+void songEditDialog::partEnabledStateChanged(int, int part, bool state)
 {
-    CustomCheckBox* checkBox = qobject_cast<CustomCheckBox*>(sender());
-    uint8_t part = checkBox->getMyNumber();
     set_part_active_state(part, state);
 }
 

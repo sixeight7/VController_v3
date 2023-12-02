@@ -119,6 +119,7 @@ void VCcommands::setup_VC_config()
         EXT_EEP_MAX_NUMBER_OF_COMMANDS = EXT_EEP_MAX_NUMBER_OF_COMMANDS_VCTOUCH;
         MAX_NUMBER_OF_DEVICE_PRESETS = MAX_NUMBER_OF_DEVICE_PRESETS_VCTOUCH;
         NUMBER_OF_SEQ_PATTERNS = NUMBER_OF_SEQ_PATTERNS_VCTOUCH;
+        MAX_NUMBER_OF_USER_DATA_ITEMS = MAX_NUMBER_OF_USER_DATA_ITEMS_VCTOUCH;
     }
 }
 
@@ -569,6 +570,7 @@ int VCcommands::createNewCommand(uint8_t pg, uint8_t sw)
 
 int VCcommands::deleteCommand(uint8_t pg, uint8_t sw, uint8_t item)
 {
+    if (sw == ON_PAGE_SELECT_SWITCH) item++; // One page select switch always has a label as page name
     if (read_title(pg, sw) != "") {
         if (item == 0) { // Label selected
             write_title(pg, sw, ""); // Will delete the label
@@ -638,13 +640,15 @@ void VCcommands::copyCommand(customListWidget *sourceWidget, int sourceRow, cust
     int sourceSwitch = sourceWidget->switchNumber();
     int destSwitch = destWidget->switchNumber();
     if ((sourceSwitch == -1) || (destSwitch == -1)) return;
-    bool hasLabel = switchHasLabel(current_page, sourceSwitch);
+
+    bool hasLabel = switchHasLabel(sourcePage, sourceSwitch);
+    if (sourceSwitch == ON_PAGE_SELECT_SWITCH) hasLabel = false;
 
     foreach (QListWidgetItem* item, sourceWidget->selectedItems()) {
         sourceRow = item->listWidget()->row(item);
 
-        if ((hasLabel) && (sourceRow == 0)) { // Copy label
-            if (destSwitch == 0) return; // Cannot drag label to on_page_select switch as this label contains the page name
+        if ((hasLabel) && (sourceRow == 0) && (destSwitch != ON_PAGE_SELECT_SWITCH)) { // Copy label
+            if (destSwitch == ON_PAGE_SELECT_SWITCH) return; // Cannot drag label to on_page_select switch as this label contains the page name
             QString label = read_title(current_page, sourceSwitch);
             write_title(current_page, destSwitch, label);
         }
@@ -656,13 +660,15 @@ void VCcommands::copyCommand(customListWidget *sourceWidget, int sourceRow, cust
                 if (sourceRow > 0) sourceRow--;
             }
 
-            uint16_t cmd_no = get_cmd_number(sourcePage, sourceSwitch, sourceRow);
-            Cmd_struct cmd = Commands[cmd_no];
+            if (sourceRow >= 0) {
+                uint16_t cmd_no = get_cmd_number(sourcePage, sourceSwitch, sourceRow);
+                Cmd_struct cmd = Commands[cmd_no];
 
-            cmd.Page = current_page;
-            cmd.Switch = destSwitch | (cmd.Switch & SWITCH_TYPE_MASK);
+                cmd.Page = current_page;
+                cmd.Switch = destSwitch | (cmd.Switch & SWITCH_TYPE_MASK);
 
-            Commands.append(cmd);
+                Commands.append(cmd);
+            }
         }
     }
 
@@ -722,30 +728,19 @@ void VCcommands::copy_command_structure(QVector<Cmd_struct> *source, QVector<Cmd
 void VCcommands::swapSwitches(int pg1, int sw1, int pg2, int sw2)
 {
     qDebug() << "Swapping switch #" << sw1 << "on page" << pg1 << "with switch#" << sw2 << "on page" << pg2;
-    bool noSwitchZero = (sw1 != 0) && (sw2 != 0);
 
-    for (int c = 0; c < number_of_cmds; c++) {
+    for (int c = 0; c < Commands.size(); c++) {
         // Swap commands
-        if ((Commands[c].Page == pg1) && ((Commands[c].Switch & SWITCH_MASK) == sw1)) {
+        bool Switch0Label = (is_label(Commands[c].Switch)) && ((sw1 == ON_PAGE_SELECT_SWITCH) || (sw2 == ON_PAGE_SELECT_SWITCH));
+
+        if ((Commands[c].Page == pg1) && ((Commands[c].Switch & SWITCH_MASK) == sw1) && (!Switch0Label)) {
             Commands[c].Page = pg2;
             Commands[c].Switch = sw2 | (Commands[c].Switch & SWITCH_TYPE_MASK);
         }
-        else if ((Commands[c].Page == pg2) && ((Commands[c].Switch & SWITCH_MASK) == sw2)) {
+        else if ((Commands[c].Page == pg2) && ((Commands[c].Switch & SWITCH_MASK) == sw2) && (!Switch0Label)) {
             Commands[c].Page = pg1;
             Commands[c].Switch = sw1 | (Commands[c].Switch & SWITCH_TYPE_MASK);
         }
-
-        // Swap label
-        /*if (noSwitchZero) { // Cannot swap labels for switch 0, as its label contains the page name
-            if ((Commands[c].Page == pg1) && (Commands[c].Switch == sw1 + LABEL)) {
-                Commands[c].Page = pg2;
-                Commands[c].Switch = sw2 + LABEL;
-            }
-            else if ((Commands[c].Page == pg2) && (Commands[c].Switch == sw2 + LABEL)) {
-                Commands[c].Page = pg1;
-                Commands[c].Switch = sw1 + LABEL;
-            }
-        }*/
     }
     create_indexes();
 }
@@ -753,10 +748,10 @@ void VCcommands::swapSwitches(int pg1, int sw1, int pg2, int sw2)
 void VCcommands::copyItemsToBuffer(customListWidget *widget)
 {   
     int sw = widget->switchNumber();
-    if ((sw == 0) && (count_cmds(current_page, sw) == 0)) return; // Cannot copy from empty on-page_select field
     copyBuffer.clear();
     copyBufferContainsLabel = false;
     bool hasLabel = switchHasLabel(current_page, sw);
+    if (sw == ON_PAGE_SELECT_SWITCH) hasLabel = false;
 
     foreach (QListWidgetItem* item, widget->selectedItems()) {
         int row = item->listWidget()->row(item);
@@ -781,8 +776,7 @@ void VCcommands::pasteItem(int sw)
 {
     if (!copyBufferFilled) return;
 
-    if (copyBufferContainsLabel) {
-        if (sw == 0) return; // Cannot paste label to on_page_select switch as this label contains the page name
+    if ((copyBufferContainsLabel) && (sw != ON_PAGE_SELECT_SWITCH)) {
         write_title(current_page, sw, copyBufferLabel);
     }
 
@@ -1075,7 +1069,6 @@ uint16_t VCcommands::get_cmd_number(uint8_t pg, uint8_t sw, uint8_t number)
 {
     uint16_t i = First_cmd_index[pg][sw & SWITCH_MASK];
     uint16_t prev_i = i;
-    //if (i == 0) i = First_cmd_index[PAGE_DEFAULT][sw]; // Read from default page if no command is found for this switch
 
     if (i & INTERNAL_CMD) { // Read fixed cmd
         for (uint8_t n = 0; n < number; n++) {
@@ -1643,7 +1636,7 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
                       cmdbyte[CB_VAL3].Title = "VALUE 3";
                       break;
                   case FOURSTATE:
-                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE 3, VALUE 4
+                      // Command: <selected device>, PARAMETER, NUMBER, FOURSTATE, VALUE 1, VALUE 2, VALUE 3, VALUE 4
                       set_type_and_value(CB_VAL3, TYPE_PAR_VALUE, max, in_edit_mode);
                       set_type_and_value(CB_VAL4, TYPE_PAR_VALUE, max, in_edit_mode);
                       cmdbyte[CB_VAL1].Title = "VALUE 1";
@@ -1652,7 +1645,7 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
                       cmdbyte[CB_VAL4].Title = "VALUE 4";
                       break;
                   case STEP:
-                      // Command: <selected device>, PARAMETER, NUMBER, TRISTATE, VALUE 1, VALUE 2, VALUE3
+                      // Command: <selected device>, PARAMETER, NUMBER, STEP, MIN VALU, MAX VALUE
                       cmdbyte[CB_VAL1].Title = "MIN VALUE";
                       cmdbyte[CB_VAL2].Title = "MAX VALUE";
                       set_type_and_value(CB_VAL3, TYPE_STEP, 1, in_edit_mode);
@@ -1663,6 +1656,10 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
                       cmdbyte[CB_VAL1].Title = "MIN VALUE";
                       cmdbyte[CB_VAL2].Title = "MAX VALUE";
                       clear_cmd_bytes(CB_VAL3, in_edit_mode);
+                      break;
+                  case ONE_SHOT:
+                      cmdbyte[CB_VAL1].Title = "VALUE";
+                      clear_cmd_bytes(CB_VAL2, in_edit_mode);
                       break;
 
                   default:
@@ -1768,6 +1765,12 @@ void VCcommands::set_default_parameter_values(bool in_edit_mode)
           if (in_edit_mode) {
             cmdbyte[CB_VAL1].Value = max;
             cmdbyte[CB_VAL2].Value = 0;
+          }
+          break;
+      case ONE_SHOT:
+          if (in_edit_mode) {
+             cmdbyte[CB_VAL1].Value = max;
+             cmdbyte[CB_VAL2].Max = 0;
           }
           break;
       default:

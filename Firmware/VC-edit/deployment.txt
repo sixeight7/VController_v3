@@ -8,13 +8,6 @@ Deploy VC-edit for Mac:
 2) Deploy the app by running the following command in Terminal: ~/Qt/5.11.1/clang_64/bin/macdeployqt ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/VC-edit.app ls -dmg -always-overwrite
 3) The VC-edit.dmg file is in folder ~/qt-projects/build-VC-edit-Desktop_Qt_5_11_1_clang_64bit-Release/
 
-
-Deploying for Windows:
-Command prompt:
-D:
-cd \catsdocs\Documents\qt-projects\build-VC-edit-Desktop_Qt_6_3_0_MinGW_64_bit-Release\packager
-C:\Qt\6.3.0\mingw_64\bin\windeployqt VC-edit.exe --compiler-runtime
-
 Deploy VC-edit for Windows:
 1) Make sure Qt creator is set to release (and not Debug) and compile and run the app.
 2) Deploy the app by running the following commands in a command prompt:
@@ -31,7 +24,7 @@ lib
 
 Also for windeployqt to run, the D:\Qt\5.10.1\mingw53_32\bin folder must be in the PATH variable and there should be no link to other compilers here!
 
-4) Copy the folder C:\Users\HP\Documents\qt-projects\build-VC-edit-Desktop_Qt_5_11_1_MinGW_32bit-Release\packager to C:\Users\HP\Documents\qt-projects\\Releases and rename the folder to VC-edit for Controller or VC-edit for VC-mini depending on the IS_VCMINI setting in config.h in Qt creator. Also add the proper version number. Then zip the folder. 
+4) Copy the folder C:\Users\HP\Documents\qt-projects\build-VC-edit-Desktop_Qt_6_3_0_MinGW_32bit-Release\packager to C:\Users\HP\Documents\qt-projects\\Releases and rename the folder to VC-edit for Controller or VC-edit for VC-mini depending on the IS_VCMINI setting in config.h in Qt creator. Also add the proper version number. Then zip the folder. 
 
 
 

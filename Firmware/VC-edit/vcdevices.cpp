@@ -94,6 +94,88 @@ void VCdevices::fillTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
     }
 }
 
+void VCdevices::updateTreeWidget(QTreeWidget *my_tree, VCcommands *VCd)
+{
+    QTreeWidgetItem *parent = findTopLevelItemByName(my_tree, "Device Settings");
+    if (parent) {
+        for (int d = 0; d < NUMBER_OF_DEVICES; d++) {
+            QTreeWidgetItem *deviceChild = parent->child(d);
+            deviceChild->setText(0, Device[d]->full_device_name);
+
+            for (int i = 0; i < NUMBER_OF_DEVICE_MENU_ITEMS; i++) {
+                QTreeWidgetItem *child = deviceChild->child(i);
+
+                // Update CustomSlider value
+                CustomSlider *slider = dynamic_cast<CustomSlider*>(my_tree->itemWidget(child, 4));
+                if (slider) {
+                    uint8_t max = VCdeviceMenu[i].max;
+                    if (VCdeviceMenu[i].sublist == MIDI_PORT_SUBLIST1) max = number_of_midi_ports;
+                    slider->setRange(VCdeviceMenu[i].min, max);
+                    slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                }
+
+                // Update CustomComboBox current item (if applicable)
+                if (VCdeviceMenu[i].type == OPTION) {
+                    CustomComboBox *comboBox = dynamic_cast<CustomComboBox*>(my_tree->itemWidget(child, 2));
+                    if (comboBox) {
+                        comboBox->clear(); // Clear existing items
+                        if (VCdeviceMenu[i].sublist == PAGE_SUBLIST) {
+                            comboBox->addItem("---"); // First item is "no page selected"
+                            VCd->fillPageComboBox(comboBox);
+                            VCd->fillFixedPageComboBox(comboBox);
+                            int pageNumber = Device[d]->get_setting(VCdeviceMenu[i].parameter);
+                            comboBox->setCurrentIndex(VCd->indexFromValue(TYPE_PAGE, pageNumber));
+                            slider->setRange(0, VCd->indexFromValue(TYPE_PAGE, last_fixed_cmd_page));
+                            slider->setValue(VCd->indexFromValue(TYPE_PAGE, pageNumber));
+                        }
+                        else if (VCdeviceMenu[i].sublist == MIDI_PORT_SUBLIST1) {
+                            for (int p = 0; p < number_of_midi_ports; p++)
+                                comboBox->addItem(midi_port_names[p]);
+                            comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                            slider->setRange(0, number_of_midi_ports - 1);
+                            slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        }
+                        else if (VCdeviceMenu[i].sublist == TYPE_MODE_SUBLIST) {
+                            for(int j = 0; j < Device[d]->get_number_of_dev_types(); j++) {
+                                comboBox->addItem(Device[d]->get_dev_type_name(j));
+                            }
+                            comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                            slider->setRange(0, Device[d]->get_number_of_dev_types() - 1);
+                            slider->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        }
+                        else {
+                            int number_of_items = VCdeviceMenu[i].max - VCdeviceMenu[i].min + 1;
+                            for (int j = 0; j < number_of_items; j++)
+                                comboBox->addItem(menu_sublist.at(j + VCdeviceMenu[i].sublist - 1));
+                            comboBox->setCurrentIndex(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                        }
+                    }
+                }
+
+                // Update CustomSpinBox value (if applicable)
+                if (VCdeviceMenu[i].type == VALUE) {
+                    CustomSpinBox *spinBox = dynamic_cast<CustomSpinBox*>(my_tree->itemWidget(child, 2));
+                    if (spinBox) {
+                        spinBox->setRange(VCdeviceMenu[i].min, VCdeviceMenu[i].max);
+                        spinBox->setValue(Device[d]->get_setting(VCdeviceMenu[i].parameter));
+                    }
+                }
+            }
+        }
+    }
+}
+
+QTreeWidgetItem* VCdevices::findTopLevelItemByName(QTreeWidget* my_tree, const QString &name) {
+    int topLevelItemCount = my_tree->topLevelItemCount();
+    for (int i = 0; i < topLevelItemCount; i++) {
+        QTreeWidgetItem* item = my_tree->topLevelItem(i);
+        if (item && item->text(0) == name) {
+            return item;
+        }
+    }
+    return nullptr;  // Item not found
+}
+
 void VCdevices::read(const QJsonObject &json)
 {
     QJsonObject deviceHeader = json["Devices"].toObject();
@@ -398,6 +480,12 @@ void VCdevices::pastePatch(int number, int type)
 void VCdevices::clearCopyBuffer()
 {
     Patch_copy_buffer.clear();
+}
+
+bool VCdevices::checkSelectedTypeMatchesCopyBufferType(uint8_t selected_type)
+{
+    if (!copyBufferFilled) return false;
+    return (Patch_copy_buffer.at(0) == selected_type);
 }
 
 void VCdevices::initializePatch(int number, int type)

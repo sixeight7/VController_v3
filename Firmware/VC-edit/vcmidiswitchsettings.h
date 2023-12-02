@@ -22,6 +22,7 @@ class VCmidiSwitches : public QObject
 public:
     explicit VCmidiSwitches(QObject *parent = nullptr);
     void fillTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm);
+    void updateTreeWidget(QTreeWidget *my_tree, VCmidiSwitches *VCm);
     void read(const QJsonObject &json);
     void write(QJsonObject &json) const;
     //void readMidi();
@@ -39,6 +40,7 @@ private slots:
 
 private:
     //void setup_devices();
+    QTreeWidgetItem *findTopLevelItemByName(QTreeWidget *my_tree, const QString &name);
     QString getSwitchNameForTree(int sw) const;
     QString getSwitchNameForJson(int sw) const;
 

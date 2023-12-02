@@ -70,7 +70,7 @@ public:
 
 public slots:
     void tableDataChanged(int, int, int);
-    void partEnabledStateChanged(bool state);
+    void partEnabledStateChanged(int, int, bool state);
     void partNameChanged(QString new_name);
 
 private slots:

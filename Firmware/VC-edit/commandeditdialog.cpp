@@ -92,7 +92,7 @@ void commandEditDialog::buildPage(bool first_time)
 
     // Custom label
     ui->lineEditCustomLabel->clear();
-    if (currentSwitch == 0) {
+    if (currentSwitch == ON_PAGE_SELECT_SWITCH) {
         ui->lineEditCustomLabel->setDisabled(true);
     }
     else {

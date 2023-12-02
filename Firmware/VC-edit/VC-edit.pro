@@ -38,6 +38,8 @@ SOURCES += main.cpp\
     customled.cpp \
     customlineedit.cpp \
     customswitch.cpp \
+    devices/user.cpp \
+    initializeuserdevicedatadialog.cpp \
     mainwindow.cpp \
     midi.cpp \
     scenedialog.cpp \
@@ -73,7 +75,8 @@ SOURCES += main.cpp\
     custompatchlistwidget.cpp \
     devices/sy1000.cpp \
     devices/gmajor2.cpp \
-    devices/mg300.cpp
+    devices/mg300.cpp \
+    vcuserdevices.cpp
 
 HEADERS  += RtMidi.h \
     customcheckbox.h \
@@ -81,6 +84,8 @@ HEADERS  += RtMidi.h \
     customled.h \
     customlineedit.h \
     customswitch.h \
+    devices/user.h \
+    initializeuserdevicedatadialog.h \
     mainwindow.h \
     midi.h \
     scenedialog.h \
@@ -118,9 +123,11 @@ HEADERS  += RtMidi.h \
     custompatchlistwidget.h \
     devices/sy1000.h \
     devices/gmajor2.h \
-    devices/mg300.h
+    devices/mg300.h \
+    vcuserdevices.h
 
 FORMS += \
+    initializeuserdevicedatadialog.ui \
     scenedialog.ui \
     setlisteditdialog.ui \
     songeditdialog.ui \
