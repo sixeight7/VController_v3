@@ -1181,7 +1181,9 @@ void LCD_print_main_lcd_txt() {
 // Define my strings
 const char LCD_Bank_Down[] = "<BANK DOWN>";
 const char LCD_Bank_Up[] = "<BANK UP>";
-const char LCD_Mute[] = "[MUTE]";
+const char LCD_Mute[] = "PLAY [MUTE]";
+const char LCD_Unmute[] = "[PLAY] MUTE";
+const char LCD_Always_On[] = "[PLAY]";
 const char LCD_Tuner[] = "[GLOBAL TUNER]";
 const char LCD_Tap_Tempo[] = "<TAP TEMPO>";
 const char LCD_Set_Tempo[] = "<SET TEMPO>";
@@ -1402,9 +1404,13 @@ void LCD_update(uint8_t sw, bool do_show) {
         break;
       case MUTE:
         LCD_add_vled(3);
-        LCD_add_title(LCD_Mute);
-        LCD_add_label(Device[Dev]->device_name);
-        //LCD_print_lcd_txt(sw);
+        LCD_add_title(Device[Dev]->device_name);
+        if (Device[Dev]->connected) {
+          if ((Device[Dev]->is_always_on) && (SP[sw].Value1 != MUTE_TOGGLE)) LCD_add_label(LCD_Always_On);
+          else if (Device[Dev]->is_on) LCD_add_label(LCD_Unmute);
+          else LCD_add_label(LCD_Mute);
+        }
+        //else LCD_clear_label();
         break;
       case TOGGLE_EXP_PEDAL:
         LCD_add_vled(3);
@@ -1435,10 +1441,11 @@ void LCD_update(uint8_t sw, bool do_show) {
           LCD_add_snapshot_number(Dev, SP[sw].Value3, SP[sw].PP_number, Device[Dev]->current_snapscene, Display_number_string);
         }
         LCD_set_title(Display_number_string);
-        Display_number_string = "";
-        Device[Dev]->get_snapscene_label(SP[sw].PP_number, Display_number_string);
-        LCD_set_label(Display_number_string);
+        /*Display_number_string = "";
+          Device[Dev]->get_snapscene_label(SP[sw].PP_number, Display_number_string);
+          LCD_set_label(Display_number_string);*/
         //strcpy(lcd_label, SP[sw].Label);
+        LCD_add_label(SP[sw].Label);
         break;
       case LOOPER:
         LCD_set_looper_title();
@@ -1849,12 +1856,8 @@ void LCD_set_looper_title() {
 void LCD_add_char_to_string(String ch, String &str, uint8_t len) {
   uint8_t my_length = ch.length();
   if (my_length > len) my_length = len;
-  while ((my_length > 1) && (ch[my_length - 1] == ' ')) my_length--; //Find last character that is not a space
-  uint8_t left_spaces = (len - my_length) / 2;
-  for (uint8_t i = 0; i < left_spaces; i++) str += ' ';
   for (uint8_t i = 0; i < my_length; i++) str += ch[i];
-  for (uint8_t i = left_spaces + my_length; i < len; i++) str += ' ';
-
+  for (uint8_t i = my_length; i < len; i++) str += ' ';
 }
 
 void LCD_clear_string(String & msg) {
@@ -3056,7 +3059,7 @@ void TFT_update_device_pic() {
       uint16_t pic[PIC_HEIGHT * PIC_WIDTH];
       TFT_recolour_picture(Device[Current_device]->device_pic, pic, PIC_HEIGHT * PIC_WIDTH, 0x8410, dev_colour);
       tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, pic);
-    
+
       String lbl = Device[Current_device]->device_name;
       lbl.trim();
       uint8_t x_offset = (6 - lbl.length()) * 8;
@@ -3064,7 +3067,7 @@ void TFT_update_device_pic() {
     }
     else {
       tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, Device[Current_device]->device_pic);
-    
+
     }
   }
   else tft.Show_picture(PIC_HEIGHT * PIC_WIDTH, img_VC_touch);

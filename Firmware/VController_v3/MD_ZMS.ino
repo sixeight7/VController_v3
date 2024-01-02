@@ -57,25 +57,25 @@ FLASHMEM void MD_ZMS_class::init() // Default values for variables
   MIDI_channel = ZMS_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(ZMS_MIDI_PORT); // Default value
 #if defined(CONFIG_VCTOUCH)
-  my_device_page1 = ZMS_DEFAULT_VCTOUCH_PAGE1; // Default value
-  my_device_page2 = ZMS_DEFAULT_VCTOUCH_PAGE2; // Default value
-  my_device_page3 = ZMS_DEFAULT_VCTOUCH_PAGE3; // Default value
-  my_device_page4 = ZMS_DEFAULT_VCTOUCH_PAGE4; // Default value
+  my_device_page1 = ZMS_DEFAULT_VCTOUCH_PAGE1; // Default values for VC-touch
+  my_device_page2 = ZMS_DEFAULT_VCTOUCH_PAGE2;
+  my_device_page3 = ZMS_DEFAULT_VCTOUCH_PAGE3;
+  my_device_page4 = ZMS_DEFAULT_VCTOUCH_PAGE4;
 #elif defined(CONFIG_VCMINI)
-  my_device_page1 = ZMS_DEFAULT_VCMINI_PAGE1; // Default value
-  my_device_page2 = ZMS_DEFAULT_VCMINI_PAGE2; // Default value
-  my_device_page3 = ZMS_DEFAULT_VCMINI_PAGE3; // Default value
-  my_device_page4 = ZMS_DEFAULT_VCMINI_PAGE4; // Default value
+  my_device_page1 = ZMS_DEFAULT_VCMINI_PAGE1; // Default values for VC-mini
+  my_device_page2 = ZMS_DEFAULT_VCMINI_PAGE2;
+  my_device_page3 = ZMS_DEFAULT_VCMINI_PAGE3;
+  my_device_page4 = ZMS_DEFAULT_VCMINI_PAGE4;
 #elif defined (CONFIG_CUSTOM)
-  my_device_page1 = ZMS_DEFAULT_CUSTOM_PAGE1; // Default value
-  my_device_page2 = ZMS_DEFAULT_CUSTOM_PAGE2; // Default value
-  my_device_page3 = ZMS_DEFAULT_CUSTOM_PAGE3; // Default value
-  my_device_page4 = ZMS_DEFAULT_CUSTOM_PAGE4; // Default value
+  my_device_page1 = ZMS_DEFAULT_CUSTOM_PAGE1; // Default values for custom VC device
+  my_device_page2 = ZMS_DEFAULT_CUSTOM_PAGE2;
+  my_device_page3 = ZMS_DEFAULT_CUSTOM_PAGE3;
+  my_device_page4 = ZMS_DEFAULT_CUSTOM_PAGE4;
 #else
-  my_device_page1 = ZMS_DEFAULT_VC_PAGE1; // Default value
-  my_device_page2 = ZMS_DEFAULT_VC_PAGE2; // Default value
-  my_device_page3 = ZMS_DEFAULT_VC_PAGE3; // Default value
-  my_device_page4 = ZMS_DEFAULT_VC_PAGE4; // Default value
+  my_device_page1 = ZMS_DEFAULT_VC_PAGE1; // Default values for VController
+  my_device_page2 = ZMS_DEFAULT_VC_PAGE2;
+  my_device_page3 = ZMS_DEFAULT_VC_PAGE3;
+  my_device_page4 = ZMS_DEFAULT_VC_PAGE4;
 #endif
   CP_MEM_current = false;
   midi_timer = 0;

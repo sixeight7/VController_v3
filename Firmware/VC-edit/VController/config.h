@@ -140,6 +140,12 @@ struct Cmd_struct
 #define ONE_SHOT 7
 #define TGL_OFF 255 // To show nothing
 
+// Mute types
+#define MUTE_ON 0
+#define MUTE_OFF 1
+#define MUTE_OFF_AND_ALWAYS_ON_TOGGLE 2
+#define MUTE_TOGGLE 3
+
 // Special max values:
 #define TIME_2000 255 // For delay times up to 2000 ms
 #define TIME_1000 254 // For delay times up to 1000 ms
@@ -275,7 +281,10 @@ struct Cmd_struct
 #define PAGE_VC_SONG_MODE 230
 #define PAGE_VC_SONG_SELECT 231
 #define PAGE_VC_SETLIST_SELECT 232
-#define LAST_FIXED_CMD_PAGE_VC 232
+#define PAGE_VC_USER_PATCH_BANK 233
+#define PAGE_VC_USER_PAR_BANK 234
+#define PAGE_VC_USER_SCENES 235
+#define LAST_FIXED_CMD_PAGE_VC 235
 
 #define DEFAULT_VC_PAGE PAGE_VC_SELECT // The page that gets selected when a valid page number is unknown
 
@@ -350,8 +359,8 @@ struct Cmd_struct
 #define MG300_DEFAULT_VC_PAGE3 0
 #define MG300_DEFAULT_VC_PAGE4 0
 
-#define USER_DEFAULT_VC_PAGE1 PAGE_VC_CURRENT_PATCH_BANK
-#define USER_DEFAULT_VC_PAGE2 PAGE_VC_CURRENT_PARAMETER
+#define USER_DEFAULT_VC_PAGE1 PAGE_VC_USER_PATCH_BANK
+#define USER_DEFAULT_VC_PAGE2 PAGE_VC_USER_PAR_BANK
 #define USER_DEFAULT_VC_PAGE3 0
 #define USER_DEFAULT_VC_PAGE4 0
 

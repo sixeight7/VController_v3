@@ -77,25 +77,25 @@ FLASHMEM void MD_VG99_class::init() // Default values for variables
   MIDI_channel = VG99_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(VG99_MIDI_PORT); // Default value
 #if defined(CONFIG_VCTOUCH)
-  my_device_page1 = VG99_DEFAULT_VCTOUCH_PAGE1; // Default value
-  my_device_page2 = VG99_DEFAULT_VCTOUCH_PAGE2; // Default value
-  my_device_page3 = VG99_DEFAULT_VCTOUCH_PAGE3; // Default value
-  my_device_page4 = VG99_DEFAULT_VCTOUCH_PAGE4; // Default value
+  my_device_page1 = VG99_DEFAULT_VCTOUCH_PAGE1; // Default values for VC-touch
+  my_device_page2 = VG99_DEFAULT_VCTOUCH_PAGE2;
+  my_device_page3 = VG99_DEFAULT_VCTOUCH_PAGE3;
+  my_device_page4 = VG99_DEFAULT_VCTOUCH_PAGE4;
 #elif defined(CONFIG_VCMINI)
-  my_device_page1 = VG99_DEFAULT_VCMINI_PAGE1; // Default value
-  my_device_page2 = VG99_DEFAULT_VCMINI_PAGE2; // Default value
-  my_device_page3 = VG99_DEFAULT_VCMINI_PAGE3; // Default value
-  my_device_page4 = VG99_DEFAULT_VCMINI_PAGE4; // Default value
+  my_device_page1 = VG99_DEFAULT_VCMINI_PAGE1; // Default values for VC-mini
+  my_device_page2 = VG99_DEFAULT_VCMINI_PAGE2;
+  my_device_page3 = VG99_DEFAULT_VCMINI_PAGE3;
+  my_device_page4 = VG99_DEFAULT_VCMINI_PAGE4;
 #elif defined (CONFIG_CUSTOM)
-  my_device_page1 = VG99_DEFAULT_CUSTOM_PAGE1; // Default value
-  my_device_page2 = VG99_DEFAULT_CUSTOM_PAGE2; // Default value
-  my_device_page3 = VG99_DEFAULT_CUSTOM_PAGE3; // Default value
-  my_device_page4 = VG99_DEFAULT_CUSTOM_PAGE4; // Default value
+  my_device_page1 = VG99_DEFAULT_CUSTOM_PAGE1; // Default values for custom VC device
+  my_device_page2 = VG99_DEFAULT_CUSTOM_PAGE2;
+  my_device_page3 = VG99_DEFAULT_CUSTOM_PAGE3;
+  my_device_page4 = VG99_DEFAULT_CUSTOM_PAGE4;
 #else
-  my_device_page1 = VG99_DEFAULT_VC_PAGE1; // Default value
-  my_device_page2 = VG99_DEFAULT_VC_PAGE2; // Default value
-  my_device_page3 = VG99_DEFAULT_VC_PAGE3; // Default value
-  my_device_page4 = VG99_DEFAULT_VC_PAGE4; // Default value
+  my_device_page1 = VG99_DEFAULT_VC_PAGE1; // Default values for VController
+  my_device_page2 = VG99_DEFAULT_VC_PAGE2;
+  my_device_page3 = VG99_DEFAULT_VC_PAGE3;
+  my_device_page4 = VG99_DEFAULT_VC_PAGE4;
 #endif
   count_parameter_categories();
   is_on = false;
@@ -335,15 +335,12 @@ FLASHMEM void MD_VG99_class::stop_tuner() {
 // ********************************* Section 4: VG99 program change ********************************************
 
 FLASHMEM void MD_VG99_class::select_patch(uint16_t new_patch) {
-  //if (new_patch == patch_number) unmute();
   prev_patch_number = patch_number;
   patch_number = new_patch;
 
   MIDI_send_CC(0, new_patch / 100, MIDI_channel, MIDI_out_port);
   MIDI_send_PC(new_patch % 100, MIDI_channel, MIDI_out_port);
   DEBUGMSG("out(VG99) PC" + String(new_patch)); //Debug
-  //mute();
-  //GR55.mute();
   do_after_patch_selection();
 }
 
@@ -415,28 +412,23 @@ FLASHMEM void MD_VG99_class::check_inst_switch_states(const unsigned char* sxdat
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
     if (address == VG99_COSM_GUITAR_A_SW) {
-      COSM_A_onoff = sxdata[11];  // Store the value
+      COSM_A_onoff = sxdata[11];
     }
 
     if (address == VG99_COSM_GUITAR_B_SW) {
-      COSM_B_onoff = sxdata[11];  // Store the value
+      COSM_B_onoff = sxdata[11];
       request_onoff = false;
     }
   }
 }
 
 FLASHMEM void MD_VG99_class::unmute() {
+  DEBUGMSG("!!!Unmute:");
   is_on = connected;
-  if (is_on) select_patch(patch_number); //Just sending the program change will put the sound back on
+  if (is_on) select_patch(patch_number); // Just sending the program change will put the sound back on
 }
 
 FLASHMEM void MD_VG99_class::mute() {
-  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
-    mute_now();
-  }
-}
-
-FLASHMEM void MD_VG99_class::mute_now() {
   is_on = false;
   //  VG99_select_LED = VG99_OFF_COLOUR; //Switch the LED off
   write_sysex(VG99_COSM_GUITAR_A_SW, 0x00); // Switch COSM guitar off
@@ -530,6 +522,7 @@ const PROGMEM VG99_parameter_struct VG99_parameters[] = {
   {0x0D3C, 2, "RBBN FILTER CH", 0, FX_FILTER_TYPE, VG99_CAT_SYSTEM},
   {0x0D3D, 2, "RBBN FILTER TYP", 0, FX_FILTER_TYPE, VG99_CAT_SYSTEM},
   {0x0D41, 2, "RBBN FILTER LVL", 0, FX_FILTER_TYPE, VG99_CAT_SYSTEM},
+  {0x9002, 10, "GK SELECTED GTR", 0, FX_GTR_TYPE, VG99_CAT_SYSTEM},
   //},
 
   //{ // part 1: 1000 - 2000 Alt tuning parameters
@@ -931,7 +924,8 @@ FLASHMEM void MD_VG99_class::parameter_press(uint8_t Sw, Cmd_struct *cmd, uint16
   }
 
   if ((SP[Sw].Latch != TGL_OFF) && (number < VG99_NUMBER_OF_PARAMETERS)) {
-    write_sysex(0x60000000 + VG99_parameters[number].Address, value);
+    if (VG99_parameters[number].Address < 0x8000) write_sysex(0x60000000 + VG99_parameters[number].Address, value);
+    else write_sysex(VG99_parameters[number].Address & 0x7FFF, value);
     SP[Sw].Offline_value = value;
 
     // Show popup message

@@ -371,8 +371,8 @@ void LED_update() {
           Backlight_show_colour(s, Setting.LED_global_colour);
           break;
         case MUTE:
-          if (Device[Dev]->is_on) LED_show_colour(s, LED_OFF);
-          else LED_show_colour(s, SP[sw].Colour);
+          if (Device[Dev]->is_on) LED_show_colour(s, SP[sw].Colour);
+          else LED_show_colour(s, LED_OFF);
           Backlight_show_colour(s, SP[sw].Colour);
           break;
         case SNAPSCENE:

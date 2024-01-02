@@ -662,8 +662,24 @@ void SCO_execute_command(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
       case MUTE:
         if (SC_switch_is_expr_pedal()) break;
         if (SC_switch_triggered_by_PC()) break;
-        Device[Dev]->mute();
-        update_LEDS = true;
+        if (Device[Dev]->connected) {
+          if ((Data1 == MUTE_ON) && (!Device[Dev]->is_always_on)) Device[Dev]->mute();
+          if (Data1 == MUTE_OFF) {
+            Device[Dev]->unmute();
+            Current_device = Dev;
+          }
+          if (Data1 == MUTE_OFF_AND_TOGGLE_ALWAYS_ON) {
+            if (Device[Dev]->is_on) Device[Dev]->is_always_on_toggle();
+            else Device[Dev]->unmute();
+            Current_device = Dev;
+          }
+          if (Data1 == MUTE_TOGGLE) {
+            if (Device[Dev]->is_on) Device[Dev]->mute();
+            else Device[Dev]->unmute();
+          }
+          update_LEDS = true;
+          update_page = RELOAD_PAGE;
+        }
         switch_controlled_by_master_exp_pedal = 0;
         break;
       case OPEN_PAGE_DEVICE:
@@ -917,7 +933,7 @@ void SCO_execute_command_held(uint8_t Sw, Cmd_struct *cmd, bool first_cmd) {
 
 void mute_all_but_me(uint8_t my_device) {
   for (uint8_t d = 0; d < NUMBER_OF_DEVICES; d++) {
-    if (d != my_device) Device[d]->mute();
+    if (d != my_device) Device[d]->check_for_mute();
   }
 }
 
@@ -1368,7 +1384,7 @@ void SCO_select_next_device() { // Will select the next device that is connected
     SCO_select_page(Device[current_selected_device]->read_current_device_page()); // Load the current page associated to this device
     if (Setting.Main_display_show_top_right != 0) {
       String Name = Device[current_selected_device]->device_name;
-      LCD_show_popup_label("Selecting " + Name, MESSAGE_TIMER_LENGTH);
+      LCD_show_popup_label("Selecting " + Name.trim(), MESSAGE_TIMER_LENGTH);
     }
   }
   else {
@@ -1396,7 +1412,7 @@ uint8_t SCO_get_number_of_next_device() {
   return current_selected_device;
 }
 
-void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page of the current device. These can be set in programmed on the unit. Defaults are in init() of the device class
+void SCO_select_next_page_of_device(uint8_t Dev) { // Will select the patch page of the current device. These can be set in programmed on the unit. Defaults are set in Config.ino for each device.
   if (Dev < NUMBER_OF_DEVICES) {
     set_current_device(Dev);
 

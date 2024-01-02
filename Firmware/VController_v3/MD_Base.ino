@@ -530,6 +530,12 @@ void MD_base_class::unmute() {}
 
 void MD_base_class::mute() {}
 
+void MD_base_class::check_for_mute() {
+  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
+    mute();
+  }
+}
+
 void MD_base_class::select_switch() {
   if ((Current_device == my_device_number) && (is_on)) {
     is_always_on_toggle();
@@ -543,16 +549,14 @@ void MD_base_class::select_switch() {
 }
 
 void MD_base_class::is_always_on_toggle() {
-  if (US20_mode_enabled()) {
-    is_always_on = !is_always_on; // Toggle is_always_on
-    if (is_always_on) {
-      unmute();
-      LCD_show_popup_label(String(device_name) + " always ON", ACTION_TIMER_LENGTH);
-    }
-    else {
-      //mute();
-      LCD_show_popup_label(String(device_name) + " can be muted", ACTION_TIMER_LENGTH);
-    }
+  is_always_on = !is_always_on; // Toggle is_always_on
+  if (is_always_on) {
+    unmute();
+    LCD_show_popup_label(String(device_name) + " always ON", ACTION_TIMER_LENGTH);
+  }
+  else {
+    //mute();
+    LCD_show_popup_label(String(device_name) + " can be muted", ACTION_TIMER_LENGTH);
   }
 }
 
@@ -1155,9 +1159,9 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
         looper_half_speed = true;
         current_loop_length *= 2;
         if (current_looper_state != LOOPER_STATE_STOPPED)  {
-            looper_end_time += (looper_end_time - current_time); // Add the remaining time to looper_end_time
-            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on half speed
-          }
+          looper_end_time += (looper_end_time - current_time); // Add the remaining time to looper_end_time
+          looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on half speed
+        }
       }
       break;
     case LOOPER_FULL_SPEED:
@@ -1166,9 +1170,9 @@ void MD_base_class::looper_press(uint8_t looper_cmd, bool send_cmd) {
         looper_half_speed = false;
         current_loop_length /= 2;
         if (current_looper_state != LOOPER_STATE_STOPPED) {
-            looper_end_time -= (looper_end_time - current_time) / 2; // Substract half the remaining time to looper_end_time
-            looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on double speed
-          }
+          looper_end_time -= (looper_end_time - current_time) / 2; // Substract half the remaining time to looper_end_time
+          looper_start_time = looper_end_time - current_loop_length; // So the looper does not get confused on reversing on double speed
+        }
       }
       break;
     case LOOPER_FORWARD_REVERSE:

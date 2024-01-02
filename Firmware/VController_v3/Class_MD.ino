@@ -114,6 +114,7 @@ class MD_base_class
     // Device mute procedures
     virtual void unmute();
     virtual void mute();
+    void check_for_mute();
     void select_switch();
     void is_always_on_toggle();
     bool US20_mode_enabled();
@@ -424,7 +425,6 @@ class MD_GR55_class : public MD_base_class
     void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
-    void mute_now();
     void read_preset_name(uint8_t number, uint16_t patch);
 
     // Parameter control procedures
@@ -619,8 +619,7 @@ class MD_VG99_class : public MD_base_class
     void check_inst_switch_states(const unsigned char* sxdata, short unsigned int sxlength);
     virtual void unmute();
     virtual void mute();
-    void mute_now();
-
+    
     // Parameter control procedures
     void count_parameter_categories();
     virtual void request_par_bank_category_name(uint8_t sw);
@@ -1458,6 +1457,7 @@ class MD_SY1000_class : public MD_base_class
     void request_switch_mode();
     void check_switch_mode(uint32_t  address, const unsigned char* sxdata, short unsigned int sxlength);
     void cc_operate_switch_mode(uint8_t sw, uint8_t value);
+    bool ignore_bottom_switch_when_top_switch_is_pressed(uint8_t sw, uint8_t value);
     void auto_return_switch_mode();
     void update_leds_on_SY1000();
     void set_LED_colour(uint8_t sw, uint8_t colour);
@@ -1586,6 +1586,7 @@ class MD_SY1000_class : public MD_base_class
 #define CHECK_AMPLE_TIME_BETWEEN_PC_MESSAGES_TIME 1000
     uint8_t switch_mode = 0;
     uint8_t prev_switch_mode = 0;
+    bool top_row_switch_pressed = false;
     bool request_LED_state = false;
     bool manual_mode = false;
     bool edit_mode = false;
@@ -1812,6 +1813,7 @@ class MD_USER_class : public MD_base_class
     virtual bool send_looper_cmd(uint8_t cmd);
 
     // Snapshot/sceme selection procedures
+    virtual bool request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3);
     virtual void get_snapscene_title(uint8_t number, String &Output);
     virtual void get_snapscene_label(uint8_t number, String &Output);
     //virtual bool request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3);
@@ -1819,6 +1821,7 @@ class MD_USER_class : public MD_base_class
     //virtual void show_snapscene(uint8_t number);
     //virtual void snapscene_number_format(String &Output);
     uint8_t get_number_of_snapscenes();
+    void read_scene_name_from_buffer(uint8_t scene);
     
     void edit();
     void edit_done();
@@ -1858,4 +1861,6 @@ class MD_USER_class : public MD_base_class
 
     uint8_t my_parameter_values[USER_NUMBER_OF_CC_PARAMETERS]; // Keeps track of the state the parameters
     uint8_t flash_bank_of_four = 255;
+    char scene_label_buffer[12];
+    
 };

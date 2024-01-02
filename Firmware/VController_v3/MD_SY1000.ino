@@ -124,25 +124,25 @@ FLASHMEM void MD_SY1000_class::init() { // Default values for variables
   MIDI_channel = SY1000_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(SY1000_MIDI_PORT); // Default value
 #if defined(CONFIG_VCTOUCH)
-  my_device_page1 = SY1000_DEFAULT_VCTOUCH_PAGE1; // Default value
-  my_device_page2 = SY1000_DEFAULT_VCTOUCH_PAGE2; // Default value
-  my_device_page3 = SY1000_DEFAULT_VCTOUCH_PAGE3; // Default value
-  my_device_page4 = SY1000_DEFAULT_VCTOUCH_PAGE4; // Default value
+  my_device_page1 = SY1000_DEFAULT_VCTOUCH_PAGE1; // Default values for VC-touch
+  my_device_page2 = SY1000_DEFAULT_VCTOUCH_PAGE2;
+  my_device_page3 = SY1000_DEFAULT_VCTOUCH_PAGE3;
+  my_device_page4 = SY1000_DEFAULT_VCTOUCH_PAGE4;
 #elif defined(CONFIG_VCMINI)
-  my_device_page1 = SY1000_DEFAULT_VCMINI_PAGE1; // Default value
-  my_device_page2 = SY1000_DEFAULT_VCMINI_PAGE2; // Default value
-  my_device_page3 = SY1000_DEFAULT_VCMINI_PAGE3; // Default value
-  my_device_page4 = SY1000_DEFAULT_VCMINI_PAGE4; // Default value
+  my_device_page1 = SY1000_DEFAULT_VCMINI_PAGE1; // Default values for VC-mini
+  my_device_page2 = SY1000_DEFAULT_VCMINI_PAGE2;
+  my_device_page3 = SY1000_DEFAULT_VCMINI_PAGE3;
+  my_device_page4 = SY1000_DEFAULT_VCMINI_PAGE4;
 #elif defined (CONFIG_CUSTOM)
-  my_device_page1 = SY1000_DEFAULT_CUSTOM_PAGE1; // Default value
-  my_device_page2 = SY1000_DEFAULT_CUSTOM_PAGE2; // Default value
-  my_device_page3 = SY1000_DEFAULT_CUSTOM_PAGE3; // Default value
-  my_device_page4 = SY1000_DEFAULT_CUSTOM_PAGE4; // Default value
+  my_device_page1 = SY1000_DEFAULT_CUSTOM_PAGE1; // Default values for custom VC device
+  my_device_page2 = SY1000_DEFAULT_CUSTOM_PAGE2;
+  my_device_page3 = SY1000_DEFAULT_CUSTOM_PAGE3;
+  my_device_page4 = SY1000_DEFAULT_CUSTOM_PAGE4;
 #else
-  my_device_page1 = SY1000_DEFAULT_VC_PAGE1; // Default value
-  my_device_page2 = SY1000_DEFAULT_VC_PAGE2; // Default value
-  my_device_page3 = SY1000_DEFAULT_VC_PAGE3; // Default value
-  my_device_page4 = SY1000_DEFAULT_VC_PAGE4; // Default value
+  my_device_page1 = SY1000_DEFAULT_VC_PAGE1; // Default values for VController
+  my_device_page2 = SY1000_DEFAULT_VC_PAGE2;
+  my_device_page3 = SY1000_DEFAULT_VC_PAGE3;
+  my_device_page4 = SY1000_DEFAULT_VC_PAGE4;
 #endif
   initialize_patch_space();
   //bass_mode = true;
@@ -859,14 +859,12 @@ FLASHMEM void MD_SY1000_class::unmute() {
 }
 
 FLASHMEM void MD_SY1000_class::mute() {
-  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
-    is_on = false;
-    control_edit_mode();
-    request_guitar_switch_states();
-    delay(20);
+  is_on = false;
+  control_edit_mode();
+  request_guitar_switch_states();
+  delay(20);
 
-    mute_now();
-  }
+  mute_now();
 }
 
 FLASHMEM void MD_SY1000_class::mute_now() {
@@ -1564,6 +1562,7 @@ FLASHMEM void MD_SY1000_class::check_switch_mode(uint32_t address, const unsigne
 }
 
 FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value) {
+  if (ignore_bottom_switch_when_top_switch_is_pressed(sw, value)) return;
   bool no_scene_switch = false;
   switch (switch_mode) {
     case MODE_NUM:
@@ -1645,6 +1644,16 @@ FLASHMEM void MD_SY1000_class::cc_operate_switch_mode(uint8_t sw, uint8_t value)
     prev_switch_mode_cc = 0;
     set_editor_mode(false);
   }
+}
+
+FLASHMEM bool MD_SY1000_class::ignore_bottom_switch_when_top_switch_is_pressed(uint8_t sw, uint8_t value) {
+  if (sw >= 4) {
+    top_row_switch_pressed = (value > 0);
+  }
+  else {
+    if (top_row_switch_pressed) return true;
+  }
+  return false;
 }
 
 FLASHMEM void MD_SY1000_class::auto_return_switch_mode() {

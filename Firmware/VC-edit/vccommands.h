@@ -181,6 +181,7 @@ private:
     #define TYPE_SONGPREVNEXT 39
     #define TYPE_MODE 40
     #define TYPE_MIDI_MORE 41
+    #define TYPE_MUTE 42
 
     // Some of the data for the sublists below is not fixed, but must be read from a Device class or from EEPROM
     // Here we define these sublists
@@ -244,6 +245,7 @@ private:
         { "INC/DEC TYPE", 154, 0, 2 }, // TYPE_SONGPREVNEXT 39
         { "MODE", 157, 0, 2 }, // TYPE_MODE
         { "COMMAND", 160, 0, 2 }, // TYPE_MIDI_MORE
+        { "MUTE TYPE", 163, 0, 3 }, // TYPE_MUTE
     };
 
     const QStringList cmd_sublist = {
@@ -298,6 +300,9 @@ private:
 
         // Sublist 160 - 162: Midi more types
         "START", "STOP", "START/STOP",
+
+        // Sublist 163 - 166: Mute types
+        "ON", "OFF", "OFF/ALWAYS ON", "TOGGLE",
     };
 
 #define INDEX_PAR_TOGGLE_TYPE 50

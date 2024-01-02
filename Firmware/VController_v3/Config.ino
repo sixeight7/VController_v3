@@ -127,6 +127,12 @@
 #define ONE_SHOT 7 // Only send message on press
 #define TGL_OFF 255 // To show nothing
 
+// Mute types
+#define MUTE_ON 0
+#define MUTE_OFF 1
+#define MUTE_OFF_AND_TOGGLE_ALWAYS_ON 2
+#define MUTE_TOGGLE 3
+
 // Special max values:
 #define TIME_2000 255 // For delay times up to 2000 ms
 #define TIME_1000 254 // For delay times up to 1000 ms
@@ -477,7 +483,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_VC_GR55_PATCH_BANK, 1, PATCH, GR55, BANKSELECT, 1, 9}, // ** Switch 01 **
   {PAGE_VC_GR55_PATCH_BANK, 2, PATCH, GR55, BANKSELECT, 2, 9}, // ** Switch 02 **
   {PAGE_VC_GR55_PATCH_BANK, 3, PATCH, GR55, BANKSELECT, 3, 9}, // ** Switch 03 **
-  {PAGE_VC_GR55_PATCH_BANK, 4, PARAMETER, GR55, 33, TOGGLE, 1, 0}, // ** Switch 04 **
+  {PAGE_VC_GR55_PATCH_BANK, 4, ASSIGN, GR55, SELECT, 0}, // ** Switch 04 **
   {PAGE_VC_GR55_PATCH_BANK, 5, PATCH, GR55, BANKSELECT, 4, 9}, // ** Switch 05 **
   {PAGE_VC_GR55_PATCH_BANK, 6, PATCH, GR55, BANKSELECT, 5, 9}, // ** Switch 06 **
   {PAGE_VC_GR55_PATCH_BANK, 7, PATCH, GR55, BANKSELECT, 6, 9}, // ** Switch 07 **
@@ -1047,7 +1053,8 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_VC_USER_PATCH_BANK, 14, PATCH, CURRENT, BANKUP, 8}, // ** Switch 14 **
   {PAGE_VC_USER_PATCH_BANK, 14 | ON_LONG_PRESS, OPEN_PAGE_DEVICE, CURRENT, PAGE_VC_CURRENT_DIRECT_SELECT}, // ** Switch 13 **
   //{PAGE_VC_USER_PATCH_BANK, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
-
+  {PAGE_VC_USER_PATCH_BANK, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
+  
   // ******************************* PAGE 233: User_parameter_bank (8 buttons per page) *************************************************
   {PAGE_VC_USER_PAR_BANK, LABEL, 'U', 'S', 'E', 'R', ' ', 'F', 'X', ' ' },
   {PAGE_VC_USER_PAR_BANK, LABEL, 'S', 'E', 'L', 'E', 'C', 'T', ' ', ' ' },
@@ -1066,6 +1073,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_VC_USER_PAR_BANK, 14, PATCH, CURRENT, NEXT}, // ** Switch 14 **
   {PAGE_VC_USER_PAR_BANK, 14 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 14 **
   //{PAGE_VC_USER_PAR_BANK, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
+  {PAGE_VC_USER_PAR_BANK, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 
   // ******************************* PAGE 234: User_parameter_bank (8 buttons per page) *************************************************
   {PAGE_VC_USER_SCENES, LABEL, 'U', 'S', 'E', 'R', ' ', 'S', 'C', 'E' },
@@ -1085,6 +1093,7 @@ const PROGMEM Cmd_struct Fixed_commands[] = {
   {PAGE_VC_USER_SCENES, 14, PATCH, CURRENT, NEXT}, // ** Switch 14 **
   {PAGE_VC_USER_SCENES, 14 | ON_LONG_PRESS, MODE, COMMON, SELECT, DEVICE_MODE}, // ** Switch 14 **
   //{PAGE_VC_USER_SCENES, 15, OPEN_NEXT_PAGE_OF_DEVICE, MG300}, // ** Switch 15 **
+  {PAGE_VC_USER_SCENES, 16, OPEN_NEXT_PAGE_OF_DEVICE, CURRENT}, // ** Switch 16 **
 };
 
 const uint16_t NUMBER_OF_INTERNAL_COMMANDS = sizeof(Fixed_commands) / sizeof(Fixed_commands[0]);

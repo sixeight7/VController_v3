@@ -183,6 +183,7 @@ void PAGE_load_switch(uint8_t sw) {
         break;
       case MUTE:
         SP[sw].Colour = Device[Dev]->my_LED_colour; // Set the colour
+        SP[sw].Value1 = Data1;
         break;
       case TOGGLE_EXP_PEDAL:
         SP[sw].Refresh_with_FX_only = true;

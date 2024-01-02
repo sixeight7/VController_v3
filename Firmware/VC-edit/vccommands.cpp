@@ -201,6 +201,12 @@ QString VCcommands::create_cmd_string(uint16_t number) // Strings shown on main 
         if (cmd.Data2 != 0) cmdString.append('/' + QString::number(cmd.Data2));
         if (cmd.Value1 != 0) cmdString.append('/' + QString::number(cmd.Value1));
         break;
+    case MUTE:
+        if (cmd.Data1 == MUTE_ON) cmdString.append("ON");
+        else if (cmd.Data1 == MUTE_OFF) cmdString.append("OFF");
+        else if (cmd.Data1 == MUTE_OFF_AND_ALWAYS_ON_TOGGLE) cmdString.append("OFF/ALWAYS ON");
+        else if (cmd.Data1 == MUTE_TOGGLE) cmdString.append("TOGGLE");
+        break;
     case SET_TEMPO:
     case PAR_BANK_DOWN:
     case PAR_BANK_UP:
@@ -1423,6 +1429,11 @@ void VCcommands::build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, 
           case MASTER_EXP_PEDAL:
             // Command: <selected device>, MASTER_EXP_EDAL, 0
             set_type_and_value(CB_DATA1, TYPE_EXP_PEDAL, 2, in_edit_mode);
+            clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+            break;
+          case MUTE:
+            // Command: COMMON, MODE, number
+            set_type_and_value(CB_DATA1, TYPE_MUTE, 0, in_edit_mode);
             clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
             break;
           default:

@@ -1977,6 +1977,7 @@ struct cmdtype_struct {
 #define TYPE_SONGPREVNEXT 39
 #define TYPE_MODE 40
 #define TYPE_MIDI_MORE 41
+#define TYPE_MUTE 42
 
 // Some of the data for the sublists below is not fixed, but must be read from a Device class or from EEPROM
 // Here we define these sublists
@@ -2035,6 +2036,7 @@ const PROGMEM cmdtype_struct cmdtype[] = {
   { "INC/DEC TYPE", 143, 0, 2 }, // TYPE_SONGPREVNEXT 39
   { "MODE", 146, 0, 2 }, // TYPE_MODE
   { "COMMAND", 149, 0, 2 }, // TYPE_MIDI_MORE
+  { "MUTE TYPE", 152, 0, 3 }, // TYPE_MUTE
 };
 
 const PROGMEM char cmd_sublist[][17] = {
@@ -2098,6 +2100,9 @@ const PROGMEM char cmd_sublist[][17] = {
 
   // Sublist 149 - 151: Midi more types
   "START", "STOP", "START/STOP",
+
+  // Sublist 152 - 155: Mute types
+  "ON", "OFF", "OFF/ALWAYS ON", "TOGGLE",
 };
 
 #define SUBLIST_DEVICE_COMMAND_NUMBER 18
@@ -2620,6 +2625,11 @@ void build_command_structure(uint8_t cmd_byte_no, uint8_t cmd_type, bool in_edit
         case MASTER_EXP_PEDAL:
           // Command: <selected device>, MASTER_EXP_EDAL, 0
           set_type_and_value(CB_DATA1, TYPE_EXP_PEDAL, 2, in_edit_mode);
+          clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
+          break;
+        case MUTE:
+          // Command: COMMON, MODE, number
+          set_type_and_value(CB_DATA1, TYPE_MUTE, 0, in_edit_mode);
           clear_cmd_bytes(CB_DATA2, in_edit_mode); // Clear bytes 3-7
           break;
         default:

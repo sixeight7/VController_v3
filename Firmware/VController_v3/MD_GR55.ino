@@ -83,25 +83,25 @@ FLASHMEM void MD_GR55_class::init() // Default values for variables
   is_always_on = true; // Default value
   current_exp_pedal = 1;
 #if defined(CONFIG_VCTOUCH)
-  my_device_page1 = GR55_DEFAULT_VCTOUCH_PAGE1; // Default value
-  my_device_page2 = GR55_DEFAULT_VCTOUCH_PAGE2; // Default value
-  my_device_page3 = GR55_DEFAULT_VCTOUCH_PAGE3; // Default value
-  my_device_page4 = GR55_DEFAULT_VCTOUCH_PAGE4; // Default value
+  my_device_page1 = GR55_DEFAULT_VCTOUCH_PAGE1; // Default values for VC-touch
+  my_device_page2 = GR55_DEFAULT_VCTOUCH_PAGE2;
+  my_device_page3 = GR55_DEFAULT_VCTOUCH_PAGE3;
+  my_device_page4 = GR55_DEFAULT_VCTOUCH_PAGE4;
 #elif defined(CONFIG_VCMINI)
-  my_device_page1 = GR55_DEFAULT_VCMINI_PAGE1; // Default value
-  my_device_page2 = GR55_DEFAULT_VCMINI_PAGE2; // Default value
-  my_device_page3 = GR55_DEFAULT_VCMINI_PAGE3; // Default value
-  my_device_page4 = GR55_DEFAULT_VCMINI_PAGE4; // Default value
+  my_device_page1 = GR55_DEFAULT_VCMINI_PAGE1; // Default values for VC-mini
+  my_device_page2 = GR55_DEFAULT_VCMINI_PAGE2;
+  my_device_page3 = GR55_DEFAULT_VCMINI_PAGE3;
+  my_device_page4 = GR55_DEFAULT_VCMINI_PAGE4;
 #elif defined (CONFIG_CUSTOM)
-  my_device_page1 = GR55_DEFAULT_CUSTOM_PAGE1; // Default value
-  my_device_page2 = GR55_DEFAULT_CUSTOM_PAGE2; // Default value
-  my_device_page3 = GR55_DEFAULT_CUSTOM_PAGE3; // Default value
-  my_device_page4 = GR55_DEFAULT_CUSTOM_PAGE4; // Default value
+  my_device_page1 = GR55_DEFAULT_CUSTOM_PAGE1; // Default values for custom VC device
+  my_device_page2 = GR55_DEFAULT_CUSTOM_PAGE2;
+  my_device_page3 = GR55_DEFAULT_CUSTOM_PAGE3;
+  my_device_page4 = GR55_DEFAULT_CUSTOM_PAGE4;
 #else
-  my_device_page1 = GR55_DEFAULT_VC_PAGE1; // Default value
-  my_device_page2 = GR55_DEFAULT_VC_PAGE2; // Default value
-  my_device_page3 = GR55_DEFAULT_VC_PAGE3; // Default value
-  my_device_page4 = GR55_DEFAULT_VC_PAGE4; // Default value
+  my_device_page1 = GR55_DEFAULT_VC_PAGE1; // Default values for VController
+  my_device_page2 = GR55_DEFAULT_VC_PAGE2;
+  my_device_page3 = GR55_DEFAULT_VC_PAGE3;
+  my_device_page4 = GR55_DEFAULT_VC_PAGE4;
 #endif
 
   initialize_patch_space();
@@ -335,7 +335,7 @@ FLASHMEM void MD_GR55_class::set_bpm() {
 FLASHMEM void MD_GR55_class::start_tuner() {
   if (connected) {
     was_on = is_on;
-    mute_now(); // Mute the GR-55. There is no documentation on how to start the tuner on the GR55 through sysex.
+    mute(); // Mute the GR-55. There is no documentation on how to start the tuner on the GR55 through sysex.
   }
 }
 
@@ -524,21 +524,21 @@ FLASHMEM void MD_GR55_class::check_inst_switch_states(const unsigned char* sxdat
     uint32_t address = (sxdata[7] << 24) + (sxdata[8] << 16) + (sxdata[9] << 8) + sxdata[10]; // Make the address 32 bit
 
     if (address == GR55_PCM1_SW) {
-      gr55_pcm1_mute = sxdata[11];  // Store the value
+      gr55_pcm1_mute = sxdata[11];
     }
 
     if (address == GR55_PCM2_SW) {
-      gr55_pcm2_mute = sxdata[11];  // Store the value
+      gr55_pcm2_mute = sxdata[11];
     }
 
     if (address == GR55_COSM_DATA) {
-      COSM_gtr_mute = sxdata[21];  // Store the value
+      COSM_gtr_mute = sxdata[21];
       COSM_gtr_type = sxdata[11];
       COSM_bass_type = sxdata[16];
     }
 
     if (address == GR55_NORMAL_PU_SW) {
-      normal_pu_mute = sxdata[11];  // Store the value
+      normal_pu_mute = sxdata[11];
       request_onoff = false;
     }
   }
@@ -555,12 +555,6 @@ FLASHMEM void MD_GR55_class::unmute() {
 }
 
 FLASHMEM void MD_GR55_class::mute() {
-  if ((US20_mode_enabled()) && (!is_always_on) && (is_on)) {
-    mute_now();
-  }
-}
-
-FLASHMEM void MD_GR55_class::mute_now() { // Also called when engaging global tuner.
   is_on = false;
   write_sysex(GR55_PCM1_SW, 0x01); // Switch synth 1 off
   write_sysex(GR55_PCM2_SW, 0x01); // Switch synth 1 off
@@ -1836,7 +1830,7 @@ FLASHMEM bool MD_GR55_class::load_scene(uint8_t prev_scene, uint8_t new_scene) {
 
   // Mute instruments
   mute_during_scene_change = check_mute_during_scene_change(new_scene);
-  if (mute_during_scene_change) mute_now();
+  if (mute_during_scene_change) mute();
 
   uint8_t addr_index = 0;
   DEBUGMAIN("Checking INST to turn down of off");

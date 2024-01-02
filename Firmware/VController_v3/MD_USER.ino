@@ -45,25 +45,25 @@ FLASHMEM void MD_USER_class::init() { // Default values for variables
   MIDI_channel = USER_MIDI_CHANNEL; // Default value
   MIDI_port_manual = MIDI_port_number(USER_MIDI_PORT); // Default value
 #if defined(CONFIG_VCTOUCH)
-  my_device_page1 = USER_DEFAULT_VCTOUCH_PAGE1; // Default value
-  my_device_page2 = USER_DEFAULT_VCTOUCH_PAGE2; // Default value
-  my_device_page3 = USER_DEFAULT_VCTOUCH_PAGE3; // Default value
-  my_device_page4 = USER_DEFAULT_VCTOUCH_PAGE4; // Default value
+  my_device_page1 = USER_DEFAULT_VCTOUCH_PAGE1; // Default values for VC-touch VC-touch
+  my_device_page2 = USER_DEFAULT_VCTOUCH_PAGE2;
+  my_device_page3 = USER_DEFAULT_VCTOUCH_PAGE3;
+  my_device_page4 = USER_DEFAULT_VCTOUCH_PAGE4;
 #elif defined(CONFIG_VCMINI)
-  my_device_page1 = USER_DEFAULT_VCMINI_PAGE1; // Default value
-  my_device_page2 = USER_DEFAULT_VCMINI_PAGE2; // Default value
-  my_device_page3 = USER_DEFAULT_VCMINI_PAGE3; // Default value
-  my_device_page4 = USER_DEFAULT_VCMINI_PAGE4; // Default value
+  my_device_page1 = USER_DEFAULT_VCMINI_PAGE1; // Default values for VC-mini VC-mini
+  my_device_page2 = USER_DEFAULT_VCMINI_PAGE2;
+  my_device_page3 = USER_DEFAULT_VCMINI_PAGE3;
+  my_device_page4 = USER_DEFAULT_VCMINI_PAGE4;
 #elif defined (CONFIG_CUSTOM)
-  my_device_page1 = USER_DEFAULT_CUSTOM_PAGE1; // Default value
-  my_device_page2 = USER_DEFAULT_CUSTOM_PAGE2; // Default value
-  my_device_page3 = USER_DEFAULT_CUSTOM_PAGE3; // Default value
-  my_device_page4 = USER_DEFAULT_CUSTOM_PAGE4; // Default value
+  my_device_page1 = USER_DEFAULT_CUSTOM_PAGE1; // Default values for custom VC device custom VC device
+  my_device_page2 = USER_DEFAULT_CUSTOM_PAGE2;
+  my_device_page3 = USER_DEFAULT_CUSTOM_PAGE3;
+  my_device_page4 = USER_DEFAULT_CUSTOM_PAGE4;
 #else
-  my_device_page1 = USER_DEFAULT_VC_PAGE1; // Default value
-  my_device_page2 = USER_DEFAULT_VC_PAGE2; // Default value
-  my_device_page3 = USER_DEFAULT_VC_PAGE3; // Default value
-  my_device_page4 = USER_DEFAULT_VC_PAGE4; // Default value
+  my_device_page1 = USER_DEFAULT_VC_PAGE1; // Default values for VControllers VController
+  my_device_page2 = USER_DEFAULT_VC_PAGE2;
+  my_device_page3 = USER_DEFAULT_VC_PAGE3;
+  my_device_page4 = USER_DEFAULT_VC_PAGE4;
 #endif
 
 #ifdef IS_VCTOUCH
@@ -559,6 +559,33 @@ FLASHMEM bool MD_USER_class::send_looper_cmd(uint8_t cmd) {
 }
 
 // Scenes
+FLASHMEM bool MD_USER_class::request_snapscene_name(uint8_t sw, uint8_t sw1, uint8_t sw2, uint8_t sw3) {
+  String lbl = "";
+  if ((sw2 == 0) && (sw3 == 0)) { // One scene under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 16);
+  }
+  if ((sw2 > 0) && (sw3 == 0)) { // Two scenes under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 8);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw2);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 7);
+  }
+  if ((sw2 > 0) && (sw3 > 0)) { // Three scenes under switch
+    read_scene_name_from_buffer(sw1);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 5);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw2);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 5);
+    lbl += ' ';
+    read_scene_name_from_buffer(sw3);
+    LCD_add_char_to_string(scene_label_buffer, lbl, 4);
+  }
+  LCD_set_SP_label(sw, lbl);
+  return true;
+}
+
 FLASHMEM void MD_USER_class::get_snapscene_title(uint8_t number, String &Output) {
   Output += "SCENE " + String(number);
 }
@@ -609,6 +636,14 @@ FLASHMEM uint8_t MD_USER_class::get_number_of_snapscenes() {
   }
   else {
     return 0;
+  }
+}
+
+FLASHMEM void MD_USER_class::read_scene_name_from_buffer(uint8_t scene) {
+  String lbl;
+  get_snapscene_label(scene, lbl);
+  for (uint8_t c = 0; c < 12; c++) {
+    scene_label_buffer[c] = lbl[c];
   }
 }
 

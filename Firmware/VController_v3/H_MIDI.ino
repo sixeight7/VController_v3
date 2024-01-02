@@ -114,6 +114,7 @@ uint8_t VCedit_port;
 uint16_t editor_dump_size = 0;
 bool MIDI_learn_mode = false;
 #define ESP32_MIDI_PORT MIDI5_PORT
+uint16_t USER_data_item_size_sent_by_VCedit = 0;
 
 // Setup MIDI ports. The USB port is set from the Arduino menu.
 struct MySettings : public midi::DefaultSettings
@@ -1554,7 +1555,7 @@ void MIDI_check_SYSEX_in_editor(const unsigned char* sxdata, short unsigned int 
         for (uint16_t i = 0; i <= USER_data_last_item; i++) MIDI_editor_send_user_device_name_item(i, VC_MODEL_NUMBER, VCedit_port);
         break;
       case VC_INITIALIZE_USER_DEVICE_DATA:
-        MIDI_editor_initialize_user_device_data((sxdata[6] << 7) + sxdata[7]);
+        MIDI_editor_initialize_user_device_data((sxdata[7] << 7) + sxdata[9]);
         break;
       case VC_SELECT_PATCH_FROM_EDITOR:
         if (sxdata[7] < NUMBER_OF_DEVICES) Device[sxdata[7]]->select_patch((sxdata[11] << 7) + sxdata[13]);
@@ -1983,7 +1984,7 @@ void MIDI_editor_send_user_device_name_item(uint16_t index, uint8_t model, uint8
   User_device_name_struct data;
   EEPROM_read_user_data_item(index, &data);
   send_7_bit_overflow_data((uint8_t*)&data, sizeof(data), VC_SAVE_USER_DEVICE_NAME_ITEM, index, model, port);
-  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_last_item);
+  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_item_size_sent_by_VCedit);
 }
 
 void MIDI_editor_send_initialize_user_device_data_request() {
@@ -1993,6 +1994,7 @@ void MIDI_editor_send_initialize_user_device_data_request() {
 void MIDI_editor_initialize_user_device_data(uint16_t size) {
   // We only initialize the bytes that are extra - in case we have fewer bytes than what we started with.
   for(uint16_t i = size; i <= USER_data_last_item; i++) EEPROM_initialize_user_data_item(i);
+  USER_data_item_size_sent_by_VCedit = size;
 }
 
 void MIDI_editor_receive_user_device_name_item(const unsigned char* sxdata, short unsigned int sxlength) {
@@ -2004,7 +2006,7 @@ void MIDI_editor_receive_user_device_name_item(const unsigned char* sxdata, shor
   USER_data_patch_number_index[index] = (data.patch_msb << 8) + data.patch_lsb;
   USER_data_last_item = index;
   update_page = RELOAD_PAGE;
-  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_last_item);
+  MIDI_show_dump_progress(NUMBER_OF_USER_DEVICES + index, NUMBER_OF_USER_DEVICES + USER_data_item_size_sent_by_VCedit);
 }
 
 // ********************************* Section 7: MIDI switch command reading ********************************************

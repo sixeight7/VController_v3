@@ -91,7 +91,7 @@
 
 #define VCONTROLLER_FIRMWARE_VERSION_MAJOR 3
 #define VCONTROLLER_FIRMWARE_VERSION_MINOR 12
-#define VCONTROLLER_FIRMWARE_VERSION_BUILD 0
+#define VCONTROLLER_FIRMWARE_VERSION_BUILD 1
 
 #include "debug.h"
 #include "globals.h"
@@ -429,4 +429,10 @@ void loop() {
   26-10-2023 VC-edit: fixed a number of errors mcopying and deleting items from and to the On Page Select field. Also fixed crash for swapping patches.
   06-11-2023 Setlist select - double pressing a setlist will select the first item of it.
   20-11-2023 VC-touch: Updated ER_TFTM0784 library for support of changed hardware of the display
+  02-12-2023 VC-edit: fix of some crashes on Windows
+  03-12-2023 Release of firmware 3.12.0
+  29-12-2023 KPA: Fixed performance names not displaying correctly.
+  29-12-2023 VController: fixed incorrect USER device navigation on fixed pages
+  29-12-2023 MUTE: can now be "ON", "OFF", "OFF/ALWAYS ON" and "TOGGLE". This makes it easier to navigate multiple Boss/Roland devices.
+  02-01-2024 SY1000: when selecting scenes on the SY1000, a press on a bottom row switch is ignored when a top row switch is actively pressed.
   */
